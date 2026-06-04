@@ -3,6 +3,7 @@ import '../../../../core/constants/app_colors.dart';
 import 'invoice_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/payment_provider.dart';
+import '../../../../core/constants/app_curve.dart';
 
 class PaymentScreen extends ConsumerWidget {
   final double totalAmount;
@@ -50,202 +51,210 @@ class PaymentScreen extends ConsumerWidget {
         ],
       ),
 
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20.0),
-
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-
-          children: [
-            const SizedBox(height: 20),
-
-            // ================= AMOUNT CARD =================
-            Container(
-              width: double.infinity,
-
-              padding: const EdgeInsets.all(24),
-
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(16),
-              ),
-
+      body: Container(
+        color: AppColors.primary,
+        child: ClipRRect(
+          borderRadius: AppCurve.top(context),
+          child: Container(
+            color: Colors.grey.shade100,
+            child: SingleChildScrollView(
+              // Set to horizontal: 20 to preserve your exact original padding consistency
+              padding: const EdgeInsets.symmetric(horizontal: 20.0),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "TOTAL PAYABLE AMOUNT",
+                  const SizedBox(height: 20),
 
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
-                      letterSpacing: 1,
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  Text(
-                    "₹${totalAmount.toStringAsFixed(2)}",
-
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
+                  // ================= AMOUNT CARD =================
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
+                    width: double.infinity,
+
+                    padding: const EdgeInsets.all(24),
 
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(16),
                     ),
 
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-
+                    child: Column(
                       children: [
-                        const Icon(
-                          Icons.receipt_long,
-                          color: Colors.white,
-                          size: 16,
+                        const Text(
+                          "TOTAL PAYABLE AMOUNT",
+
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            letterSpacing: 1,
+                          ),
                         ),
 
-                        const SizedBox(width: 6),
+                        const SizedBox(height: 8),
 
                         Text(
-                          invoiceNumber,
+                          "₹${totalAmount.toStringAsFixed(2)}",
 
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 14,
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+
+                            children: [
+                              const Icon(
+                                Icons.receipt_long,
+                                color: Colors.white,
+                                size: 16,
+                              ),
+
+                              const SizedBox(width: 6),
+
+                              Text(
+                                invoiceNumber,
+
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
                   ),
-                ],
-              ),
-            ),
 
-            const SizedBox(height: 30),
+                  const SizedBox(height: 30),
 
-            const Text(
-              "Select Payment Method",
+                  const Text(
+                    "Select Payment Method",
 
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // ================= CASH =================
-            _buildPaymentOption(
-              selectedMethod: selectedMethod,
-              paymentNotifier: paymentNotifier,
-              title: "Cash",
-              subtitle: "Instant settlement at counter",
-              icon: Icons.money,
-              value: "Cash",
-            ),
-
-            const SizedBox(height: 12),
-
-            // ================= UPI =================
-            _buildPaymentOption(
-              selectedMethod: selectedMethod,
-              paymentNotifier: paymentNotifier,
-              title: "UPI / Digital Payment",
-              subtitle: "Secure Google Pay, PhonePe, etc.",
-              icon: Icons.account_balance_wallet_outlined,
-              value: "UPI",
-              isExpanded: selectedMethod == "UPI",
-            ),
-
-            const Spacer(),
-
-            // ================= SECURITY =================
-            Center(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-
-                children: const [
-                  Icon(
-                    Icons.verified_user_outlined,
-                    size: 16,
-                    color: Colors.grey,
-                  ),
-
-                  SizedBox(width: 4),
-
-                  Text(
-                    "Secure 256-bit encrypted transaction",
-
-                    style: TextStyle(color: Colors.grey, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // ================= INVOICE BUTTON =================
-            SizedBox(
-              width: double.infinity,
-              height: 55,
-
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.receipt_long, color: Colors.white),
-
-                label: const Text(
-                  "Open Invoice",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-
-                style: OutlinedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  elevation: 0,
-
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-
-                onPressed: () {
-                  // ✅ Check payment method selected or not
-                  if (selectedMethod == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Please select a payment method"),
-                      ),
-                    );
-                    return;
-                  }
-
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => InvoiceScreen(invoiceId: invoiceId),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
                     ),
-                  );
-                },
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // ================= CASH =================
+                  _buildPaymentOption(
+                    selectedMethod: selectedMethod,
+                    paymentNotifier: paymentNotifier,
+                    title: "Cash",
+                    subtitle: "Instant settlement at counter",
+                    icon: Icons.money,
+                    value: "Cash",
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // ================= UPI =================
+                  _buildPaymentOption(
+                    selectedMethod: selectedMethod,
+                    paymentNotifier: paymentNotifier,
+                    title: "UPI / Digital Payment",
+                    subtitle: "Secure Google Pay, PhonePe, etc.",
+                    icon: Icons.account_balance_wallet_outlined,
+                    value: "UPI",
+                    isExpanded: selectedMethod == "UPI",
+                  ),
+
+                  const Spacer(),
+
+                  // ================= SECURITY =================
+                  Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+
+                      children: const [
+                        Icon(
+                          Icons.verified_user_outlined,
+                          size: 16,
+                          color: Colors.grey,
+                        ),
+
+                        SizedBox(width: 4),
+
+                        Text(
+                          "Secure 256-bit encrypted transaction",
+
+                          style: TextStyle(color: Colors.grey, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // ================= INVOICE BUTTON =================
+                  SizedBox(
+                    width: double.infinity,
+                    height: 55,
+
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.receipt_long, color: Colors.white),
+
+                      label: const Text(
+                        "Open Invoice",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        elevation: 0,
+
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+
+                      onPressed: () {
+                        // ✅ Check payment method selected or not
+                        if (selectedMethod == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Please select a payment method"),
+                            ),
+                          );
+                          return;
+                        }
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => InvoiceScreen(invoiceId: invoiceId),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+                ],
               ),
             ),
-
-            const SizedBox(height: 20),
-          ],
+          ),
         ),
       ),
     );

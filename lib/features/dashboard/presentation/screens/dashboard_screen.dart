@@ -12,7 +12,7 @@ import '../../../products/presentation/screens/add_product_screen.dart';
 import '../../../products/presentation/screens/product_screen.dart';
 import '../providers/dashboard_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import '../../../../core/constants/app_curve.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -187,366 +187,407 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ],
       ),
 
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.md),
+      body: Container(
+        color: AppColors.primary,
+        child: ClipRRect(
+          borderRadius: AppCurve.top(context),
+          child: Container(
+            color: Colors.grey.shade100,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(
+                AppSpacing.md,
+              ), // Maintained your original padding token
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 20),
 
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+                  // =====================================================
+                  // 🔹 HEADER
+                  // =====================================================
+                  const Text("Welcome, Admin 👋", style: AppTextStyles.heading),
 
-          children: [
-            const SizedBox(height: 20),
+                  const SizedBox(height: 4),
 
-            // =====================================================
-            // 🔹 HEADER
-            // =====================================================
-            const Text("Welcome, Admin 👋", style: AppTextStyles.heading),
-
-            const SizedBox(height: 4),
-
-            const Text(
-              "Here’s what’s happening today.",
-              style: AppTextStyles.subHeading,
-            ),
-
-            const SizedBox(height: 20),
-
-            // =====================================================
-            // 🔹 TOP 4 CARDS
-            // =====================================================
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 1.8,
-
-              children: [
-                _topCard(
-                  "Total Products",
-                  "$totalProducts",
-                  Icons.inventory,
-                  Colors.blue,
-                ),
-
-                _topCard(
-                  "Low Stock Items",
-                  "$lowStock",
-                  Icons.warning,
-                  Colors.red,
-                ),
-
-                _topCard(
-                  "Total Sales",
-                  "₹ $totalSales",
-                  Icons.shopping_cart,
-                  Colors.green,
-                ),
-
-                _topCard(
-                  "Suppliers",
-                  "$totalSuppliers",
-                  Icons.people,
-                  Colors.purple,
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 24),
-
-            // =====================================================
-            // 🔹 QUICK ACTIONS
-            // =====================================================
-            const Text(
-              "Quick Actions",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            Row(
-              children: [
-                Expanded(
-                  child: _quickActionCard(
-                    icon: Icons.shopping_cart_outlined,
-                    title: "New Bill",
-                    color: Colors.blue,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const BillingScreen(),
-                        ),
-                      );
-                    },
+                  const Text(
+                    "Here’s what’s happening today.",
+                    style: AppTextStyles.subHeading,
                   ),
-                ),
 
-                const SizedBox(width: 12),
+                  const SizedBox(height: 20),
 
-                Expanded(
-                  child: _quickActionCard(
-                    icon: Icons.add,
-                    title: "Add Product",
-                    color: Colors.black54,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const AddProductScreen(),
-                        ),
-                      );
-                    },
+                  // =====================================================
+                  // 🔹 TOP 4 CARDS
+                  // =====================================================
+                  GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 1.8,
+
+                    children: [
+                      _topCard(
+                        "Total Products",
+                        "$totalProducts",
+                        Icons.inventory,
+                        Colors.blue,
+                      ),
+
+                      _topCard(
+                        "Low Stock Items",
+                        "$lowStock",
+                        Icons.warning,
+                        Colors.red,
+                      ),
+
+                      _topCard(
+                        "Total Sales",
+                        "₹ $totalSales",
+                        Icons.shopping_cart,
+                        Colors.green,
+                      ),
+
+                      _topCard(
+                        "Suppliers",
+                        "$totalSuppliers",
+                        Icons.people,
+                        Colors.purple,
+                      ),
+                    ],
                   ),
-                ),
 
-                const SizedBox(width: 12),
+                  const SizedBox(height: 24),
 
-                Expanded(
-                  child: _quickActionCard(
-                    icon: Icons.inventory_2_outlined,
-                    title: "Stock In",
-                    color: Colors.black54,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ProductScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 24),
-
-            // =====================================================
-            // 🔹 SALES OVERVIEW GRAPH
-            // =====================================================
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  "Sales Overview",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-
-                Row(
-                  children: [
-                    const Text("Show Graph", style: TextStyle(fontSize: 12)),
-
-                    Switch(
-                      value: showGraph,
-                      onChanged: (value) async {
-                        ref.read(graphVisibilityProvider.notifier).state =
-                            value;
-
-                        await DBHelper.saveGraphVisibility(value);
-                      },
+                  // =====================================================
+                  // 🔹 QUICK ACTIONS
+                  // =====================================================
+                  const Text(
+                    "Quick Actions",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
                     ),
-                  ],
-                ),
-              ],
-            ),
+                  ),
 
-            const SizedBox(height: 12),
-            // ✅ GRAPH VISIBLE ONLY WHEN SWITCH IS ON
-            if (showGraph)
-              Container(
-                padding: const EdgeInsets.all(AppSpacing.md),
+                  const SizedBox(height: 16),
 
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(AppSizes.cardRadius),
-                ),
-
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
-                      children: [
-                        DropdownButton<String>(
-                          value: selectedFilter,
-                          underline: const SizedBox(),
-
-                          items: filters
-                              .map(
-                                (e) =>
-                                    DropdownMenuItem(value: e, child: Text(e)),
-                              )
-                              .toList(),
-
-                          onChanged: (val) async {
-                            ref.read(dashboardFilterProvider.notifier).state =
-                                val!;
-
-                            await loadDashboardData();
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _quickActionCard(
+                          icon: Icons.shopping_cart_outlined,
+                          title: "New Bill",
+                          color: Colors.blue,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const BillingScreen(),
+                              ),
+                            );
                           },
                         ),
-                      ],
-                    ),
+                      ),
 
-                    const SizedBox(height: 20),
+                      const SizedBox(width: 12),
 
-                    SizedBox(
-                      height: 220,
-
-                      child: Builder(
-                        builder: (context) {
-                          double highestSale = salesData.isEmpty
-                              ? 0
-                              : salesData.reduce((a, b) => a > b ? a : b);
-
-                          // Always show minimum 5 Lakhs scale
-                          double maxValue = highestSale < 500000
-                              ? 500000
-                              : highestSale + 100000;
-
-                          double interval = 100000;
-
-                          return LineChart(
-                            LineChartData(
-                              minY: 0,
-                              maxY: maxValue,
-
-                              // ✅ GRID
-                              gridData: FlGridData(
-                                show: true,
-                                drawVerticalLine: false,
+                      Expanded(
+                        child: _quickActionCard(
+                          icon: Icons.add,
+                          title: "Add Product",
+                          color: Colors.black54,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const AddProductScreen(),
                               ),
+                            );
+                          },
+                        ),
+                      ),
 
-                              // ✅ BORDER
-                              borderData: FlBorderData(
-                                show: true,
+                      const SizedBox(width: 12),
 
-                                border: const Border(
-                                  left: BorderSide(color: Colors.black12),
-                                  bottom: BorderSide(color: Colors.black12),
-                                  top: BorderSide(color: Colors.transparent),
-                                  right: BorderSide(color: Colors.transparent),
-                                ),
+                      Expanded(
+                        child: _quickActionCard(
+                          icon: Icons.inventory_2_outlined,
+                          title: "Stock In",
+                          color: Colors.black54,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const ProductScreen(),
                               ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
 
-                              // ✅ TITLES
-                              titlesData: FlTitlesData(
-                                topTitles: AxisTitles(
-                                  sideTitles: SideTitles(showTitles: false),
-                                ),
+                  const SizedBox(height: 24),
 
-                                rightTitles: AxisTitles(
-                                  sideTitles: SideTitles(showTitles: false),
-                                ),
+                  // =====================================================
+                  // 🔹 SALES OVERVIEW GRAPH
+                  // =====================================================
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "Sales Overview",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
 
-                                leftTitles: AxisTitles(
-                                  sideTitles: SideTitles(
-                                    showTitles: true,
-                                    reservedSize: 40,
-                                    interval: interval,
-                                    getTitlesWidget: (value, _) {
-                                      if (value == 0) {
-                                        return const Text("0");
-                                      }
+                      Row(
+                        children: [
+                          const Text(
+                            "Show Graph",
+                            style: TextStyle(fontSize: 12),
+                          ),
 
-                                      if (value == 100000) {
-                                        return const Text("1L");
-                                      }
+                          Switch(
+                            value: showGraph,
+                            onChanged: (value) async {
+                              ref.read(graphVisibilityProvider.notifier).state =
+                                  value;
 
-                                      if (value == 200000) {
-                                        return const Text("2L");
-                                      }
+                              await DBHelper.saveGraphVisibility(value);
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
 
-                                      if (value == 300000) {
-                                        return const Text("3L");
-                                      }
+                  const SizedBox(height: 12),
+                  // ✅ GRAPH VISIBLE ONLY WHEN SWITCH IS ON
+                  if (showGraph)
+                    Container(
+                      padding: const EdgeInsets.all(AppSpacing.md),
 
-                                      if (value == 400000) {
-                                        return const Text("4L");
-                                      }
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(
+                          AppSizes.cardRadius,
+                        ),
+                      ),
 
-                                      if (value == 500000) {
-                                        return const Text("5L");
-                                      }
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
 
-                                      return const SizedBox();
-                                    },
-                                  ),
-                                ),
-                                // ✅ BOTTOM TITLES
-                                bottomTitles: AxisTitles(
-                                  sideTitles: SideTitles(
-                                    showTitles: true,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
 
-                                    getTitlesWidget: (value, _) {
-                                      int i = value.toInt();
+                            children: [
+                              DropdownButton<String>(
+                                value: selectedFilter,
+                                underline: const SizedBox(),
 
-                                      if (i < 0 || i >= chartLabels.length) {
-                                        return const SizedBox();
-                                      }
+                                items: filters
+                                    .map(
+                                      (e) => DropdownMenuItem(
+                                        value: e,
+                                        child: Text(e),
+                                      ),
+                                    )
+                                    .toList(),
 
-                                      return Padding(
-                                        padding: const EdgeInsets.only(top: 8),
-                                        child: Text(
-                                          chartLabels[i],
-                                          style: const TextStyle(fontSize: 10),
+                                onChanged: (val) async {
+                                  ref
+                                          .read(
+                                            dashboardFilterProvider.notifier,
+                                          )
+                                          .state =
+                                      val!;
+
+                                  await loadDashboardData();
+                                },
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          SizedBox(
+                            height: 220,
+
+                            child: Builder(
+                              builder: (context) {
+                                double highestSale = salesData.isEmpty
+                                    ? 0
+                                    : salesData.reduce((a, b) => a > b ? a : b);
+
+                                // Always show minimum 5 Lakhs scale
+                                double maxValue = highestSale < 500000
+                                    ? 500000
+                                    : highestSale + 100000;
+
+                                double interval = 100000;
+
+                                return LineChart(
+                                  LineChartData(
+                                    minY: 0,
+                                    maxY: maxValue,
+
+                                    // ✅ GRID
+                                    gridData: FlGridData(
+                                      show: true,
+                                      drawVerticalLine: false,
+                                    ),
+
+                                    // ✅ BORDER
+                                    borderData: FlBorderData(
+                                      show: true,
+
+                                      border: const Border(
+                                        left: BorderSide(color: Colors.black12),
+                                        bottom: BorderSide(
+                                          color: Colors.black12,
                                         ),
-                                      );
-                                    },
+                                        top: BorderSide(
+                                          color: Colors.transparent,
+                                        ),
+                                        right: BorderSide(
+                                          color: Colors.transparent,
+                                        ),
+                                      ),
+                                    ),
+
+                                    // ✅ TITLES
+                                    titlesData: FlTitlesData(
+                                      topTitles: AxisTitles(
+                                        sideTitles: SideTitles(
+                                          showTitles: false,
+                                        ),
+                                      ),
+
+                                      rightTitles: AxisTitles(
+                                        sideTitles: SideTitles(
+                                          showTitles: false,
+                                        ),
+                                      ),
+
+                                      leftTitles: AxisTitles(
+                                        sideTitles: SideTitles(
+                                          showTitles: true,
+                                          reservedSize: 40,
+                                          interval: interval,
+                                          getTitlesWidget: (value, _) {
+                                            if (value == 0) {
+                                              return const Text("0");
+                                            }
+
+                                            if (value == 100000) {
+                                              return const Text("1L");
+                                            }
+
+                                            if (value == 200000) {
+                                              return const Text("2L");
+                                            }
+
+                                            if (value == 300000) {
+                                              return const Text("3L");
+                                            }
+
+                                            if (value == 400000) {
+                                              return const Text("4L");
+                                            }
+
+                                            if (value == 500000) {
+                                              return const Text("5L");
+                                            }
+
+                                            return const SizedBox();
+                                          },
+                                        ),
+                                      ),
+                                      // ✅ BOTTOM TITLES
+                                      bottomTitles: AxisTitles(
+                                        sideTitles: SideTitles(
+                                          showTitles: true,
+
+                                          getTitlesWidget: (value, _) {
+                                            int i = value.toInt();
+
+                                            if (i < 0 ||
+                                                i >= chartLabels.length) {
+                                              return const SizedBox();
+                                            }
+
+                                            return Padding(
+                                              padding: const EdgeInsets.only(
+                                                top: 8,
+                                              ),
+                                              child: Text(
+                                                chartLabels[i],
+                                                style: const TextStyle(
+                                                  fontSize: 10,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ),
+
+                                    // ✅ LINE DATA
+                                    lineBarsData: [
+                                      LineChartBarData(
+                                        spots: List.generate(
+                                          salesData.length,
+                                          (i) => FlSpot(
+                                            i.toDouble(),
+                                            salesData[i],
+                                          ),
+                                        ),
+
+                                        isCurved: true,
+                                        curveSmoothness: 0.35,
+                                        barWidth: 4,
+                                        color: Colors.blue,
+                                        isStrokeCapRound: true,
+
+                                        dotData: FlDotData(
+                                          show: true,
+
+                                          getDotPainter:
+                                              (spot, percent, barData, index) {
+                                                return FlDotCirclePainter(
+                                                  radius: 4,
+                                                  color: Colors.white,
+                                                  strokeWidth: 3,
+                                                  strokeColor: Colors.blue,
+                                                );
+                                              },
+                                        ),
+
+                                        belowBarData: BarAreaData(
+                                          show: true,
+                                          color: Colors.blue.withOpacity(0.12),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                              ),
-
-                              // ✅ LINE DATA
-                              lineBarsData: [
-                                LineChartBarData(
-                                  spots: List.generate(
-                                    salesData.length,
-                                    (i) => FlSpot(i.toDouble(), salesData[i]),
-                                  ),
-
-                                  isCurved: true,
-                                  curveSmoothness: 0.35,
-                                  barWidth: 4,
-                                  color: Colors.blue,
-                                  isStrokeCapRound: true,
-
-                                  dotData: FlDotData(
-                                    show: true,
-
-                                    getDotPainter:
-                                        (spot, percent, barData, index) {
-                                          return FlDotCirclePainter(
-                                            radius: 4,
-                                            color: Colors.white,
-                                            strokeWidth: 3,
-                                            strokeColor: Colors.blue,
-                                          );
-                                        },
-                                  ),
-
-                                  belowBarData: BarAreaData(
-                                    show: true,
-                                    color: Colors.blue.withOpacity(0.12),
-                                  ),
-                                ),
-                              ],
+                                );
+                              },
                             ),
-                          );
-                        },
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
+                ],
               ),
-          ],
+            ),
+          ),
         ),
       ),
     );

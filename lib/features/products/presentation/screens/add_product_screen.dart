@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../suppliers/presentation/screens/add_supplier_screen.dart';
 import '../providers/add_product_provider.dart';
+import '../../../../core/constants/app_curve.dart';
 
 class AddProductScreen extends ConsumerStatefulWidget {
   final Map? product; // Add this line
@@ -361,521 +362,555 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           ),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(18),
+      body: Container(
+        color: AppColors.primary,
 
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: ClipRRect(
+          borderRadius: AppCurve.top(context),
 
-          children: [
-            // =====================================================
-            // 🔹 PRODUCT MEDIA
-            // =====================================================
-            sectionTitle("1. Product Media"),
+          child: Container(
+            color: Colors.grey.shade100,
 
-            // 🔹 IMAGE
-            Container(
-              height: width * 0.55,
-              width: double.infinity,
-
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-              ),
-
-              child: image == null
-                  ? Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-
-                      children: const [
-                        Icon(
-                          Icons.image_outlined,
-                          size: 60,
-                          color: Colors.grey,
-                        ),
-
-                        SizedBox(height: 12),
-
-                        Text(
-                          "Product Image",
-                          style: TextStyle(color: Colors.grey, fontSize: 16),
-                        ),
-                      ],
-                    )
-                  : ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: Image.file(image!, fit: BoxFit.cover),
-                    ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // 🔹 MEDIA BUTTONS
-            Row(
-              children: [
-                Expanded(
-                  child: _mediaButton(
-                    icon: Icons.photo_library,
-                    title: "Gallery",
-
-                    onTap: () {
-                      pickImage(ImageSource.gallery);
-                    },
-                  ),
-                ),
-
-                const SizedBox(width: 12),
-
-                Expanded(
-                  child: _mediaButton(
-                    icon: Icons.camera_alt,
-                    title: "Camera",
-
-                    onTap: () {
-                      pickImage(ImageSource.camera);
-                    },
-                  ),
-                ),
-
-                const SizedBox(width: 12),
-
-                Expanded(
-                  child: _mediaButton(
-                    icon: Icons.qr_code_scanner,
-                    title: "Scan Barcode",
-
-                    onTap: () async {
-                      final result = await Navigator.push(
-                        context,
-
-                        MaterialPageRoute(
-                          builder: (_) => const BarcodeScannerScreen(),
-                        ),
-                      );
-
-                      if (result != null) {
-                        productcodeController.text = result;
-                      }
-                    },
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 32),
-
-            // =====================================================
-            // 🔹 BASIC INFORMATION
-            // =====================================================
-            sectionTitle("2. Basic Information"),
-
-            inputField(label: "Product Name", controller: nameController),
-            inputField(
-              label: "Product code",
-              controller: productcodeController,
-            ),
-
-            const SizedBox(height: 20),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Category",
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  value: selectedCategory,
-                  isExpanded: true,
-                  menuMaxHeight: 250,
-
-                  // -- Kept Dropdown Menu Styling (Popup only) --
-                  dropdownColor: Colors.white,
-                  elevation: 2,
-                  borderRadius: BorderRadius.circular(16),
-
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 16,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                  items: categories.map((e) {
-                    return DropdownMenuItem(
-                      value: e,
-                      child: Text(e, overflow: TextOverflow.ellipsis),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    ref.read(selectedCategoryProvider.notifier).state = value!;
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // 🔹 ADD GST BUTTON
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  "Add GST",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-
-                Switch(
-                  value: showGstFields,
-                  onChanged: (value) {
-                    ref.read(showGstProvider.notifier).state = value;
-
-                    if (!value) {
-                      sgstController.clear();
-                      cgstController.clear();
-                      hsnController.clear();
-                    }
-                  },
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 20),
-
-            // 🔹 GST FIELDS
-            if (showGstFields)
-              Column(
-                children: [
-                  // SGST
-                  inputField(
-                    label: "State GST (SGST) %",
-                    controller: sgstController,
-                    keyboard: TextInputType.number,
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // CGST
-                  inputField(
-                    label: "Central GST (CGST) %",
-                    controller: cgstController,
-                    keyboard: TextInputType.number,
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // HSN
-                  inputField(label: "HSN Code", controller: hsnController),
-
-                  const SizedBox(height: 20),
-                ],
-              ),
-
-            // 🔹 SUPPLIER
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      "Supplier",
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
-
-                    TextButton.icon(
-                      onPressed: () async {
-                        final result = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const AddSupplierScreen(),
-                          ),
-                        );
-
-                        // 🔹 Refresh supplier list after adding
-                        if (result == true) {
-                          loadSuppliers();
-                        }
-                      },
-
-                      icon: const Icon(Icons.add, size: 18),
-
-                      label: const Text("Add Supplier"),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 8),
-
-                DropdownButtonFormField<String>(
-                  value: selectedSupplier,
-                  isExpanded: true,
-                  menuMaxHeight: 250,
-
-                  dropdownColor: Colors.white,
-                  elevation: 2,
-                  borderRadius: BorderRadius.circular(16),
-
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: Colors.white,
-
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 16,
-                    ),
-
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-
-                  items: suppliers.map((supplier) {
-                    return DropdownMenuItem(
-                      value: supplier,
-                      child: Text(supplier, overflow: TextOverflow.ellipsis),
-                    );
-                  }).toList(),
-
-                  onChanged: (value) {
-                    ref.read(selectedSupplierProvider.notifier).state = value;
-
-                    supplierController.text = value!;
-                  },
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 20),
-
-            // 🔹 EXPIRY DATE
-            inputField(
-              label: "Expiry Date",
-              controller: expiryController,
-              readOnly: true,
-
-              suffixIcon: const Icon(Icons.calendar_month),
-
-              onTap: pickDate,
-            ),
-
-            const SizedBox(height: 32),
-
-            // =====================================================
-            // 🔹 STOCK DETAILS
-            // =====================================================
-            sectionTitle("3. Stock Details"),
-
-            Row(
-              children: [
-                // Quantity
-                Expanded(
-                  child: inputField(
-                    label: "Quantity",
-                    controller: quantityController,
-                    keyboard: TextInputType.number,
-                  ),
-                ),
-
-                const SizedBox(width: 14),
-
-                // Low Stock Limit
-                Expanded(
-                  child: inputField(
-                    label: "Low Stock Limit",
-                    controller: lslController,
-                    keyboard: TextInputType.number,
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 20),
-
-            // 🔹 UNIT DROPDOWN
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Unit",
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-
-                const SizedBox(height: 8),
-
-                DropdownButtonFormField<String>(
-                  value: unitController.text.isEmpty
-                      ? null
-                      : unitController.text,
-
-                  isExpanded: true,
-                  menuMaxHeight: 250,
-
-                  dropdownColor: Colors.white,
-                  elevation: 2,
-                  borderRadius: BorderRadius.circular(16),
-
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: Colors.white,
-
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 16,
-                    ),
-
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-
-                  items: ["Kg", "gram", "litre", "piece", "box"].map((unit) {
-                    return DropdownMenuItem(
-                      value: unit,
-                      child: Text(unit, overflow: TextOverflow.ellipsis),
-                    );
-                  }).toList(),
-
-                  onChanged: (value) {
-                    unitController.text = value!;
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            inputField(
-              label: "Description",
-              controller: descriptionController,
-              maxLines: 4,
-            ),
-
-            const SizedBox(height: 32),
-
-            // =====================================================
-            // 🔹 PRICING
-            // =====================================================
-            sectionTitle("4. Pricing"),
-
-            Row(
-              children: [
-                Expanded(
-                  child: inputField(
-                    label: "Purchase Price",
-                    controller: purchaseController,
-                    keyboard: TextInputType.number,
-                  ),
-                ),
-
-                const SizedBox(width: 14),
-
-                Expanded(
-                  child: inputField(
-                    label: "Selling Price",
-                    controller: sellingController,
-                    keyboard: TextInputType.number,
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 22),
-
-            // 🔹 PROFIT BUTTON
-            SizedBox(
-              width: double.infinity,
-              height: 55,
-
-              child: ElevatedButton(
-                onPressed: calculateProfit,
-
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-
-                child: const Text(
-                  "Calculate Profit Margin",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 18),
-
-            // 🔹 PROFIT CARD
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(22),
-
-              decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                borderRadius: BorderRadius.circular(18),
-              ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(12),
 
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+
                 children: [
-                  const Text(
-                    "Profit Margin",
-                    style: TextStyle(fontWeight: FontWeight.w600),
+                  // =====================================================
+                  // 🔹 PRODUCT MEDIA
+                  // =====================================================
+                  sectionTitle("1. Product Media"),
+
+                  // 🔹 IMAGE
+                  Container(
+                    height: width * 0.55,
+                    width: double.infinity,
+
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+
+                    child: image == null
+                        ? Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+
+                            children: const [
+                              Icon(
+                                Icons.image_outlined,
+                                size: 60,
+                                color: Colors.grey,
+                              ),
+
+                              SizedBox(height: 12),
+
+                              Text(
+                                "Product Image",
+                                style: TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          )
+                        : ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: Image.file(image!, fit: BoxFit.cover),
+                          ),
                   ),
 
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 16),
 
-                  Text(
-                    "${profitMargin.toStringAsFixed(1)}%",
-                    style: TextStyle(
-                      fontSize: 34,
-                      fontWeight: FontWeight.bold,
-                      color: profitMargin > 0 ? Colors.green : Colors.red,
+                  // 🔹 MEDIA BUTTONS
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _mediaButton(
+                          icon: Icons.photo_library,
+                          title: "Gallery",
+
+                          onTap: () {
+                            pickImage(ImageSource.gallery);
+                          },
+                        ),
+                      ),
+
+                      const SizedBox(width: 12),
+
+                      Expanded(
+                        child: _mediaButton(
+                          icon: Icons.camera_alt,
+                          title: "Camera",
+
+                          onTap: () {
+                            pickImage(ImageSource.camera);
+                          },
+                        ),
+                      ),
+
+                      const SizedBox(width: 12),
+
+                      Expanded(
+                        child: _mediaButton(
+                          icon: Icons.qr_code_scanner,
+                          title: "Scan Barcode",
+
+                          onTap: () async {
+                            final result = await Navigator.push(
+                              context,
+
+                              MaterialPageRoute(
+                                builder: (_) => const BarcodeScannerScreen(),
+                              ),
+                            );
+
+                            if (result != null) {
+                              productcodeController.text = result;
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // =====================================================
+                  // 🔹 BASIC INFORMATION
+                  // =====================================================
+                  sectionTitle("2. Basic Information"),
+
+                  inputField(label: "Product Name", controller: nameController),
+                  inputField(
+                    label: "Product code",
+                    controller: productcodeController,
+                  ),
+
+                  const SizedBox(height: 20),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Category",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        value: selectedCategory,
+                        isExpanded: true,
+                        menuMaxHeight: 250,
+
+                        // -- Kept Dropdown Menu Styling (Popup only) --
+                        dropdownColor: Colors.white,
+                        elevation: 2,
+                        borderRadius: BorderRadius.circular(16),
+
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 16,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                        items: categories.map((e) {
+                          return DropdownMenuItem(
+                            value: e,
+                            child: Text(e, overflow: TextOverflow.ellipsis),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          ref.read(selectedCategoryProvider.notifier).state =
+                              value!;
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // 🔹 ADD GST BUTTON
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "Add GST",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+
+                      Switch(
+                        value: showGstFields,
+                        onChanged: (value) {
+                          ref.read(showGstProvider.notifier).state = value;
+
+                          if (!value) {
+                            sgstController.clear();
+                            cgstController.clear();
+                            hsnController.clear();
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // 🔹 GST FIELDS
+                  if (showGstFields)
+                    Column(
+                      children: [
+                        // SGST
+                        inputField(
+                          label: "State GST (SGST) %",
+                          controller: sgstController,
+                          keyboard: TextInputType.number,
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // CGST
+                        inputField(
+                          label: "Central GST (CGST) %",
+                          controller: cgstController,
+                          keyboard: TextInputType.number,
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // HSN
+                        inputField(
+                          label: "HSN Code",
+                          controller: hsnController,
+                        ),
+
+                        const SizedBox(height: 20),
+                      ],
+                    ),
+
+                  // 🔹 SUPPLIER
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            "Supplier",
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+
+                          TextButton.icon(
+                            onPressed: () async {
+                              final result = await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const AddSupplierScreen(),
+                                ),
+                              );
+
+                              // 🔹 Refresh supplier list after adding
+                              if (result == true) {
+                                loadSuppliers();
+                              }
+                            },
+
+                            icon: const Icon(Icons.add, size: 18),
+
+                            label: const Text("Add Supplier"),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 8),
+
+                      DropdownButtonFormField<String>(
+                        value: selectedSupplier,
+                        isExpanded: true,
+                        menuMaxHeight: 250,
+
+                        dropdownColor: Colors.white,
+                        elevation: 2,
+                        borderRadius: BorderRadius.circular(16),
+
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: Colors.white,
+
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 16,
+                          ),
+
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+
+                        items: suppliers.map((supplier) {
+                          return DropdownMenuItem(
+                            value: supplier,
+                            child: Text(
+                              supplier,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }).toList(),
+
+                        onChanged: (value) {
+                          ref.read(selectedSupplierProvider.notifier).state =
+                              value;
+
+                          supplierController.text = value!;
+                        },
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // 🔹 EXPIRY DATE
+                  inputField(
+                    label: "Expiry Date",
+                    controller: expiryController,
+                    readOnly: true,
+
+                    suffixIcon: const Icon(Icons.calendar_month),
+
+                    onTap: pickDate,
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // =====================================================
+                  // 🔹 STOCK DETAILS
+                  // =====================================================
+                  sectionTitle("3. Stock Details"),
+
+                  Row(
+                    children: [
+                      // Quantity
+                      Expanded(
+                        child: inputField(
+                          label: "Quantity",
+                          controller: quantityController,
+                          keyboard: TextInputType.number,
+                        ),
+                      ),
+
+                      const SizedBox(width: 14),
+
+                      // Low Stock Limit
+                      Expanded(
+                        child: inputField(
+                          label: "Low Stock Limit",
+                          controller: lslController,
+                          keyboard: TextInputType.number,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // 🔹 UNIT DROPDOWN
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Unit",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+
+                      const SizedBox(height: 8),
+
+                      DropdownButtonFormField<String>(
+                        value: unitController.text.isEmpty
+                            ? null
+                            : unitController.text,
+
+                        isExpanded: true,
+                        menuMaxHeight: 250,
+
+                        dropdownColor: Colors.white,
+                        elevation: 2,
+                        borderRadius: BorderRadius.circular(16),
+
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: Colors.white,
+
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 16,
+                          ),
+
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+
+                        items: ["Kg", "gram", "litre", "piece", "box"].map((
+                          unit,
+                        ) {
+                          return DropdownMenuItem(
+                            value: unit,
+                            child: Text(unit, overflow: TextOverflow.ellipsis),
+                          );
+                        }).toList(),
+
+                        onChanged: (value) {
+                          unitController.text = value!;
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  inputField(
+                    label: "Description",
+                    controller: descriptionController,
+                    maxLines: 4,
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // =====================================================
+                  // 🔹 PRICING
+                  // =====================================================
+                  sectionTitle("4. Pricing"),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: inputField(
+                          label: "Purchase Price",
+                          controller: purchaseController,
+                          keyboard: TextInputType.number,
+                        ),
+                      ),
+
+                      const SizedBox(width: 14),
+
+                      Expanded(
+                        child: inputField(
+                          label: "Selling Price",
+                          controller: sellingController,
+                          keyboard: TextInputType.number,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 22),
+
+                  // 🔹 PROFIT BUTTON
+                  SizedBox(
+                    width: double.infinity,
+                    height: 55,
+
+                    child: ElevatedButton(
+                      onPressed: calculateProfit,
+
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black,
+
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+
+                      child: const Text(
+                        "Calculate Profit Margin",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
+
+                  const SizedBox(height: 18),
+
+                  // 🔹 PROFIT CARD
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(22),
+
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+
+                    child: Column(
+                      children: [
+                        const Text(
+                          "Profit Margin",
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        Text(
+                          "${profitMargin.toStringAsFixed(1)}%",
+                          style: TextStyle(
+                            fontSize: 34,
+                            fontWeight: FontWeight.bold,
+                            color: profitMargin > 0 ? Colors.green : Colors.red,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 36),
+
+                  // =====================================================
+                  // 🔹 SAVE BUTTON
+                  // =====================================================
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+
+                    child: ElevatedButton(
+                      onPressed: widget.product == null
+                          ? saveProduct
+                          : updateProduct, // Dynamic Function
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: widget.product == null
+                            ? Colors.blue
+                            : Colors.orange, // Optional color change
+                      ),
+                      child: Text(
+                        widget.product == null
+                            ? "Save Product"
+                            : "Update Product", // Dynamic Text
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 40),
                 ],
               ),
             ),
-
-            const SizedBox(height: 36),
-
-            // =====================================================
-            // 🔹 SAVE BUTTON
-            // =====================================================
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-
-              child: ElevatedButton(
-                onPressed: widget.product == null
-                    ? saveProduct
-                    : updateProduct, // Dynamic Function
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: widget.product == null
-                      ? Colors.blue
-                      : Colors.orange, // Optional color change
-                ),
-                child: Text(
-                  widget.product == null
-                      ? "Save Product"
-                      : "Update Product", // Dynamic Text
-                  style: const TextStyle(fontSize: 16),
-                ),
-              ),
-            ),
-            const SizedBox(height: 40),
-          ],
+          ),
         ),
       ),
     );

@@ -12,6 +12,7 @@ import '../../../../core/storage/db_helper.dart';
 import 'billing_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/invoice_provider.dart';
+import '../../../../core/constants/app_curve.dart';
 
 class InvoiceScreen extends ConsumerStatefulWidget {
   final int invoiceId;
@@ -300,7 +301,7 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
 
       appBar: AppBar(
         backgroundColor: AppColors.primary,
-
+        elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
 
         title: const Text(
@@ -309,268 +310,279 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
         ),
       ),
 
-      body: items.isEmpty
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(14),
+      body: Container(
+        color: AppColors.primary,
+        child: ClipRRect(
+          borderRadius: AppCurve.top(context),
+          child: Container(
+            color: Colors.grey.shade100,
+            child: items.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.all(14),
+                    child: Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 10,
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // ================= HEADER =================
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
 
-              child: Container(
-                padding: const EdgeInsets.all(18),
+                            crossAxisAlignment: CrossAxisAlignment.start,
 
-                decoration: BoxDecoration(
-                  color: Colors.white,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
 
-                  borderRadius: BorderRadius.circular(18),
+                                children: const [
+                                  Text(
+                                    "Your Store",
+                                    style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
 
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                    ),
-                  ],
-                ),
+                                  SizedBox(height: 6),
 
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-
-                  children: [
-                    // ================= HEADER =================
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
-                      crossAxisAlignment: CrossAxisAlignment.start,
-
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-
-                          children: const [
-                            Text(
-                              "Your Store",
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primary,
+                                  Text("No. 45, Anna Nagar"),
+                                  Text("Chennai - 600080"),
+                                  Text("Ph: 9876543210"),
+                                  Text("GSTIN: 33ABCDE1234F1Z5"),
+                                ],
                               ),
+
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+
+                                children: [
+                                  Text(
+                                    "INV-${widget.invoiceId}",
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 5),
+
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.shade100,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+
+                                    child: const Text(
+                                      "Paid",
+                                      style: TextStyle(
+                                        color: Colors.green,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          // ================= DATE =================
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+                            children: [
+                              Text(
+                                "Date: ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}",
+                              ),
+
+                              const Text("Customer: Walk-in Customer"),
+                            ],
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          // ================= TABLE HEADER =================
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 10,
+                              horizontal: 8,
                             ),
 
-                            SizedBox(height: 6),
-
-                            Text("No. 45, Anna Nagar"),
-                            Text("Chennai - 600080"),
-                            Text("Ph: 9876543210"),
-                            Text("GSTIN: 33ABCDE1234F1Z5"),
-                          ],
-                        ),
-
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-
-                          children: [
-                            Text(
-                              "INV-${widget.invoiceId}",
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade200,
+                              borderRadius: BorderRadius.circular(8),
                             ),
 
-                            const SizedBox(height: 5),
+                            child: const Row(
+                              children: [
+                                Expanded(
+                                  flex: 4,
+                                  child: Text(
+                                    "Item",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
 
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
+                                Expanded(
+                                  flex: 2,
+                                  child: Text(
+                                    "Qty",
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
 
-                              decoration: BoxDecoration(
-                                color: Colors.green.shade100,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
+                                Expanded(
+                                  flex: 3,
+                                  child: Text(
+                                    "Price",
+                                    textAlign: TextAlign.right,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
 
-                              child: const Text(
+                                Expanded(
+                                  flex: 3,
+                                  child: Text(
+                                    "Amount",
+                                    textAlign: TextAlign.right,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          // ================= ITEMS =================
+                          ListView.builder(
+                            itemCount: items.length,
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+
+                            itemBuilder: (_, i) => _buildItemRow(items[i]),
+                          ),
+
+                          const Divider(height: 30),
+
+                          // ================= TOTALS =================
+                          _row("Subtotal", subtotal),
+                          _row("Discount", discount),
+                          _row("Tax (18%)", tax),
+
+                          const Divider(),
+
+                          _row("Total", total, bold: true),
+
+                          const SizedBox(height: 10),
+
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+                            children: [
+                              const Text(
                                 "Paid",
                                 style: TextStyle(
                                   color: Colors.green,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
 
-                    const SizedBox(height: 20),
-
-                    // ================= DATE =================
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
-                      children: [
-                        Text(
-                          "Date: ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}",
-                        ),
-
-                        const Text("Customer: Walk-in Customer"),
-                      ],
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // ================= TABLE HEADER =================
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 10,
-                        horizontal: 8,
-                      ),
-
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-
-                      child: const Row(
-                        children: [
-                          Expanded(
-                            flex: 4,
-                            child: Text(
-                              "Item",
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
+                              Text(
+                                "₹ ${total.toStringAsFixed(0)}",
+                                style: const TextStyle(
+                                  color: Colors.green,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
 
-                          Expanded(
-                            flex: 2,
-                            child: Text(
-                              "Qty",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
+                          const SizedBox(height: 6),
 
-                          Expanded(
-                            flex: 3,
-                            child: Text(
-                              "Price",
-                              textAlign: TextAlign.right,
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
+                          _row("Balance", 0),
 
-                          Expanded(
-                            flex: 3,
-                            child: Text(
-                              "Amount",
-                              textAlign: TextAlign.right,
-                              style: TextStyle(fontWeight: FontWeight.bold),
+                          const SizedBox(height: 30),
+
+                          // ================= BUTTONS =================
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+
+                            children: [
+                              _btn(
+                                Icons.download,
+                                "Download",
+                                onTap: _downloadInvoice,
+                              ),
+
+                              _btn(Icons.share, "Share", onTap: _shareInvoice),
+
+                              _btn(Icons.print, "Print", onTap: _printInvoice),
+                            ],
+                          ),
+                          const SizedBox(height: 25), // ✅ Space between rows
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              onPressed: () {
+                                Navigator.pushAndRemoveUntil(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const BillingScreen(),
+                                  ),
+                                  (route) => false,
+                                );
+                              },
+                              child: const Text(
+                                "Exit",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
-
-                    const SizedBox(height: 10),
-
-                    // ================= ITEMS =================
-                    ListView.builder(
-                      itemCount: items.length,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-
-                      itemBuilder: (_, i) => _buildItemRow(items[i]),
-                    ),
-
-                    const Divider(height: 30),
-
-                    // ================= TOTALS =================
-                    _row("Subtotal", subtotal),
-                    _row("Discount", discount),
-                    _row("Tax (18%)", tax),
-
-                    const Divider(),
-
-                    _row("Total", total, bold: true),
-
-                    const SizedBox(height: 10),
-
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
-                      children: [
-                        const Text(
-                          "Paid",
-                          style: TextStyle(
-                            color: Colors.green,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-
-                        Text(
-                          "₹ ${total.toStringAsFixed(0)}",
-                          style: const TextStyle(
-                            color: Colors.green,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 6),
-
-                    _row("Balance", 0),
-
-                    const SizedBox(height: 30),
-
-                    // ================= BUTTONS =================
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-
-                      children: [
-                        _btn(
-                          Icons.download,
-                          "Download",
-                          onTap: _downloadInvoice,
-                        ),
-
-                        _btn(Icons.share, "Share", onTap: _shareInvoice),
-
-                        _btn(Icons.print, "Print", onTap: _printInvoice),
-                      ],
-                    ),
-                    const SizedBox(height: 25), // ✅ Space between rows
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        onPressed: () {
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const BillingScreen(),
-                            ),
-                            (route) => false,
-                          );
-                        },
-                        child: const Text(
-                          "Exit",
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+                  ),
+          ),
+        ),
+      ),
     );
   }
 

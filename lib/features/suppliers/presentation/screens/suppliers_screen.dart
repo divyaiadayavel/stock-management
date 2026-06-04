@@ -6,6 +6,7 @@ import '../../../../core/storage/db_helper.dart';
 import 'add_supplier_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/supplier_provider.dart';
+import '../../../../core/constants/app_curve.dart';
 
 class SuppliersScreen extends ConsumerStatefulWidget {
   const SuppliersScreen({super.key});
@@ -228,29 +229,21 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
 
     final totalPurchases = ref.watch(totalPurchasesProvider);
     return Scaffold(
+      // Set the main Scaffold background color to primary
       backgroundColor: AppColors.background,
 
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         elevation: 0,
-
         title: const Text(
           "Suppliers",
-
           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
-
         actions: [
-          // IconButton(
-          //   onPressed: () {},
-
-          //   icon: const Icon(Icons.search, color: Colors.white),
-          // ),
           IconButton(
             onPressed: () async {
               final result = await Navigator.push(
                 context,
-
                 MaterialPageRoute(builder: (_) => const AddSupplierScreen()),
               );
 
@@ -258,110 +251,157 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
                 loadSuppliers();
               }
             },
-
             icon: const Icon(Icons.add, color: Colors.white),
           ),
         ],
       ),
 
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-
-          children: [
-            // =========================
-            // 🔹 TOP CARDS
-            // =========================
-            GridView.count(
-              shrinkWrap: true,
-
-              physics: const NeverScrollableScrollPhysics(),
-
-              crossAxisCount: 2,
-
-              crossAxisSpacing: AppSizes.gridSpacing,
-
-              mainAxisSpacing: AppSizes.gridSpacing,
-
-              childAspectRatio: 1.8,
-
-              children: [
-                _topCard(
-                  "Total Suppliers",
-                  "$totalSuppliers",
-                  Icons.people,
-                  Colors.blue,
-                ),
-
-                _topCard(
-                  "Categories",
-                  "$totalCategories",
-                  Icons.category,
-                  Colors.orange,
-                ),
-
-                _topCard(
-                  "Total Products",
-                  "$totalProducts",
-                  Icons.inventory,
-                  Colors.green,
-                ),
-
-                _topCard(
-                  "Purchases",
-                  "₹${totalPurchases.toStringAsFixed(0)}",
-                  Icons.shopping_cart,
-                  Colors.purple,
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 24),
-
-            // =========================
-            // 🔹 HEADER
-            // =========================
-            Row(
-              children: [
-                const Text(
-                  "Supplier List",
-
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-
-                const Spacer(),
-
-                TextButton(onPressed: () {}, child: const Text("View All")),
-              ],
-            ),
-
-            const SizedBox(height: 12),
-
-            // =========================
-            // 🔹 SUPPLIER LIST
-            // =========================
-            suppliers.isEmpty
-                ? Container(
-                    height: 250,
-
-                    alignment: Alignment.center,
-
-                    child: const Text("No Suppliers Added"),
-                  )
-                : ListView.builder(
+      body: Container(
+        color: AppColors.primary,
+        child: ClipRRect(
+          borderRadius: AppCurve.top(context),
+          child: Container(
+            color: Colors.grey.shade100,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ==================== SEARCH BAR ====================
+                  Container(
+                    height: 52,
+                    margin: const EdgeInsets.only(
+                      bottom: 16,
+                    ), // Spaces it perfectly away from cards below
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: TextField(
+                      onChanged: (val) {
+                        // You can add your supplier filter logic here if needed
+                      },
+                      decoration: InputDecoration(
+                        hintText: "Search suppliers...",
+                        hintStyle: TextStyle(color: Colors.grey.shade500),
+                        prefixIcon: const Icon(
+                          Icons.search,
+                          color: Colors.grey,
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // =========================
+                  // 🔹 TOP CARDS
+                  // =========================
+                  GridView.count(
                     shrinkWrap: true,
 
                     physics: const NeverScrollableScrollPhysics(),
 
-                    itemCount: suppliers.length,
+                    crossAxisCount: 2,
 
-                    itemBuilder: (context, index) {
-                      return supplierCard(suppliers[index]);
-                    },
+                    crossAxisSpacing: AppSizes.gridSpacing,
+
+                    mainAxisSpacing: AppSizes.gridSpacing,
+
+                    childAspectRatio: 1.8,
+
+                    children: [
+                      _topCard(
+                        "Total Suppliers",
+                        "$totalSuppliers",
+                        Icons.people,
+                        Colors.blue,
+                      ),
+
+                      _topCard(
+                        "Categories",
+                        "$totalCategories",
+                        Icons.category,
+                        Colors.orange,
+                      ),
+
+                      _topCard(
+                        "Total Products",
+                        "$totalProducts",
+                        Icons.inventory,
+                        Colors.green,
+                      ),
+
+                      _topCard(
+                        "Purchases",
+                        "₹${totalPurchases.toStringAsFixed(0)}",
+                        Icons.shopping_cart,
+                        Colors.purple,
+                      ),
+                    ],
                   ),
-          ],
+
+                  const SizedBox(height: 24),
+
+                  // =========================
+                  // 🔹 HEADER
+                  // =========================
+                  Row(
+                    children: [
+                      const Text(
+                        "Supplier List",
+
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+
+                      const Spacer(),
+
+                      TextButton(
+                        onPressed: () {},
+                        child: const Text("View All"),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // =========================
+                  // 🔹 SUPPLIER LIST
+                  // =========================
+                  suppliers.isEmpty
+                      ? Container(
+                          height: 250,
+
+                          alignment: Alignment.center,
+
+                          child: const Text("No Suppliers Added"),
+                        )
+                      : ListView.builder(
+                          shrinkWrap: true,
+
+                          physics: const NeverScrollableScrollPhysics(),
+
+                          itemCount: suppliers.length,
+
+                          itemBuilder: (context, index) {
+                            return supplierCard(suppliers[index]);
+                          },
+                        ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

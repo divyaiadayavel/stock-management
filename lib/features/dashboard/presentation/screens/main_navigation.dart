@@ -58,13 +58,22 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
       /// 🔥 BOTTOM NAV BAR
       bottomNavigationBar: BottomAppBar(
+        color: Colors.white,
+
+        surfaceTintColor: Colors.transparent,
+
         shape: const CircularNotchedRectangle(),
+
         notchMargin: 6,
-        elevation: 8,
+
+        elevation: 12,
+
         child: SizedBox(
           height: 70,
+
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
+
             children: [
               _navItem(Icons.home_outlined, "Home", 0),
               _navItem(Icons.inventory_2_outlined, "Products", 1),

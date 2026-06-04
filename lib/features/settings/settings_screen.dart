@@ -14,6 +14,7 @@ import 'backup_sync_screen.dart';
 import 'notifications_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'settings_provider.dart';
+import '../../core/constants/app_curve.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -277,137 +278,156 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     final logoPath = ref.watch(logoPathProvider);
     return Scaffold(
+      backgroundColor: AppColors.primary,
+
       appBar: AppBar(
         backgroundColor: AppColors.primary,
+        elevation: 0,
         title: const Text(
           "Settings",
           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            profileCard(),
-            const SizedBox(height: 20),
-            const Text(
-              "BUSINESS",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
+      body: Container(
+        color: AppColors.primary,
 
-            // ✅ Updated Tile to handle navigation
-            _tile(
-              Icons.store,
-              "Business Profile",
-              "Store details, address",
-              onTap: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const BusinessProfileScreen(),
-                  ),
-                );
-                loadProfile(); // Reload in case store name was updated
-              },
-            ),
+        child: ClipRRect(
+          borderRadius: AppCurve.top(context),
 
-            _tile(
-              Icons.receipt_long,
-              "Invoice & Tax",
-              "GST, invoice, taxes",
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const InvoiceTaxScreen(),
+          child: Container(
+            color: Colors.grey.shade100,
+
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(12),
+
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  profileCard(),
+                  const SizedBox(height: 20),
+                  const Text(
+                    "BUSINESS",
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
-                );
-              },
-            ),
-            _tile(
-              Icons.tune,
-              "Customize",
-              "Category, Units",
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CustomizeScreen(),
+                  const SizedBox(height: 10),
+
+                  // ✅ Updated Tile to handle navigation
+                  _tile(
+                    Icons.store,
+                    "Business Profile",
+                    "Store details, address",
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const BusinessProfileScreen(),
+                        ),
+                      );
+                      loadProfile(); // Reload in case store name was updated
+                    },
                   ),
-                );
-              },
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              "HARDWARE",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            _tile(
-              Icons.print,
-              "Printers & Hardware",
-              "Bluetooth, Thermal, Barcode",
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const PrintersHardwareScreen(),
+
+                  _tile(
+                    Icons.receipt_long,
+                    "Invoice & Tax",
+                    "GST, invoice, taxes",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const InvoiceTaxScreen(),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
-            const SizedBox(height: 20),
-            const Text("STAFF", style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            _tile(
-              Icons.people,
-              "User Roles & Permissions",
-              "Manage staff and access",
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const UserRolesScreen(),
+                  _tile(
+                    Icons.tune,
+                    "Customize",
+                    "Category, Units",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const CustomizeScreen(),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              "DATA & PREFERENCES",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            _tile(
-              Icons.backup,
-              "Backup & Sync",
-              "Auto backup and restore",
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const BackupSyncScreen(),
+                  const SizedBox(height: 20),
+                  const Text(
+                    "HARDWARE",
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
-                );
-              },
-            ),
-            _tile(
-              Icons.notifications,
-              "Notifications",
-              "Alerts and updates",
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const NotificationsScreen(),
+                  const SizedBox(height: 10),
+                  _tile(
+                    Icons.print,
+                    "Printers & Hardware",
+                    "Bluetooth, Thermal, Barcode",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const PrintersHardwareScreen(),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
+                  const SizedBox(height: 20),
+                  const Text(
+                    "STAFF",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 10),
+                  _tile(
+                    Icons.people,
+                    "User Roles & Permissions",
+                    "Manage staff and access",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const UserRolesScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    "DATA & PREFERENCES",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 10),
+                  _tile(
+                    Icons.backup,
+                    "Backup & Sync",
+                    "Auto backup and restore",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const BackupSyncScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _tile(
+                    Icons.notifications,
+                    "Notifications",
+                    "Alerts and updates",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const NotificationsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                ],
+              ),
             ),
-            const SizedBox(height: 20),
-          ],
+          ),
         ),
       ),
     );
