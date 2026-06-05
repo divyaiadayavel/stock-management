@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'dashboard_screen.dart';
 import '../../../products/presentation/screens/product_screen.dart';
 import '../../../sales/presentation/screens/billing_screen.dart';
-import '../../../settings/settings_screen.dart';
+import '../../../settings/presentation/screens/settings_screen.dart';
 import '../../../suppliers/presentation/screens/suppliers_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
