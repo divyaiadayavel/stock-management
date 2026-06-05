@@ -7,6 +7,8 @@ import 'add_supplier_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/supplier_provider.dart';
 import '../../../../core/constants/app_curve.dart';
+import 'supplier_details_screen.dart';
+import 'supplier_details_screen.dart';
 
 class SuppliersScreen extends ConsumerStatefulWidget {
   const SuppliersScreen({super.key});
@@ -16,6 +18,9 @@ class SuppliersScreen extends ConsumerStatefulWidget {
 }
 
 class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
+  List<Map<String, dynamic>> filteredSuppliers = [];
+  String searchText = '';
+
   @override
   void initState() {
     super.initState();
@@ -30,19 +35,21 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
   Future<void> loadSuppliers() async {
     final data = await DBHelper.getSuppliers();
 
-    final count = await DBHelper.getSuppliersCount();
+    final supplierCount = await DBHelper.getSupplierCount();
+
+    final productCount = await DBHelper.getProductCount();
 
     final categories = data.map((e) => e["category"]).toSet().length;
 
-    // 🔹 GET TOTAL PURCHASE AMOUNT
     final purchaseAmount = await DBHelper.getTotalPurchaseAmount();
+
     ref.read(suppliersProvider.notifier).state = data;
 
-    ref.read(totalSuppliersProvider.notifier).state = count;
+    ref.read(totalSuppliersProvider.notifier).state = supplierCount;
 
     ref.read(totalCategoriesProvider.notifier).state = categories;
 
-    ref.read(totalProductsProvider.notifier).state = count;
+    ref.read(totalProductsProvider.notifier).state = productCount;
 
     ref.read(totalPurchasesProvider.notifier).state = purchaseAmount;
   }
@@ -119,96 +126,111 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
   // =========================
 
   Widget supplierCard(Map<String, dynamic> supplier) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-
-      padding: const EdgeInsets.all(14),
-
-      decoration: BoxDecoration(
-        color: Colors.white,
-
-        borderRadius: BorderRadius.circular(AppSizes.cardRadius),
-
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+    return GestureDetector(
+      onTap: () async {
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => SupplierDetailsScreen(supplier: supplier),
           ),
-        ],
-      ),
+        );
 
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 28,
+        if (result == true) {
+          loadSuppliers();
+        }
+      },
 
-            backgroundColor: AppColors.primary.withOpacity(0.1),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
 
-            child: Text(
-              supplier["supplierName"][0].toUpperCase(),
+        padding: const EdgeInsets.all(14),
 
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: AppColors.primary,
+        decoration: BoxDecoration(
+          color: Colors.white,
+
+          borderRadius: BorderRadius.circular(AppSizes.cardRadius),
+
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 28,
+
+              backgroundColor: AppColors.primary.withOpacity(0.1),
+
+              child: Text(
+                supplier["supplierName"][0].toUpperCase(),
+
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
               ),
             ),
-          ),
 
-          const SizedBox(width: 14),
+            const SizedBox(width: 14),
 
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
 
-              children: [
-                Text(
-                  supplier["supplierName"],
+                children: [
+                  Text(
+                    supplier["supplierName"],
 
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
 
-                const SizedBox(height: 4),
+                  const SizedBox(height: 4),
 
-                Text(
-                  supplier["category"],
+                  Text(
+                    supplier["category"],
 
-                  style: const TextStyle(color: Colors.grey, fontSize: 13),
-                ),
+                    style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
 
-                const SizedBox(height: 8),
+                  const SizedBox(height: 8),
 
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.phone,
-                      size: AppSizes.iconSm,
-                      color: AppColors.primary,
-                    ),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.phone,
+                        size: AppSizes.iconSm,
+                        color: AppColors.primary,
+                      ),
 
-                    const SizedBox(width: 5),
+                      const SizedBox(width: 5),
 
-                    Text(
-                      supplier["contactNumber"],
+                      Text(
+                        supplier["contactNumber"],
 
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                  ],
-                ),
-              ],
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
 
-          const Icon(
-            Icons.arrow_forward_ios,
-            size: AppSizes.iconSm,
-            color: Colors.grey,
-          ),
-        ],
+            const Icon(
+              Icons.arrow_forward_ios,
+              size: AppSizes.iconSm,
+              color: Colors.grey,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -219,7 +241,7 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final suppliers = ref.watch(suppliersProvider);
+    final suppliers = ref.watch(filteredSuppliersProvider);
 
     final totalSuppliers = ref.watch(totalSuppliersProvider);
 
@@ -285,8 +307,8 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
                       ],
                     ),
                     child: TextField(
-                      onChanged: (val) {
-                        // You can add your supplier filter logic here if needed
+                      onChanged: (value) {
+                        ref.read(searchSupplierProvider.notifier).state = value;
                       },
                       decoration: InputDecoration(
                         hintText: "Search suppliers...",
@@ -395,7 +417,23 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
                           itemCount: suppliers.length,
 
                           itemBuilder: (context, index) {
-                            return supplierCard(suppliers[index]);
+                            return GestureDetector(
+                              onTap: () async {
+                                final result = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => SupplierDetailsScreen(
+                                      supplier: suppliers[index],
+                                    ),
+                                  ),
+                                );
+
+                                if (result == true) {
+                                  loadSuppliers();
+                                }
+                              },
+                              child: supplierCard(suppliers[index]),
+                            );
                           },
                         ),
                 ],

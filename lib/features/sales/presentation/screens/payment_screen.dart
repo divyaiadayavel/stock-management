@@ -177,7 +177,7 @@ class PaymentScreen extends ConsumerWidget {
                     isExpanded: selectedMethod == "UPI",
                   ),
 
-                  const Spacer(),
+                  const SizedBox(height: 60),
 
                   // ================= SECURITY =================
                   Center(

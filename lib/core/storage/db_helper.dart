@@ -53,12 +53,6 @@ class DBHelper {
         } catch (e) {}
 
         try {
-          await db.execute(
-            "ALTER TABLE products ADD COLUMN selling_price REAL",
-          );
-        } catch (e) {}
-
-        try {
           await db.execute("ALTER TABLE products ADD COLUMN image_path TEXT");
         } catch (e) {}
 
@@ -191,16 +185,6 @@ class DBHelper {
       )
     ''');
 
-    // =========================
-    // ⚙️ SETTINGS
-    // =========================
-    await db.execute('''
-      CREATE TABLE settings(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        key TEXT UNIQUE,
-        value TEXT
-      )
-    ''');
     // =========================
     // ⚙️ SETTINGS
     // =========================
@@ -565,16 +549,53 @@ class DBHelper {
   }
 
   // =========================
-  // 🚚 GET SUPPLIERS COUNT
+  // 🚚 GET SUPPLIER BY ID
   // =========================
-  static Future<int> getSuppliersCount() async {
+  static Future<Map<String, dynamic>?> getSupplierById(int id) async {
     final dbClient = await db;
 
-    final result = await dbClient.rawQuery(
-      "SELECT COUNT(*) as count FROM suppliers",
+    final result = await dbClient.query(
+      "suppliers",
+      where: "id = ?",
+      whereArgs: [id],
+      limit: 1,
     );
 
-    return Sqflite.firstIntValue(result) ?? 0;
+    if (result.isNotEmpty) {
+      return result.first;
+    }
+
+    return null;
+  }
+
+  // =========================
+  // 🚚 UPDATE SUPPLIER
+  // =========================
+  static Future<int> updateSupplier({
+    required int id,
+    required String supplierName,
+    required String contactNumber,
+    required String category,
+  }) async {
+    final dbClient = await db;
+
+    return await dbClient.update(
+      "suppliers",
+      {
+        "supplierName": supplierName,
+        "contactNumber": contactNumber,
+        "category": category,
+      },
+      where: "id = ?",
+      whereArgs: [id],
+    );
+  }
+
+  // delete supplier//
+  static Future<int> deleteSupplier(int id) async {
+    final dbClient = await db;
+
+    return await dbClient.delete("suppliers", where: "id = ?", whereArgs: [id]);
   }
 
   // =========================
@@ -1004,19 +1025,6 @@ class DBHelper {
     final dbClient = await db;
 
     await dbClient.delete('products', where: 'id = ?', whereArgs: [id]);
-  }
-
-  // =========================
-  // ⚙️ SETTINGS TABLE
-  // =========================
-  static Future<void> createSettingsTable(Database db) async {
-    await db.execute('''
-    CREATE TABLE settings(
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      key TEXT UNIQUE,
-      value TEXT
-    )
-  ''');
   }
 
   // SAVE SETTING
