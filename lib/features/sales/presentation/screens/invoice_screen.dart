@@ -6,10 +6,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-
+import '../../../dashboard/presentation/screens/main_navigation.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/storage/db_helper.dart';
-import 'new_bill_screen.dart';
+import '../../../dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/invoice_provider.dart';
 import '../../../../core/constants/app_curve.dart';
@@ -562,7 +562,8 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
                                 Navigator.pushAndRemoveUntil(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => const NewBillScreen(),
+                                    builder: (_) =>
+                                        const MainNavigationScreen(),
                                   ),
                                   (route) => false,
                                 );

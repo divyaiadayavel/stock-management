@@ -16,22 +16,30 @@ class NewBillScreen extends ConsumerStatefulWidget {
 }
 
 class _NewBillScreenState extends ConsumerState<NewBillScreen> {
-  final TextEditingController discountController = TextEditingController();
-
-  double discount = 0;
-
   @override
   Widget build(BuildContext context) {
     final billingState = ref.watch(billingProvider);
 
     final billingNotifier = ref.read(billingProvider.notifier);
 
-    final subtotal = billingState.subtotal;
+    final originalSubtotal = billingState.cart.fold(
+      0.0,
+      (sum, item) => sum + item.subtotal,
+    );
+
+    final totalDiscount = billingState.cart.fold(
+      0.0,
+      (sum, item) => sum + item.discountAmount,
+    );
+
+    final subtotal = billingState.cart.fold(
+      0.0,
+      (sum, item) => sum + item.total,
+    );
 
     final tax = billingState.tax;
 
-    final total = subtotal - discount + tax;
-
+    final total = subtotal + tax;
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
 
@@ -134,8 +142,22 @@ class _NewBillScreenState extends ConsumerState<NewBillScreen> {
 
                                             const SizedBox(height: 5),
 
-                                            Text(
-                                              "₹${item.price.toStringAsFixed(2)}",
+                                            Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  "₹${item.price.toStringAsFixed(2)}",
+                                                ),
+
+                                                Text(
+                                                  "Discount: ${item.discount.toStringAsFixed(0)}%",
+                                                  style: const TextStyle(
+                                                    color: Colors.green,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ],
                                         ),
@@ -273,40 +295,15 @@ class _NewBillScreenState extends ConsumerState<NewBillScreen> {
 
                   child: Column(
                     children: [
-                      TextField(
-                        controller: discountController,
+                      _amountRow("Subtotal", originalSubtotal),
 
-                        keyboardType: TextInputType.number,
-
-                        onChanged: (value) {
-                          setState(() {
-                            discount = double.tryParse(value) ?? 0;
-                          });
-                        },
-
-                        decoration: InputDecoration(
-                          labelText: "Discount",
-
-                          prefixText: "₹ ",
-
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      _amountRow("Subtotal", subtotal),
+                      _amountRow("Discount", totalDiscount),
 
                       _amountRow("Tax", tax),
-
-                      _amountRow("Discount", discount),
 
                       const Divider(),
 
                       _amountRow("Total", total, isBold: true),
-
                       const SizedBox(height: 20),
 
                       Row(
@@ -406,7 +403,7 @@ class _NewBillScreenState extends ConsumerState<NewBillScreen> {
                                   }).toList(),
 
                                   subtotal: subtotal,
-                                  discount: discount,
+                                  discount: billingState.discount,
                                   tax: tax,
                                   total: total,
                                 );

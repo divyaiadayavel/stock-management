@@ -28,6 +28,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   final TextEditingController cgstController = TextEditingController();
   final TextEditingController hsnController = TextEditingController();
   final TextEditingController productcodeController = TextEditingController();
+  final TextEditingController discountController = TextEditingController();
 
   final purchaseController = TextEditingController();
   final sellingController = TextEditingController();
@@ -80,7 +81,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       // 🔹 FIX 1: Load GST values so they don't reset to 0
       sgstController.text = widget.product!['sgst']?.toString() ?? "";
       cgstController.text = widget.product!['cgst']?.toString() ?? "";
-
+      discountController.text = widget.product!['discount']?.toString() ?? "";
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(selectedCategoryProvider.notifier).state =
             widget.product!['category'] ?? "Electronics";
@@ -102,7 +103,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     final selectedCategory = ref.read(selectedCategoryProvider);
     final selectedSupplier = ref.read(selectedSupplierProvider);
     final showGstFields = ref.read(showGstProvider);
-
+    final TextEditingController productcodeController = TextEditingController();
     try {
       // 🔹 FIX 2: Logic for Image Persistence
       String finalImagePath =
@@ -126,6 +127,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         description: descriptionController.text.trim(),
         barcode: productcodeController.text.trim(),
         imagePath: finalImagePath,
+        discount: double.tryParse(discountController.text) ?? 0,
       );
 
       Navigator.pop(context, true);
@@ -223,6 +225,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         barcode: productcodeController.text.trim(),
 
         imagePath: image?.path ?? "",
+        discount: double.tryParse(discountController.text) ?? 0,
       );
 
       // ✅ SUCCESS MESSAGE
@@ -542,7 +545,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
-                        "Add GST",
+                        "Add GST and Discount",
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -593,6 +596,14 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                           label: "HSN Code",
                           controller: hsnController,
                         ),
+                        // DISCOUNT
+                        inputField(
+                          label: "Discount %",
+                          controller: discountController,
+                          keyboard: TextInputType.number,
+                        ),
+
+                        const SizedBox(height: 20),
 
                         const SizedBox(height: 20),
                       ],
@@ -902,7 +913,10 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                         widget.product == null
                             ? "Save Product"
                             : "Update Product", // Dynamic Text
-                        style: const TextStyle(fontSize: 16),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                        ),
                       ),
                     ),
                   ),

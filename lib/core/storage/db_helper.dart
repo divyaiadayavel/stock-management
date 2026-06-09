@@ -56,10 +56,6 @@ class DBHelper {
           await db.execute("ALTER TABLE products ADD COLUMN image_path TEXT");
         } catch (e) {}
 
-        try {
-          await db.execute("ALTER TABLE products ADD COLUMN image_path TEXT");
-        } catch (e) {}
-
         // 👇 ADD THESE NEW LINES FOR THE PROFILE TABLE 👇
         try {
           await db.execute(
@@ -76,6 +72,9 @@ class DBHelper {
           await db.execute("ALTER TABLE profile ADD COLUMN gstNumber TEXT");
         } catch (e) {}
         try {
+          await db.execute("ALTER TABLE products ADD COLUMN image_path TEXT");
+        } catch (e) {}
+        try {
           await db.execute(
             "ALTER TABLE profile ADD COLUMN taxRegistrationType TEXT",
           );
@@ -83,6 +82,11 @@ class DBHelper {
         // --- NEW USER COLUMN ---
         try {
           await db.execute("ALTER TABLE users ADD COLUMN phone TEXT");
+        } catch (e) {}
+        try {
+          await db.execute(
+            "ALTER TABLE products ADD COLUMN discount REAL DEFAULT 0",
+          );
         } catch (e) {}
       },
     );
@@ -125,7 +129,8 @@ class DBHelper {
         unit TEXT,
         description TEXT,
         barcode TEXT,
-        image_path TEXT        -- Changed from imagePath
+        image_path TEXT,
+       discount REAL DEFAULT 0,     -- Changed from imagePath
       )
     ''');
     // =========================
@@ -360,6 +365,7 @@ class DBHelper {
     required String description,
     required String barcode,
     required String imagePath,
+    required double discount,
   }) async {
     final dbClient = await db;
 
@@ -386,6 +392,7 @@ class DBHelper {
       "description": description,
       "barcode": barcode,
       "image_path": imagePath,
+      "discount": discount,
     });
   }
 
@@ -406,6 +413,7 @@ class DBHelper {
     required String description,
     required String barcode,
     required String imagePath,
+    required double discount,
   }) async {
     final dbClient = await db;
 
@@ -425,6 +433,7 @@ class DBHelper {
       "description": description,
       "barcode": barcode,
       "image_path": imagePath,
+      "discount": discount,
     };
 
     return await dbClient.update(

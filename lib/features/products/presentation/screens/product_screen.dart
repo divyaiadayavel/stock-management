@@ -114,6 +114,12 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
       }).toList();
     }
 
+    temp.sort(
+      (a, b) => (a["name"] ?? "").toString().toLowerCase().compareTo(
+        (b["name"] ?? "").toString().toLowerCase(),
+      ),
+    );
+
     filteredProducts = temp;
 
     setState(() {});

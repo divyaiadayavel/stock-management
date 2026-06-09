@@ -56,6 +56,7 @@ class BillingNotifier extends StateNotifier<BillingState> {
           price: (product["selling_price"] as num).toDouble(),
           sgst: (product["sgst"] ?? 0).toDouble(),
           cgst: (product["cgst"] ?? 0).toDouble(),
+          discount: (product["discount"] ?? 0).toDouble(),
           imagePath: product["image_path"],
           qty: qty,
         ),

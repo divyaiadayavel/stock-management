@@ -49,6 +49,11 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
       );
     }).toList();
 
+    filteredProducts.sort(
+      (a, b) => (a["name"] ?? "").toString().toLowerCase().compareTo(
+        (b["name"] ?? "").toString().toLowerCase(),
+      ),
+    );
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
 

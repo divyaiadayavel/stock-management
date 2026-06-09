@@ -12,3 +12,5 @@ final profitMarginProvider = StateProvider<double>((ref) => 0);
 final showGstProvider = StateProvider<bool>((ref) => false);
 
 final suppliersProvider = StateProvider<List<String>>((ref) => []);
+
+final discountProvider = StateProvider<double>((ref) => 0);

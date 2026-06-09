@@ -4,6 +4,7 @@ class CartItem {
   final double price;
   final double sgst;
   final double cgst;
+  final double discount;
   final String? imagePath;
 
   int qty;
@@ -14,11 +15,16 @@ class CartItem {
     required this.price,
     required this.sgst,
     required this.cgst,
+    required this.discount,
     this.imagePath,
     this.qty = 1,
   });
 
-  double get total => price * qty;
+  double get subtotal => price * qty;
+
+  double get discountAmount => subtotal * (discount / 100);
+
+  double get total => subtotal - discountAmount;
 
   double get tax => total * ((sgst + cgst) / 100);
 
