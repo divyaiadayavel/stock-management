@@ -2,35 +2,28 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../../../core/network/api_config.dart';
 import '../models/business_profile_model.dart';
 import '../models/settings_bundle_model.dart';
 import '../models/staff_user_model.dart';
 
 class SettingsRemoteDatasource {
   SettingsRemoteDatasource({http.Client? client})
-    : _client = client ?? http.Client();
-
-static const String baseUrl =
-'https://nonredemptive-gyrational-pauletta.ngrok-free.dev/public_html';
+      : _client = client ?? http.Client();
 
   static const int defaultUserId = 1;
 
   final http.Client _client;
 
-  Uri _endpoint(String fileName, [Map<String, String>? query]) {
-    return Uri.parse(
-      '$baseUrl/settings/$fileName',
-    ).replace(queryParameters: query);
-  }
+  // ── Settings ────────────────────────────────────────────────────────────────
 
   Future<SettingsBundleModel> getSettingsBundle({
     int userId = defaultUserId,
   }) async {
-    final response = await _client.get(
-      _endpoint('get_settings.php', {'user_id': userId.toString()}),
-      headers: _headers,
-    );
+    final uri = Uri.parse(ApiConfig.getSettings)
+        .replace(queryParameters: {'user_id': userId.toString()});
 
+    final response = await _client.get(uri, headers: ApiConfig.jsonHeaders);
     final json = _decodeResponse(response);
     return SettingsBundleModel.fromJson(json);
   }
@@ -39,7 +32,7 @@ static const String baseUrl =
     BusinessProfileModel profile, {
     int userId = defaultUserId,
   }) async {
-    final json = await _postSave({
+    final json = await _post(ApiConfig.saveSettings, {
       'user_id': userId,
       'profile': profile.toJson(),
     });
@@ -56,41 +49,103 @@ static const String baseUrl =
     Map<String, String> settings, {
     int userId = defaultUserId,
   }) async {
-    await _postSave({'user_id': userId, 'settings': settings});
+    await _post(ApiConfig.saveSettings, {
+      'user_id': userId,
+      'settings': settings,
+    });
+  }
+
+  // ── Staff ────────────────────────────────────────────────────────────────────
+
+  Future<List<StaffUserModel>> getStaffUsers({
+    int userId = defaultUserId,
+  }) async {
+    final uri = Uri.parse(ApiConfig.getStaff)
+        .replace(queryParameters: {'user_id': userId.toString()});
+
+    final response = await _client.get(uri, headers: ApiConfig.jsonHeaders);
+    final json = _decodeResponse(response);
+    final data = _readData(json);
+
+    final list = data['staff'];
+    if (list is! List) return [];
+    return list
+        .whereType<Map>()
+        .map((e) => StaffUserModel.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
   }
 
   Future<bool> addStaffUser(
     StaffUserModel user, {
     int userId = defaultUserId,
   }) async {
-    final json = await _postSave({'user_id': userId, 'staff': user.toJson()});
-
+    final json = await _post(ApiConfig.saveStaff, {
+      'user_id': userId,
+      ...user.toJson(),
+    });
     return _readSuccess(json);
   }
 
-  Future<Map<String, dynamic>> _postSave(Map<String, dynamic> body) async {
+  Future<bool> updateStaffUser(
+    StaffUserModel user, {
+    int userId = defaultUserId,
+  }) async {
+    final json = await _post(ApiConfig.saveStaff, {
+      'user_id': userId,
+      ...user.toJson(),
+    });
+    return _readSuccess(json);
+  }
+
+  Future<bool> deleteStaffUser(
+    int staffUserId, {
+    int userId = defaultUserId,
+  }) async {
+    final json = await _post(ApiConfig.deleteStaff, {
+      'user_id': userId,
+      'staff_id': staffUserId,
+    });
+    return _readSuccess(json);
+  }
+
+  Future<bool> setStaffUserStatus(
+    int staffUserId,
+    bool isActive, {
+    int userId = defaultUserId,
+  }) async {
+    final json = await _post(ApiConfig.updateStatus, {
+      'user_id': userId,
+      'id': staffUserId,
+      'isActive': isActive,
+    });
+    return _readSuccess(json);
+  }
+
+  // ── Internals ────────────────────────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> _post(
+    String url,
+    Map<String, dynamic> body,
+  ) async {
     final response = await _client.post(
-      _endpoint('save_settings.php'),
-      headers: _headers,
+      Uri.parse(url),
+      headers: ApiConfig.jsonHeaders,
       body: jsonEncode(body),
     );
-
     return _decodeResponse(response);
   }
 
   Map<String, dynamic> _decodeResponse(http.Response response) {
     final decoded = jsonDecode(response.body);
-    if (decoded is! Map) {
-      throw Exception('Invalid settings API response');
-    }
+    if (decoded is! Map) throw Exception('Invalid API response');
 
     final json = Map<String, dynamic>.from(decoded);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(json['message'] ?? 'Settings API failed');
-    }
 
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(json['message'] ?? 'API request failed');
+    }
     if (!_readSuccess(json)) {
-      throw Exception(json['message'] ?? 'Settings API failed');
+      throw Exception(json['message'] ?? 'API request failed');
     }
 
     return json;
@@ -108,13 +163,5 @@ static const String baseUrl =
     if (value is bool) return value;
     if (value is num) return value == 1;
     return value?.toString().toLowerCase() == 'true';
-  }
-
-  Map<String, String> get _headers {
-    return const {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-    };
   }
 }

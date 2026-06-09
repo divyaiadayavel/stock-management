@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stock_management/features/auth/presentation/screens/login_screen.dart';
 
 void main() {
-  runApp(const ProviderScope(child: MyApp()));
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -11,10 +11,13 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Stock Management',
-      debugShowCheckedModeBanner: false,
-      home: const LoginScreen(),
+    return ProviderScope(
+      child: MaterialApp(
+        title: 'Stock Management',
+        debugShowCheckedModeBanner: false,
+        home: const LoginScreen(),
+        routes: {'/login': (context) => const LoginScreen()},
+      ),
     );
   }
 }

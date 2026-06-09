@@ -20,4 +20,10 @@ abstract class SettingsRepository {
   Future<List<StaffUser>> getStaffUsers();
 
   Future<bool> addStaffUser(StaffUser user);
+
+  Future<bool> updateStaffUser(StaffUser user);
+
+  Future<bool> deleteStaffUser(int staffUserId);
+
+  Future<bool> setStaffUserStatus(int staffUserId, bool isActive);
 }

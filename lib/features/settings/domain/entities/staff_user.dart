@@ -17,6 +17,26 @@ class StaffUser {
   final String password;
   final bool isActive;
 
+  StaffUser copyWith({
+    int? id,
+    String? name,
+    String? email,
+    String? phone,
+    String? role,
+    String? password,
+    bool? isActive,
+  }) {
+    return StaffUser(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      phone: phone ?? this.phone,
+      role: role ?? this.role,
+      password: password ?? this.password,
+      isActive: isActive ?? this.isActive,
+    );
+  }
+
   Map<String, dynamic> toMap() {
     return {
       if (id != null) 'id': id,

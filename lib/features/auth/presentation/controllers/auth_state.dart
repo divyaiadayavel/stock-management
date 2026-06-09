@@ -1,3 +1,5 @@
+const Object _unset = Object();
+
 class AuthState {
   final bool isLoading;
   final String? error;
@@ -15,19 +17,41 @@ class AuthState {
     this.otpEmail,
   });
 
+  bool get isLoggedIn => user != null;
+
+  String get currentRole {
+    return user?['role']?.toString().toLowerCase() ?? '';
+  }
+
+  String get displayName {
+    return user?['name']?.toString() ?? 'User';
+  }
+
+  String get email {
+    return user?['email']?.toString() ?? '';
+  }
+
+  bool get isStaffUser {
+    return user?['source']?.toString() == 'staff';
+  }
+
   AuthState copyWith({
     bool? isLoading,
-    String? error,
-    Map<String, dynamic>? user,
-    String? otp,
-    String? otpEmail,
+    Object? error = _unset,
+    Object? user = _unset,
+    Object? otp = _unset,
+    Object? otpEmail = _unset,
   }) {
     return AuthState(
       isLoading: isLoading ?? this.isLoading,
-      error: error,
-      user: user ?? this.user,
-      otp: otp ?? this.otp,
-      otpEmail: otpEmail ?? this.otpEmail,
+      error: identical(error, _unset) ? this.error : error as String?,
+      user: identical(user, _unset)
+          ? this.user
+          : user as Map<String, dynamic>?,
+      otp: identical(otp, _unset) ? this.otp : otp as String?,
+      otpEmail: identical(otpEmail, _unset)
+          ? this.otpEmail
+          : otpEmail as String?,
     );
   }
 }

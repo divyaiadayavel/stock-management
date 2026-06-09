@@ -11,10 +11,14 @@ class SettingsRepositoryImpl implements SettingsRepository {
 
   final SettingsRemoteDatasource remoteDatasource;
 
+  // ── Settings bundle (profile + app settings only, no staff) ──────────────
+
   @override
   Future<SettingsBundle> getSettingsBundle() {
     return remoteDatasource.getSettingsBundle();
   }
+
+  // ── Business profile ──────────────────────────────────────────────────────
 
   @override
   Future<BusinessProfile> getBusinessProfile() async {
@@ -31,10 +35,11 @@ class SettingsRepositoryImpl implements SettingsRepository {
 
   @override
   Future<BusinessProfile> updateProfileField(String field, String value) async {
-    final currentProfile = await getBusinessProfile();
-    final updatedProfile = _copyProfileField(currentProfile, field, value);
-    return saveProfile(updatedProfile);
+    final current = await getBusinessProfile();
+    return saveProfile(_copyProfileField(current, field, value));
   }
+
+  // ── App settings ──────────────────────────────────────────────────────────
 
   @override
   Future<Map<String, String>> getSettings() async {
@@ -52,16 +57,35 @@ class SettingsRepositoryImpl implements SettingsRepository {
     return remoteDatasource.saveSettings(settings);
   }
 
+  // ── Staff ─────────────────────────────────────────────────────────────────
+
   @override
-  Future<List<StaffUser>> getStaffUsers() async {
-    final bundle = await getSettingsBundle();
-    return bundle.staff;
+  Future<List<StaffUser>> getStaffUsers() {
+    // Now hits api/staff/get_staff.php — no longer bundled with settings
+    return remoteDatasource.getStaffUsers();
   }
 
   @override
   Future<bool> addStaffUser(StaffUser user) {
     return remoteDatasource.addStaffUser(StaffUserModel.fromEntity(user));
   }
+
+  @override
+  Future<bool> updateStaffUser(StaffUser user) {
+    return remoteDatasource.updateStaffUser(StaffUserModel.fromEntity(user));
+  }
+
+  @override
+  Future<bool> deleteStaffUser(int staffUserId) {
+    return remoteDatasource.deleteStaffUser(staffUserId);
+  }
+
+  @override
+  Future<bool> setStaffUserStatus(int staffUserId, bool isActive) {
+    return remoteDatasource.setStaffUserStatus(staffUserId, isActive);
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
   BusinessProfile _copyProfileField(
     BusinessProfile profile,
