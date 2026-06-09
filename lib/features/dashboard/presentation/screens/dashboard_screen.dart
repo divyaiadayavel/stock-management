@@ -7,7 +7,8 @@ import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/storage/db_helper.dart';
-import '../../../sales/presentation/screens/billing_screen.dart';
+import '../../../sales/presentation/screens/new_bill_screen.dart';
+import '../../../sales/presentation/screens/add_product_bill_screen.dart';
 import '../../../products/presentation/screens/add_product_screen.dart';
 import '../../../products/presentation/screens/product_screen.dart';
 import '../providers/dashboard_provider.dart';
@@ -279,13 +280,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       Expanded(
                         child: _quickActionCard(
                           icon: Icons.shopping_cart_outlined,
-                          title: "New Bill",
+                          title: "Add Bill",
                           color: Colors.blue,
                           onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => const BillingScreen(),
+                                builder: (_) => const AddProductBillScreen(),
                               ),
                             );
                           },

@@ -933,6 +933,25 @@ class DBHelper {
     });
   }
 
+  static Future<void> addInvoiceItem({
+    required int invoiceId,
+    required int productId,
+    required String name,
+    required double price,
+    required int qty,
+    required double amount,
+  }) async {
+    final dbClient = await db;
+
+    await dbClient.insert("invoice_items", {
+      "invoiceId": invoiceId,
+      "productId": productId,
+      "name": name,
+      "price": price,
+      "qty": qty,
+      "amount": amount,
+    });
+  }
   // =========================
   // 🧾 BILLING SUPPORT METHODS
   // =========================

@@ -17,9 +17,6 @@ class ProductScreen extends ConsumerStatefulWidget {
 
 class _ProductScreenState extends ConsumerState<ProductScreen> {
   int currentIndex = 1;
-  String selectedFilter = "All";
-  String searchQuery = "";
-
   List<Map<String, dynamic>> products = [];
   List<Map<String, dynamic>> filteredProducts = [];
 
@@ -56,10 +53,12 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
     List<Map<String, dynamic>> temp = List.from(products);
 
     // 🔍 SEARCH
-    if (searchQuery.isNotEmpty) {
+    final currentSearch = ref.read(searchQueryProvider);
+
+    if (currentSearch.isNotEmpty) {
       temp = temp.where((p) {
         return p["name"].toString().toLowerCase().contains(
-          searchQuery.toLowerCase(),
+          currentSearch.toLowerCase(),
         );
       }).toList();
     }
@@ -86,33 +85,32 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
     // ❌ OUT OF STOCK
     outStock = products.where((p) {
       int qty = p["quantity"] ?? 0;
-
-      return qty == 0;
+      return qty <= 0;
     }).length;
 
     // =========================
     // FILTERS
     // =========================
+    final currentFilter = ref.read(selectedFilterProvider);
 
-    if (selectedFilter == "In Stock") {
+    if (currentFilter == "In Stock") {
       temp = temp.where((p) {
         int qty = p["quantity"] ?? 0;
         int lsl = p["lsl"] ?? 10;
 
         return qty > lsl;
       }).toList();
-    } else if (selectedFilter == "Low Stock") {
+    } else if (currentFilter == "Low Stock") {
       temp = temp.where((p) {
         int qty = p["quantity"] ?? 0;
         int lsl = p["lsl"] ?? 10;
 
         return qty > 0 && qty <= lsl;
       }).toList();
-    } else if (selectedFilter == "Out Of Stock") {
+    } else if (currentFilter == "Out Of Stock") {
       temp = temp.where((p) {
         int qty = p["quantity"] ?? 0;
-
-        return qty == 0;
+        return qty <= 0;
       }).toList();
     }
 
@@ -180,7 +178,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                     ),
                     child: TextField(
                       onChanged: (val) {
-                        searchNotifier.state = val.toLowerCase();
+                        ref.read(searchQueryProvider.notifier).state = val;
                         applyFilters();
                       },
                       decoration: InputDecoration(
@@ -199,15 +197,17 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                 const SizedBox(height: 14),
 
                 // ================= FILTERS =================
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.start,
                     children: [
-                      const SizedBox(width: 12),
                       _filterTab("All", total),
                       _filterTab("In Stock", inStock),
                       _filterTab("Low Stock", lowStock),
-                      _filterTab("Out", outStock),
+                      _filterTab("Out Of Stock", outStock),
                     ],
                   ),
                 ),
@@ -421,27 +421,24 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
   }
 
   Widget _filterTab(String title, int count) {
-    final isSelected = selectedFilter == title;
+    final isSelected = ref.read(selectedFilterProvider) == title;
 
     return GestureDetector(
       onTap: () {
-        setState(() {
-          selectedFilter = title;
-          applyFilters();
-        });
+        ref.read(selectedFilterProvider.notifier).state = title;
+        applyFilters();
       },
 
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 8),
+        margin: const EdgeInsets.only(right: 4),
 
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
 
         decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: isSelected ? Colors.blue : Colors.transparent,
-              width: 2.5,
-            ),
+          color: isSelected ? AppColors.primary.withOpacity(0.1) : Colors.white,
+          borderRadius: BorderRadius.circular(25),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : Colors.grey.shade300,
           ),
         ),
 
@@ -449,10 +446,10 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
           "$title ($count)",
 
           style: TextStyle(
-            fontSize: 14,
+            fontSize: 12,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
 
-            color: isSelected ? Colors.blue : Colors.grey.shade600,
+            color: isSelected ? AppColors.primary : Colors.grey.shade600,
           ),
         ),
       ),

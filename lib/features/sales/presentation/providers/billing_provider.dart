@@ -33,7 +33,7 @@ class BillingState {
 
   double get subtotal => cart.fold(0, (sum, item) => sum + item.total);
 
-  double get tax => subtotal * taxPercent / 100;
+  double get tax => cart.fold(0, (sum, item) => sum + item.tax);
 
   double get total => subtotal - discount + tax;
 }
@@ -54,6 +54,9 @@ class BillingNotifier extends StateNotifier<BillingState> {
           productId: product["id"],
           name: product["name"],
           price: (product["selling_price"] as num).toDouble(),
+          sgst: (product["sgst"] ?? 0).toDouble(),
+          cgst: (product["cgst"] ?? 0).toDouble(),
+          imagePath: product["image_path"],
           qty: qty,
         ),
       );
@@ -86,5 +89,9 @@ class BillingNotifier extends StateNotifier<BillingState> {
 
   void clearCart() {
     state = state.copyWith(cart: []);
+  }
+
+  void setDiscount(double value) {
+    state = state.copyWith(discount: value);
   }
 }

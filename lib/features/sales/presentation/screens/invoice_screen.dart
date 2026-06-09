@@ -9,7 +9,7 @@ import 'package:printing/printing.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/storage/db_helper.dart';
-import 'billing_screen.dart';
+import 'new_bill_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/invoice_provider.dart';
 import '../../../../core/constants/app_curve.dart';
@@ -562,7 +562,7 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
                                 Navigator.pushAndRemoveUntil(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => const BillingScreen(),
+                                    builder: (_) => const NewBillScreen(),
                                   ),
                                   (route) => false,
                                 );

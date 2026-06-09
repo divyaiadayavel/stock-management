@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dashboard_screen.dart';
 import '../../../products/presentation/screens/product_screen.dart';
-import '../../../sales/presentation/screens/billing_screen.dart';
+import '../../../sales/presentation/screens/add_product_bill_screen.dart';
 import '../../../settings/presentation/screens/settings_screen.dart';
 import '../../../suppliers/presentation/screens/suppliers_screen.dart';
 
@@ -48,7 +48,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             // ✅ OPEN BILLING SCREEN (FIXED)
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const BillingScreen()),
+              MaterialPageRoute(builder: (_) => const AddProductBillScreen()),
             );
           },
           icon: const Icon(Icons.receipt_long, color: Colors.white, size: 26),
