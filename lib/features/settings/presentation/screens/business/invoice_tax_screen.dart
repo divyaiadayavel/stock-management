@@ -1,23 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/constants/app_colors.dart';
-import '../providers/settings_provider.dart';
+import '../../../../../core/constants/app_colors.dart';
+import '../../providers/settings_provider.dart';
 
-class CustomizeScreen extends ConsumerStatefulWidget {
-  const CustomizeScreen({super.key});
+class InvoiceTaxScreen extends ConsumerStatefulWidget {
+  const InvoiceTaxScreen({super.key});
 
   @override
-  ConsumerState<CustomizeScreen> createState() => _CustomizeScreenState();
+  ConsumerState<InvoiceTaxScreen> createState() => _InvoiceTaxScreenState();
 }
 
-class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
+class _InvoiceTaxScreenState extends ConsumerState<InvoiceTaxScreen> {
   bool isLoading = true;
 
-  bool barcodeEnabled = true;
-  bool lowStockAlert = true;
-  String lowStockLimit = "5";
-  bool stockManagement = true;
+  // Default values
+  String invoicePrefix = "INV";
+  String invoiceFormat = "INV-0001";
+  String nextInvoiceNumber = "INV-000123";
+  String defaultDueDate = "15 Days";
+  bool showGst = true;
+  bool showDiscount = true;
+  String invoiceFooter = "Thanks for your business!";
+  String termsConditions = "No return without permission.";
 
   @override
   void initState() {
@@ -28,16 +33,20 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
   Future<void> _loadSettings() async {
     final settings = await ref.read(settingsRepositoryProvider).getSettings();
 
-    String? barcodeStr = settings["barcodeEnabled"];
-    barcodeEnabled = barcodeStr == null ? true : barcodeStr == "true";
+    invoicePrefix = settings["invoicePrefix"] ?? "INV";
+    invoiceFormat = settings["invoiceFormat"] ?? "INV-0001";
+    nextInvoiceNumber = settings["nextInvoiceNumber"] ?? "INV-000123";
+    defaultDueDate = settings["defaultDueDate"] ?? "15 Days";
 
-    String? alertStr = settings["lowStockAlert"];
-    lowStockAlert = alertStr == null ? true : alertStr == "true";
+    String? gstStored = settings["showGst"];
+    showGst = gstStored == null ? true : gstStored == "true";
 
-    lowStockLimit = settings["lowStockLimit"] ?? "5";
+    String? discountStored = settings["showDiscount"];
+    showDiscount = discountStored == null ? true : discountStored == "true";
 
-    String? stockStr = settings["stockManagement"];
-    stockManagement = stockStr == null ? true : stockStr == "true";
+    invoiceFooter = settings["invoiceFooter"] ?? "Thanks for your business!";
+    termsConditions =
+        settings["termsConditions"] ?? "No return without permission.";
 
     if (mounted) {
       setState(() {
@@ -51,16 +60,16 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
         .read(settingsRepositoryProvider)
         .saveSetting(dbKey, newValue.toString());
     setState(() {
-      if (dbKey == "barcodeEnabled") barcodeEnabled = newValue;
-      if (dbKey == "lowStockAlert") lowStockAlert = newValue;
-      if (dbKey == "stockManagement") stockManagement = newValue;
+      if (dbKey == "showGst") showGst = newValue;
+      if (dbKey == "showDiscount") showDiscount = newValue;
     });
   }
 
-  void _openEditDialog() {
+  void _openEditDialog(String title, String dbKey, String currentValue) {
     final TextEditingController ctrl = TextEditingController(
-      text: lowStockLimit,
+      text: currentValue,
     );
+    final messenger = ScaffoldMessenger.of(context);
 
     showDialog(
       context: context,
@@ -69,12 +78,11 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          title: const Text("Edit Low Stock Limit"),
+          title: Text("Edit $title"),
           content: TextField(
             controller: ctrl,
-            keyboardType: TextInputType.number,
             decoration: InputDecoration(
-              labelText: "Limit Quantity",
+              labelText: title,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
@@ -91,11 +99,14 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
                 String newValue = ctrl.text.trim();
                 await ref
                     .read(settingsRepositoryProvider)
-                    .saveSetting("lowStockLimit", newValue);
+                    .saveSetting(dbKey, newValue);
 
                 if (!mounted) return;
                 navigator.pop();
                 _loadSettings();
+                messenger.showSnackBar(
+                  SnackBar(content: Text("$title updated successfully")),
+                );
               },
               child: const Text("Save"),
             ),
@@ -113,12 +124,8 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
         backgroundColor: AppColors.primary,
         iconTheme: const IconThemeData(color: Colors.white),
         title: const Text(
-          "Customize (Products & Units)",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            fontSize: 18,
-          ),
+          "Invoice & Tax",
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
       ),
       body: isLoading
@@ -131,7 +138,7 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
                   const Padding(
                     padding: EdgeInsets.only(left: 4, bottom: 12),
                     child: Text(
-                      "Product Settings",
+                      "Invoice Settings",
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -147,59 +154,68 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
                     ),
                     child: Column(
                       children: [
-                        _buildNavActionItem(
-                          icon: Icons.category_outlined,
-                          iconColor: Colors.redAccent,
-                          title: "Product Categories",
-                          subtitle: "Manage your product categories",
-                          onTap: () {
-                            // Navigate to Categories Screen
-                          },
+                        _buildTextItem(
+                          icon: Icons.receipt_outlined,
+                          iconColor: Colors.blue,
+                          title: "Invoice Prefix",
+                          value: invoicePrefix,
+                          dbKey: "invoicePrefix",
                         ),
                         _buildDivider(),
-                        _buildNavActionItem(
-                          icon: Icons.ad_units,
-                          iconColor: Colors.orange,
-                          title: "Units",
-                          subtitle: "Manage product units",
-                          onTap: () {
-                            // Navigate to Units Screen
-                          },
-                        ),
-                        _buildDivider(),
-                        _buildToggleItem(
-                          icon: Icons.qr_code_scanner,
-                          iconColor: Colors.green,
-                          title: "Barcode Settings",
-                          subtitle: "Enable barcode for products",
-                          value: barcodeEnabled,
-                          dbKey: "barcodeEnabled",
-                        ),
-                        _buildDivider(),
-                        _buildToggleItem(
-                          icon: Icons.warning_amber_rounded,
-                          iconColor: Colors.orangeAccent,
-                          title: "Low Stock Alert",
-                          subtitle: "Enable alerts for low stock",
-                          value: lowStockAlert,
-                          dbKey: "lowStockAlert",
-                        ),
-                        _buildDivider(),
-                        _buildNavActionItem(
-                          icon: Icons.sim_card_outlined,
-                          iconColor: Colors.blueAccent,
-                          title: "Low Stock Limit",
-                          subtitle: lowStockLimit,
-                          onTap: _openEditDialog,
-                        ),
-                        _buildDivider(),
-                        _buildToggleItem(
-                          icon: Icons.inventory_2_outlined,
+                        _buildTextItem(
+                          icon: Icons.numbers,
                           iconColor: Colors.teal,
-                          title: "Stock Management",
-                          subtitle: "Enable stock tracking",
-                          value: stockManagement,
-                          dbKey: "stockManagement",
+                          title: "Invoice Number Format",
+                          value: invoiceFormat,
+                          dbKey: "invoiceFormat",
+                        ),
+                        _buildDivider(),
+                        _buildTextItem(
+                          icon: Icons.pin_invoke,
+                          iconColor: Colors.indigo,
+                          title: "Next Invoice Number",
+                          value: nextInvoiceNumber,
+                          dbKey: "nextInvoiceNumber",
+                        ),
+                        _buildDivider(),
+                        _buildTextItem(
+                          icon: Icons.calendar_today_outlined,
+                          iconColor: Colors.blueGrey,
+                          title: "Default Due Date",
+                          value: defaultDueDate,
+                          dbKey: "defaultDueDate",
+                        ),
+                        _buildDivider(),
+                        _buildToggleItem(
+                          icon: Icons.percent,
+                          iconColor: Colors.redAccent,
+                          title: "Show GST in Invoice",
+                          value: showGst,
+                          dbKey: "showGst",
+                        ),
+                        _buildDivider(),
+                        _buildToggleItem(
+                          icon: Icons.discount_outlined,
+                          iconColor: Colors.green,
+                          title: "Show Discount in Invoice",
+                          value: showDiscount,
+                          dbKey: "showDiscount",
+                        ),
+                        _buildDivider(),
+                        _buildTextItem(
+                          icon: Icons.format_align_center,
+                          iconColor: Colors.blueAccent,
+                          title: "Invoice Footer",
+                          value: invoiceFooter,
+                          dbKey: "invoiceFooter",
+                        ),
+                        _buildDivider(),
+                        _buildTextItem(
+                          icon: Icons.article_outlined,
+                          iconColor: Colors.deepOrange,
+                          title: "Terms & Conditions",
+                          value: termsConditions,
+                          dbKey: "termsConditions",
                         ),
                       ],
                     ),
@@ -219,15 +235,16 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
     );
   }
 
-  Widget _buildNavActionItem({
+  // Widget for Text fields with a Chevron (>)
+  Widget _buildTextItem({
     required IconData icon,
     required Color iconColor,
     required String title,
-    required String subtitle,
-    required VoidCallback onTap,
+    required String value,
+    required String dbKey,
   }) {
     return InkWell(
-      onTap: onTap,
+      onTap: () => _openEditDialog(title, dbKey, value),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
@@ -248,14 +265,15 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
                   Text(
                     title,
                     style: const TextStyle(
-                      fontWeight: FontWeight.bold,
                       fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 4),
                   Text(
-                    subtitle,
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                    value,
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                   ),
                 ],
               ),
@@ -267,16 +285,19 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
     );
   }
 
+  // Widget for Toggle Switch fields
   Widget _buildToggleItem({
     required IconData icon,
     required Color iconColor,
     required String title,
-    required String subtitle,
     required bool value,
     required String dbKey,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 6,
+      ), // slightly less vertical padding to account for switch size
       child: Row(
         children: [
           Container(
@@ -289,22 +310,13 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
           ),
           const SizedBox(width: 16),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                ),
-              ],
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
             ),
           ),
           Switch(

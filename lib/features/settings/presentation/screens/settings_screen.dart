@@ -6,16 +6,28 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_curve.dart';
+import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../domain/entities/business_profile.dart';
 
 import '../providers/settings_provider.dart';
-import 'business_profile_screen.dart';
-import 'invoice_tax_screen.dart';
-import 'inventory_preferences_screen.dart';
-import 'printers_hardware_screen.dart';
-import 'roles_permissions_screen.dart';
-import 'backup_sync_screen.dart';
-import 'notifications_screen.dart';
+
+// business/
+import 'business/business_profile_screen.dart';
+import 'business/invoice_tax_screen.dart';
+import 'business/customize_screen.dart';
+
+// staff/
+import 'staff/roles_permissions_screen.dart';
+
+// operations/hardware/
+import 'operations/hardware/printers_hardware_screen.dart';
+
+// operations/data/
+import 'operations/data/backup_sync_screen.dart';
+import 'operations/data/notifications_screen.dart';
+
+// operations/inventory/
+import 'operations/inventory/inventory_preferences_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -201,6 +213,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  Future<void> _confirmLogout() async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Logout"),
+          content: const Text("Do you want to logout from this account?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.red),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("Logout"),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldLogout != true || !mounted) return;
+
+    ref.read(authControllerProvider.notifier).logout();
+    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+  }
+
   Widget profileCard() {
     final storeName = ref.watch(storeNameProvider);
     final tagline = ref.watch(taglineProvider);
@@ -268,6 +308,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authControllerProvider);
+    final currentRole = authState.currentRole.isEmpty
+        ? 'admin'
+        : authState.currentRole;
+
     return Scaffold(
       backgroundColor: AppColors.primary,
 
@@ -295,6 +340,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   profileCard(),
+                  const SizedBox(height: 20),
+                  const Text(
+                    "ACCOUNT",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 10),
+                  _tile(
+                    Icons.logout,
+                    "Logout",
+                    "${authState.displayName} - $currentRole",
+                    onTap: _confirmLogout,
+                  ),
                   const SizedBox(height: 20),
                   const Text(
                     "BUSINESS",

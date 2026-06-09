@@ -1,28 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/constants/app_colors.dart';
-import '../providers/settings_provider.dart';
+import '../../../../../../core/constants/app_colors.dart';
+import '../../../providers/settings_provider.dart';
 
-class InvoiceTaxScreen extends ConsumerStatefulWidget {
-  const InvoiceTaxScreen({super.key});
+class CustomizeScreen extends ConsumerStatefulWidget {
+  const CustomizeScreen({super.key});
 
   @override
-  ConsumerState<InvoiceTaxScreen> createState() => _InvoiceTaxScreenState();
+  ConsumerState<CustomizeScreen> createState() => _CustomizeScreenState();
 }
 
-class _InvoiceTaxScreenState extends ConsumerState<InvoiceTaxScreen> {
+class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
   bool isLoading = true;
 
-  // Default values
-  String invoicePrefix = "INV";
-  String invoiceFormat = "INV-0001";
-  String nextInvoiceNumber = "INV-000123";
-  String defaultDueDate = "15 Days";
-  bool showGst = true;
-  bool showDiscount = true;
-  String invoiceFooter = "Thanks for your business!";
-  String termsConditions = "No return without permission.";
+  bool barcodeEnabled = true;
+  bool lowStockAlert = true;
+  String lowStockLimit = "5";
+  bool stockManagement = true;
 
   @override
   void initState() {
@@ -33,20 +28,16 @@ class _InvoiceTaxScreenState extends ConsumerState<InvoiceTaxScreen> {
   Future<void> _loadSettings() async {
     final settings = await ref.read(settingsRepositoryProvider).getSettings();
 
-    invoicePrefix = settings["invoicePrefix"] ?? "INV";
-    invoiceFormat = settings["invoiceFormat"] ?? "INV-0001";
-    nextInvoiceNumber = settings["nextInvoiceNumber"] ?? "INV-000123";
-    defaultDueDate = settings["defaultDueDate"] ?? "15 Days";
+    String? barcodeStr = settings["barcodeEnabled"];
+    barcodeEnabled = barcodeStr == null ? true : barcodeStr == "true";
 
-    String? gstStored = settings["showGst"];
-    showGst = gstStored == null ? true : gstStored == "true";
+    String? alertStr = settings["lowStockAlert"];
+    lowStockAlert = alertStr == null ? true : alertStr == "true";
 
-    String? discountStored = settings["showDiscount"];
-    showDiscount = discountStored == null ? true : discountStored == "true";
+    lowStockLimit = settings["lowStockLimit"] ?? "5";
 
-    invoiceFooter = settings["invoiceFooter"] ?? "Thanks for your business!";
-    termsConditions =
-        settings["termsConditions"] ?? "No return without permission.";
+    String? stockStr = settings["stockManagement"];
+    stockManagement = stockStr == null ? true : stockStr == "true";
 
     if (mounted) {
       setState(() {
@@ -60,16 +51,16 @@ class _InvoiceTaxScreenState extends ConsumerState<InvoiceTaxScreen> {
         .read(settingsRepositoryProvider)
         .saveSetting(dbKey, newValue.toString());
     setState(() {
-      if (dbKey == "showGst") showGst = newValue;
-      if (dbKey == "showDiscount") showDiscount = newValue;
+      if (dbKey == "barcodeEnabled") barcodeEnabled = newValue;
+      if (dbKey == "lowStockAlert") lowStockAlert = newValue;
+      if (dbKey == "stockManagement") stockManagement = newValue;
     });
   }
 
-  void _openEditDialog(String title, String dbKey, String currentValue) {
+  void _openEditDialog() {
     final TextEditingController ctrl = TextEditingController(
-      text: currentValue,
+      text: lowStockLimit,
     );
-    final messenger = ScaffoldMessenger.of(context);
 
     showDialog(
       context: context,
@@ -78,11 +69,12 @@ class _InvoiceTaxScreenState extends ConsumerState<InvoiceTaxScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          title: Text("Edit $title"),
+          title: const Text("Edit Low Stock Limit"),
           content: TextField(
             controller: ctrl,
+            keyboardType: TextInputType.number,
             decoration: InputDecoration(
-              labelText: title,
+              labelText: "Limit Quantity",
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
@@ -99,14 +91,11 @@ class _InvoiceTaxScreenState extends ConsumerState<InvoiceTaxScreen> {
                 String newValue = ctrl.text.trim();
                 await ref
                     .read(settingsRepositoryProvider)
-                    .saveSetting(dbKey, newValue);
+                    .saveSetting("lowStockLimit", newValue);
 
                 if (!mounted) return;
                 navigator.pop();
                 _loadSettings();
-                messenger.showSnackBar(
-                  SnackBar(content: Text("$title updated successfully")),
-                );
               },
               child: const Text("Save"),
             ),
@@ -124,8 +113,12 @@ class _InvoiceTaxScreenState extends ConsumerState<InvoiceTaxScreen> {
         backgroundColor: AppColors.primary,
         iconTheme: const IconThemeData(color: Colors.white),
         title: const Text(
-          "Invoice & Tax",
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          "Customize (Products & Units)",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            fontSize: 18,
+          ),
         ),
       ),
       body: isLoading
@@ -138,7 +131,7 @@ class _InvoiceTaxScreenState extends ConsumerState<InvoiceTaxScreen> {
                   const Padding(
                     padding: EdgeInsets.only(left: 4, bottom: 12),
                     child: Text(
-                      "Invoice Settings",
+                      "Product Settings",
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -154,68 +147,59 @@ class _InvoiceTaxScreenState extends ConsumerState<InvoiceTaxScreen> {
                     ),
                     child: Column(
                       children: [
-                        _buildTextItem(
-                          icon: Icons.receipt_outlined,
-                          iconColor: Colors.blue,
-                          title: "Invoice Prefix",
-                          value: invoicePrefix,
-                          dbKey: "invoicePrefix",
-                        ),
-                        _buildDivider(),
-                        _buildTextItem(
-                          icon: Icons.numbers,
-                          iconColor: Colors.teal,
-                          title: "Invoice Number Format",
-                          value: invoiceFormat,
-                          dbKey: "invoiceFormat",
-                        ),
-                        _buildDivider(),
-                        _buildTextItem(
-                          icon: Icons.pin_invoke,
-                          iconColor: Colors.indigo,
-                          title: "Next Invoice Number",
-                          value: nextInvoiceNumber,
-                          dbKey: "nextInvoiceNumber",
-                        ),
-                        _buildDivider(),
-                        _buildTextItem(
-                          icon: Icons.calendar_today_outlined,
-                          iconColor: Colors.blueGrey,
-                          title: "Default Due Date",
-                          value: defaultDueDate,
-                          dbKey: "defaultDueDate",
-                        ),
-                        _buildDivider(),
-                        _buildToggleItem(
-                          icon: Icons.percent,
+                        _buildNavActionItem(
+                          icon: Icons.category_outlined,
                           iconColor: Colors.redAccent,
-                          title: "Show GST in Invoice",
-                          value: showGst,
-                          dbKey: "showGst",
+                          title: "Product Categories",
+                          subtitle: "Manage your product categories",
+                          onTap: () {
+                            // Navigate to Categories Screen
+                          },
+                        ),
+                        _buildDivider(),
+                        _buildNavActionItem(
+                          icon: Icons.ad_units,
+                          iconColor: Colors.orange,
+                          title: "Units",
+                          subtitle: "Manage product units",
+                          onTap: () {
+                            // Navigate to Units Screen
+                          },
                         ),
                         _buildDivider(),
                         _buildToggleItem(
-                          icon: Icons.discount_outlined,
+                          icon: Icons.qr_code_scanner,
                           iconColor: Colors.green,
-                          title: "Show Discount in Invoice",
-                          value: showDiscount,
-                          dbKey: "showDiscount",
+                          title: "Barcode Settings",
+                          subtitle: "Enable barcode for products",
+                          value: barcodeEnabled,
+                          dbKey: "barcodeEnabled",
                         ),
                         _buildDivider(),
-                        _buildTextItem(
-                          icon: Icons.format_align_center,
+                        _buildToggleItem(
+                          icon: Icons.warning_amber_rounded,
+                          iconColor: Colors.orangeAccent,
+                          title: "Low Stock Alert",
+                          subtitle: "Enable alerts for low stock",
+                          value: lowStockAlert,
+                          dbKey: "lowStockAlert",
+                        ),
+                        _buildDivider(),
+                        _buildNavActionItem(
+                          icon: Icons.sim_card_outlined,
                           iconColor: Colors.blueAccent,
-                          title: "Invoice Footer",
-                          value: invoiceFooter,
-                          dbKey: "invoiceFooter",
+                          title: "Low Stock Limit",
+                          subtitle: lowStockLimit,
+                          onTap: _openEditDialog,
                         ),
                         _buildDivider(),
-                        _buildTextItem(
-                          icon: Icons.article_outlined,
-                          iconColor: Colors.deepOrange,
-                          title: "Terms & Conditions",
-                          value: termsConditions,
-                          dbKey: "termsConditions",
+                        _buildToggleItem(
+                          icon: Icons.inventory_2_outlined,
+                          iconColor: Colors.teal,
+                          title: "Stock Management",
+                          subtitle: "Enable stock tracking",
+                          value: stockManagement,
+                          dbKey: "stockManagement",
                         ),
                       ],
                     ),
@@ -235,16 +219,15 @@ class _InvoiceTaxScreenState extends ConsumerState<InvoiceTaxScreen> {
     );
   }
 
-  // Widget for Text fields with a Chevron (>)
-  Widget _buildTextItem({
+  Widget _buildNavActionItem({
     required IconData icon,
     required Color iconColor,
     required String title,
-    required String value,
-    required String dbKey,
+    required String subtitle,
+    required VoidCallback onTap,
   }) {
     return InkWell(
-      onTap: () => _openEditDialog(title, dbKey, value),
+      onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
@@ -265,15 +248,14 @@ class _InvoiceTaxScreenState extends ConsumerState<InvoiceTaxScreen> {
                   Text(
                     title,
                     style: const TextStyle(
-                      fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                      fontSize: 14,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
-                    value,
-                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                    subtitle,
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                   ),
                 ],
               ),
@@ -285,19 +267,16 @@ class _InvoiceTaxScreenState extends ConsumerState<InvoiceTaxScreen> {
     );
   }
 
-  // Widget for Toggle Switch fields
   Widget _buildToggleItem({
     required IconData icon,
     required Color iconColor,
     required String title,
+    required String subtitle,
     required bool value,
     required String dbKey,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 6,
-      ), // slightly less vertical padding to account for switch size
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Row(
         children: [
           Container(
@@ -310,13 +289,22 @@ class _InvoiceTaxScreenState extends ConsumerState<InvoiceTaxScreen> {
           ),
           const SizedBox(width: 16),
           Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                ),
+              ],
             ),
           ),
           Switch(

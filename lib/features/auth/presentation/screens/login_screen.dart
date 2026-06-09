@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../controllers/auth_controller.dart';
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/utils/validators.dart';
 import '../../../../core/storage/db_helper.dart';
 import 'package:stock_management/features/dashboard/presentation/screens/main_navigation.dart';
 import 'forgot_password_screen.dart';
@@ -31,8 +30,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   bool validateEmailNow = false;
   bool validatePasswordNow = false;
-
-  bool isLoading = false;
 
   // ✅ DYNAMIC BRANDING
   String storeName = "Catalystack";
@@ -69,16 +66,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   // 🔹 LOAD BRANDING
   // =========================
   Future<void> loadBranding() async {
-    final data = await DBHelper.getProfile();
+    try {
+      final data = await DBHelper.getProfile();
 
-    if (data != null) {
-      setState(() {
-        storeName = data['storeName'] ?? "Catalystack";
+      if (data != null && mounted) {
+        setState(() {
+          storeName = data['storeName'] ?? "Catalystack";
 
-        tagline = data['tagline'] ?? "Smart Billing for Modern Stores";
+          tagline = data['tagline'] ?? "Smart Billing for Modern Stores";
 
-        logoPath = data['logoPath'];
-      });
+          logoPath = data['logoPath'];
+        });
+      }
+    } catch (_) {
+      return;
     }
   }
 
@@ -93,39 +94,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     if (!formKey.currentState!.validate()) return;
 
-    setState(() => isLoading = true);
-
-    final user = await DBHelper.login(
-      emailController.text.trim(),
-      passwordController.text.trim(),
-    );
+    final success = await ref
+        .read(authControllerProvider.notifier)
+        .login(emailController.text.trim(), passwordController.text.trim());
 
     if (!mounted) return;
 
-    setState(() => isLoading = false);
-
-    if (user != null) {
-      final role = user["role"]?.toString().toLowerCase();
-
-      if (role == "admin" || role == "staff" || role == "cashier") {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
-        );
-      } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("Invalid user role")));
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Invalid email or password")),
+    if (success) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
       );
+    } else {
+      final error =
+          ref.read(authControllerProvider).error ?? "Invalid email or password";
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error)));
     }
-  }
-
-  void logoutUser() {
-    ref.read(authControllerProvider.notifier).logout();
   }
 
   @override
@@ -168,7 +154,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 20,
                       offset: const Offset(0, 8),
                     ),
@@ -314,26 +300,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             return "Password is required";
                           }
 
-                          if (value.length < 8) {
-                            return "Minimum 8 characters required";
-                          }
-
-                          if (!RegExp(r'[A-Z]').hasMatch(value)) {
-                            return "Add at least 1 uppercase letter";
-                          }
-
-                          if (!RegExp(r'[a-z]').hasMatch(value)) {
-                            return "Add at least 1 lowercase letter";
-                          }
-
-                          if (!RegExp(r'[0-9]').hasMatch(value)) {
-                            return "Add at least 1 number";
-                          }
-
-                          if (!RegExp(
-                            r'[!@#$%^&*(),.?":{}|<>]',
-                          ).hasMatch(value)) {
-                            return "Add at least 1 special character";
+                          if (value.length < 6) {
+                            return "Minimum 6 characters required";
                           }
 
                           return null;
@@ -384,14 +352,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                           const SizedBox(width: 10),
 
-                          const Text(
-                            "Remember me",
-                            style: TextStyle(fontSize: 13),
+                          const Expanded(
+                            child: Text(
+                              "Remember me",
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 13),
+                            ),
                           ),
 
-                          const Spacer(),
-
                           TextButton(
+                            style: TextButton.styleFrom(
+                              minimumSize: Size.zero,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 8,
+                              ),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
                             onPressed: () {
                               Navigator.push(
                                 context,
@@ -422,9 +400,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         height: 56,
 
                         child: ElevatedButton(
-                          onPressed: (authState.isLoading || isLoading)
-                              ? null
-                              : loginUser,
+                          onPressed: authState.isLoading ? null : loginUser,
 
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
@@ -435,7 +411,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                           ),
 
-                          child: (authState.isLoading || isLoading)
+                          child: authState.isLoading
                               ? const CircularProgressIndicator(
                                   color: Colors.white,
                                 )

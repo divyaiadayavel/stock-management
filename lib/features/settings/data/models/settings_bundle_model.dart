@@ -1,12 +1,10 @@
 import '../../domain/entities/settings_bundle.dart';
 import 'business_profile_model.dart';
-import 'staff_user_model.dart';
 
 class SettingsBundleModel extends SettingsBundle {
   const SettingsBundleModel({
     required super.profile,
     required super.settings,
-    required super.staff,
   });
 
   factory SettingsBundleModel.fromJson(Map<String, dynamic> json) {
@@ -19,7 +17,6 @@ class SettingsBundleModel extends SettingsBundle {
         _readMap(data['profile'] ?? data['businessProfile']),
       ),
       settings: _readSettings(data['settings']),
-      staff: _readStaff(data['staff'] ?? data['users']),
     );
   }
 
@@ -48,14 +45,5 @@ class SettingsBundleModel extends SettingsBundle {
     }
 
     return <String, String>{};
-  }
-
-  static List<StaffUserModel> _readStaff(dynamic value) {
-    if (value is! List) return const <StaffUserModel>[];
-
-    return value
-        .whereType<Map>()
-        .map((item) => StaffUserModel.fromJson(Map<String, dynamic>.from(item)))
-        .toList();
   }
 }
