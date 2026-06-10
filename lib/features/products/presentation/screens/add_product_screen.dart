@@ -91,10 +91,14 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
         ref.read(showGstProvider.notifier).state =
             hsnController.text.isNotEmpty;
+        calculateProfit();
+        if (widget.product!['image_path'] != null &&
+            widget.product!['image_path'].toString().isNotEmpty) {
+          ref.read(imageProvider.notifier).state = File(
+            widget.product!['image_path'],
+          );
+        }
       });
-
-      // Calculate profit margin initially
-      calculateProfit();
     }
   }
 
@@ -103,7 +107,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     final selectedCategory = ref.read(selectedCategoryProvider);
     final selectedSupplier = ref.read(selectedSupplierProvider);
     final showGstFields = ref.read(showGstProvider);
-    final TextEditingController productcodeController = TextEditingController();
     try {
       // 🔹 FIX 2: Logic for Image Persistence
       String finalImagePath =

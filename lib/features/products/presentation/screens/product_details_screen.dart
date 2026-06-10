@@ -167,7 +167,6 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // 🔹 TOP CARD
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -177,50 +176,124 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   BoxShadow(color: Colors.grey.shade300, blurRadius: 5),
                 ],
               ),
-              child: Row(
+
+              child: Stack(
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child:
-                        currentProduct["image_path"] != null &&
-                            currentProduct["image_path"] != ""
-                        ? Image.file(
-                            File(currentProduct["image_path"]),
-                            height: 80,
-                            width: 80,
-                            fit: BoxFit.cover,
-                          )
-                        : Container(
-                            height: 80,
-                            width: 80,
-                            color: Colors.grey.shade200,
-                            child: const Icon(Icons.image),
-                          ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          currentProduct["name"],
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(currentProduct["category"] ?? ""),
-                        const SizedBox(height: 10),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            _summaryItem(
-                              "Selling Price",
-                              "₹ ${currentProduct["selling_price"]}",
+                  // DELETE BUTTON
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      onPressed: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (context) {
+                            return AlertDialog(
+                              title: const Text("Delete Product"),
+                              content: Text(
+                                "Are you sure you want to delete ${currentProduct["name"]}?",
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.pop(context, false);
+                                  },
+                                  child: const Text("Cancel"),
+                                ),
+
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red,
+                                  ),
+                                  onPressed: () {
+                                    Navigator.pop(context, true);
+                                  },
+                                  child: const Text(
+                                    "Delete",
+                                    style: TextStyle(color: Colors.white),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+
+                        if (confirm == true) {
+                          await DBHelper.deleteProduct(currentProduct["id"]);
+
+                          Navigator.pop(context, true);
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Product deleted successfully"),
                             ),
-                            _summaryItem("Stock", "$qty units"),
-                            _summaryItem("Status", status, color: statusColor),
-                          ],
+                          );
+                        }
+                      },
+                    ),
+                  ),
+
+                  // CARD CONTENT
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child:
+                              currentProduct["image_path"] != null &&
+                                  currentProduct["image_path"] != ""
+                              ? Image.file(
+                                  File(currentProduct["image_path"]),
+                                  height: 80,
+                                  width: 80,
+                                  fit: BoxFit.cover,
+                                )
+                              : Container(
+                                  height: 80,
+                                  width: 80,
+                                  color: Colors.grey.shade200,
+                                  child: const Icon(Icons.image),
+                                ),
+                        ),
+
+                        const SizedBox(width: 12),
+
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                currentProduct["name"],
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+
+                              Text(currentProduct["category"] ?? ""),
+
+                              const SizedBox(height: 10),
+
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  _summaryItem(
+                                    "Selling Price",
+                                    "₹ ${currentProduct["selling_price"]}",
+                                  ),
+                                  _summaryItem("Stock", "$qty units"),
+                                  _summaryItem(
+                                    "Status",
+                                    status,
+                                    color: statusColor,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),

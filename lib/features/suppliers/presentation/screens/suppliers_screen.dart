@@ -62,15 +62,13 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
       padding: const EdgeInsets.all(16),
 
       decoration: BoxDecoration(
-        color: Colors.white,
-
+        color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(AppSizes.cardRadius),
-
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
@@ -80,7 +78,7 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
           CircleAvatar(
             radius: 22,
 
-            backgroundColor: color.withOpacity(0.12),
+            backgroundColor: color.withOpacity(0.20),
 
             child: Icon(icon, color: color, size: AppSizes.iconMd),
           ),
@@ -97,10 +95,10 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     value,
-                    maxLines: 1,
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
+                      color: Colors.black,
                     ),
                   ),
                 ),
@@ -111,7 +109,11 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
                   title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black.withOpacity(0.7),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
