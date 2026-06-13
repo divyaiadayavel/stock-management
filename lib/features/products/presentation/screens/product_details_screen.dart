@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../../core/storage/db_helper.dart'; // Ensure this path is correct
 import 'add_product_screen.dart';
+import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_curve.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> product;
@@ -153,144 +155,198 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         : Colors.green;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(
-        title: const Text("Product Details"),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(
-            context,
-            true,
-          ), // Pass true to refresh the list screen
+        backgroundColor: AppColors.primary,
+        elevation: 0,
+
+        title: const Text(
+          "Product Details",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        ),
+
+        centerTitle: true,
+
+        leading: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(.15),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              onPressed: () => Navigator.pop(context, true),
+            ),
+          ),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(color: Colors.grey.shade300, blurRadius: 5),
-                ],
-              ),
-
-              child: Stack(
+      body: Container(
+        color: AppColors.primary,
+        child: ClipRRect(
+          borderRadius: AppCurve.top(context),
+          child: Container(
+            color: const Color(0xFFF5F6FA),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 30),
+              child: Column(
                 children: [
-                  // DELETE BUTTON
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    child: IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.red),
-                      onPressed: () async {
-                        final confirm = await showDialog<bool>(
-                          context: context,
-                          builder: (context) {
-                            return AlertDialog(
-                              title: const Text("Delete Product"),
-                              content: Text(
-                                "Are you sure you want to delete ${currentProduct["name"]}?",
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () {
-                                    Navigator.pop(context, false);
-                                  },
-                                  child: const Text("Cancel"),
-                                ),
-
-                                ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.red,
-                                  ),
-                                  onPressed: () {
-                                    Navigator.pop(context, true);
-                                  },
-                                  child: const Text(
-                                    "Delete",
-                                    style: TextStyle(color: Colors.white),
-                                  ),
-                                ),
-                              ],
-                            );
-                          },
-                        );
-
-                        if (confirm == true) {
-                          await DBHelper.deleteProduct(currentProduct["id"]);
-
-                          Navigator.pop(context, true);
-
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Product deleted successfully"),
-                            ),
-                          );
-                        }
-                      },
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(.05),
+                          blurRadius: 25,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
                     ),
-                  ),
 
-                  // CARD CONTENT
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Row(
+                    child: Stack(
                       children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child:
-                              currentProduct["image_path"] != null &&
-                                  currentProduct["image_path"] != ""
-                              ? Image.file(
-                                  File(currentProduct["image_path"]),
-                                  height: 80,
-                                  width: 80,
-                                  fit: BoxFit.cover,
-                                )
-                              : Container(
-                                  height: 80,
-                                  width: 80,
-                                  color: Colors.grey.shade200,
-                                  child: const Icon(Icons.image),
-                                ),
+                        // DELETE BUTTON
+                        Positioned(
+                          top: 0,
+                          right: 0,
+                          child: IconButton(
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: Colors.red,
+                            ),
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (context) {
+                                  return AlertDialog(
+                                    title: const Text("Delete Product"),
+                                    content: Text(
+                                      "Are you sure you want to delete ${currentProduct["name"]}?",
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () {
+                                          Navigator.pop(context, false);
+                                        },
+                                        child: const Text("Cancel"),
+                                      ),
+
+                                      ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.red,
+                                        ),
+                                        onPressed: () {
+                                          Navigator.pop(context, true);
+                                        },
+                                        child: const Text(
+                                          "Delete",
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              );
+
+                              if (confirm == true) {
+                                await DBHelper.deleteProduct(
+                                  currentProduct["id"],
+                                );
+
+                                Navigator.pop(context, true);
+
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      "Product deleted successfully",
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                          ),
                         ),
 
-                        const SizedBox(width: 12),
-
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                        // CARD CONTENT
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Row(
                             children: [
-                              Text(
-                                currentProduct["name"],
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child:
+                                    currentProduct["image_path"] != null &&
+                                        currentProduct["image_path"] != ""
+                                    ? Image.file(
+                                        File(currentProduct["image_path"]),
+                                        height: 80,
+                                        width: 80,
+                                        fit: BoxFit.cover,
+                                      )
+                                    : Container(
+                                        height: 80,
+                                        width: 80,
+                                        color: Colors.grey.shade200,
+                                        child: const Icon(Icons.image),
+                                      ),
                               ),
 
-                              Text(currentProduct["category"] ?? ""),
+                              const SizedBox(width: 12),
 
-                              const SizedBox(height: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      currentProduct["name"],
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
 
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  _summaryItem(
-                                    "Selling Price",
-                                    "₹ ${currentProduct["selling_price"]}",
-                                  ),
-                                  _summaryItem("Stock", "$qty units"),
-                                  _summaryItem(
-                                    "Status",
-                                    status,
-                                    color: statusColor,
-                                  ),
-                                ],
+                                    Text(currentProduct["category"] ?? ""),
+                                    Container(
+                                      margin: const EdgeInsets.only(top: 6),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 6,
+                                      ),
+                                    ),
+
+                                    const SizedBox(height: 18),
+
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: _compactStat(
+                                            "Selling Price",
+                                            "₹ ${currentProduct["selling_price"]}",
+                                            Colors.black,
+                                          ),
+                                        ),
+
+                                        Expanded(
+                                          child: _compactStat(
+                                            "Stock",
+                                            "$qty units",
+                                            Colors.black,
+                                          ),
+                                        ),
+
+                                        Expanded(
+                                          child: _compactStat(
+                                            "Status",
+                                            status,
+                                            statusColor,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
@@ -298,74 +354,123 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       ],
                     ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-            // 🔹 BUTTONS
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () async {
-                      // Wait for user to finish editing
-                      final result = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              AddProductScreen(product: currentProduct),
+                  // 🔹 BUTTONS
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 40,
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.edit_outlined),
+
+                            label: const Text(
+                              "Edit",
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.primary,
+
+                              side: const BorderSide(color: AppColors.primary),
+
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                            ),
+
+                            onPressed: () async {
+                              final result = await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      AddProductScreen(product: currentProduct),
+                                ),
+                              );
+
+                              if (result == true) {
+                                refreshProduct();
+                              }
+                            },
+                          ),
                         ),
-                      );
-                      // If edit was successful, refresh this screen
-                      if (result == true) {
-                        refreshProduct();
-                      }
-                    },
-                    child: const Text("Edit"),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _showUpdateStockDialog,
-                    child: const Text("Update Stock"),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
+                      ),
 
-            // 🔹 INFO SECTION
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Product Information",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      const SizedBox(width: 12),
+
+                      Expanded(
+                        child: SizedBox(
+                          height: 40,
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.inventory_2_outlined),
+
+                            label: const Text(
+                              "Update Stock",
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+
+                              foregroundColor: Colors.white,
+
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                            ),
+
+                            onPressed: _showUpdateStockDialog,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 10),
-                  _row("Category", currentProduct["category"]),
-                  _row("HSN Code", currentProduct["hsn_code"]),
-                  _row("Product Code", currentProduct["barcode"]),
-                  _row(
-                    "Purchase Price",
-                    "₹ ${currentProduct["purchase_price"]}",
+                  const SizedBox(height: 20),
+
+                  // 🔹 INFO SECTION
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(.04),
+                          blurRadius: 25,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Product Information",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        _row("Category", currentProduct["category"]),
+                        _row("HSN Code", currentProduct["hsn_code"]),
+                        _row("Product Code", currentProduct["barcode"]),
+                        _row(
+                          "Purchase Price",
+                          "₹ ${currentProduct["purchase_price"]}",
+                        ),
+                        _row("Quantity", "$qty"),
+                        _row("Unit", currentProduct["unit"]),
+                        _row("Expiry Date", currentProduct["expiry_date"]),
+                        _row("Description", currentProduct["description"]),
+                      ],
+                    ),
                   ),
-                  _row("Quantity", "$qty"),
-                  _row("Unit", currentProduct["unit"]),
-                  _row("Expiry Date", currentProduct["expiry_date"]),
-                  _row("Description", currentProduct["description"]),
                 ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -384,15 +489,56 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   Widget _row(String title, dynamic value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(title, style: const TextStyle(color: Colors.grey)),
-          Text(value?.toString() ?? ""),
-        ],
-      ),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+
+              Flexible(
+                child: Text(
+                  value?.toString() ?? "",
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const Divider(height: 1),
+      ],
+    );
+  }
+
+  Widget _compactStat(String title, String value, Color valueColor) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+
+        const SizedBox(height: 4),
+
+        Text(
+          value,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: valueColor,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+      ],
     );
   }
 }

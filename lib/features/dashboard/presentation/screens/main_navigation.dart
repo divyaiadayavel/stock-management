@@ -5,7 +5,7 @@ import '../../../auth/presentation/controllers/access_policy.dart';
 import '../../../auth/presentation/providers/access_provider.dart';
 import '../../../auth/presentation/widgets/access_guard.dart';
 import '../../../products/presentation/screens/product_screen.dart';
-import '../../../sales/presentation/screens/add_product_bill_screen.dart';
+import '../../../sales/presentation/screens/current_bill_screen.dart';
 import '../../../settings/presentation/screens/settings_screen.dart';
 import '../../../suppliers/presentation/screens/suppliers_screen.dart';
 import 'dashboard_screen.dart';
@@ -76,13 +76,9 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
   }
 
   void _openBilling() {
-    if (!_canAccess(AppFeature.billing)) {
-      _showAccessDenied('Billing');
-      return;
-    }
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const AddProductBillScreen()),
+      MaterialPageRoute(builder: (_) => CurrentBillScreen()),
     );
   }
 

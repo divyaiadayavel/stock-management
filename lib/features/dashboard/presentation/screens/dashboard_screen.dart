@@ -7,7 +7,7 @@ import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/storage/db_helper.dart';
-import '../../../sales/presentation/screens/new_bill_screen.dart';
+import '../../../sales/presentation/screens/current_bill_screen.dart';
 import '../../../sales/presentation/screens/add_product_bill_screen.dart';
 import '../../../products/presentation/screens/add_product_screen.dart';
 import '../../../products/presentation/screens/product_screen.dart';
@@ -286,7 +286,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => const AddProductBillScreen(),
+                               builder: (_) => CurrentBillScreen(),
                               ),
                             );
                           },

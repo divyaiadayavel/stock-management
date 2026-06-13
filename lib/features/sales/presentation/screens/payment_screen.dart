@@ -4,6 +4,7 @@ import 'invoice_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/payment_provider.dart';
 import '../../../../core/constants/app_curve.dart';
+import '../providers/billing_provider.dart';
 
 class PaymentScreen extends ConsumerWidget {
   final double totalAmount;
@@ -239,7 +240,8 @@ class PaymentScreen extends ConsumerWidget {
                           );
                           return;
                         }
-
+                        // Clear current bill
+                        ref.read(billingProvider.notifier).clearCart();
                         Navigator.push(
                           context,
                           MaterialPageRoute(
