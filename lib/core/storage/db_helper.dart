@@ -130,7 +130,7 @@ class DBHelper {
         description TEXT,
         barcode TEXT,
         image_path TEXT,
-       discount REAL DEFAULT 0,     -- Changed from imagePath
+       discount REAL DEFAULT 0    -- Changed from imagePath
       )
     ''');
     // =========================

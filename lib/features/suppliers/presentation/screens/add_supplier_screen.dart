@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/storage/db_helper.dart';
+import '../../../../core/utils/responsive_helper.dart'; // Ensure this path matches your directory structure
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/add_supplier_provider.dart';
 import '../../../../core/constants/app_curve.dart';
@@ -51,10 +52,10 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
         RichText(
           text: TextSpan(
             text: title,
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.black,
               fontWeight: FontWeight.w600,
-              fontSize: 13,
+              fontSize: R.fs(context, 13),
             ),
             children: requiredField
                 ? const [
@@ -67,39 +68,43 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
           ),
         ),
 
-        const SizedBox(height: 8),
+        SizedBox(height: R.sp(context, 8)),
 
         TextField(
           controller: controller,
           maxLines: maxLines,
           keyboardType: keyboard,
-
+          style: TextStyle(fontSize: R.fs(context, 14)),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: const TextStyle(fontSize: 13),
+            hintStyle: TextStyle(fontSize: R.fs(context, 13)),
 
-            prefixIcon: Icon(icon, color: Colors.grey.shade500, size: 20),
+            prefixIcon: Icon(
+              icon,
+              color: Colors.grey.shade500,
+              size: R.icon(context, 20),
+            ),
 
             filled: true,
             fillColor: Colors.white,
 
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 14,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: R.fluid(context, 14, 18),
+              vertical: R.fluid(context, 14, 18),
             ),
 
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(R.radius(context, 10)),
               borderSide: BorderSide(color: Colors.grey.shade300),
             ),
 
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(R.radius(context, 10)),
               borderSide: BorderSide(color: Colors.grey.shade300),
             ),
 
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(R.radius(context, 10)),
               borderSide: const BorderSide(
                 color: AppColors.primary,
                 width: 1.5,
@@ -119,14 +124,14 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         RichText(
-          text: const TextSpan(
+          text: TextSpan(
             text: "Product Category",
             style: TextStyle(
               color: Colors.black,
               fontWeight: FontWeight.w600,
-              fontSize: 13,
+              fontSize: R.fs(context, 13),
             ),
-            children: [
+            children: const [
               TextSpan(
                 text: " *",
                 style: TextStyle(color: Colors.red),
@@ -135,35 +140,36 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
           ),
         ),
 
-        const SizedBox(height: 8),
+        SizedBox(height: R.sp(context, 8)),
 
         DropdownButtonFormField<String>(
           value: ref.watch(selectedSupplierCategoryProvider),
-
+          style: TextStyle(fontSize: R.fs(context, 14), color: Colors.black),
           decoration: InputDecoration(
             hintText: "Select category",
+            hintStyle: TextStyle(fontSize: R.fs(context, 13)),
 
             prefixIcon: Icon(
               Icons.category_outlined,
               color: Colors.grey.shade500,
-              size: 20,
+              size: R.icon(context, 20),
             ),
 
             filled: true,
             fillColor: Colors.white,
 
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(R.radius(context, 10)),
               borderSide: BorderSide(color: Colors.grey.shade300),
             ),
 
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(R.radius(context, 10)),
               borderSide: BorderSide(color: Colors.grey.shade300),
             ),
 
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(R.radius(context, 10)),
               borderSide: const BorderSide(
                 color: AppColors.primary,
                 width: 1.5,
@@ -172,7 +178,10 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
           ),
 
           items: categories.map((e) {
-            return DropdownMenuItem(value: e, child: Text(e));
+            return DropdownMenuItem(
+              value: e,
+              child: Text(e, style: TextStyle(fontSize: R.fs(context, 14))),
+            );
           }).toList(),
 
           onChanged: (value) {
@@ -206,7 +215,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
       companyName: companyCtrl.text.trim(),
       contactNumber: contactCtrl.text.trim(),
       email: emailCtrl.text.trim(),
-      category: selectedCategory ?? "",
+      category: selectedCategory,
       gst: gstCtrl.text.trim(),
       address: addressCtrl.text.trim(),
     );
@@ -220,18 +229,22 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final selectedCategory = ref.watch(selectedSupplierCategoryProvider);
     return Scaffold(
       backgroundColor: AppColors.background,
-
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text(
+        iconTheme: IconThemeData(
+          color: Colors.white,
+          size: R.icon(context, 24),
+        ),
+        title: Text(
           "Add New Suppliers",
-
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            fontSize: R.fs(context, 20),
+          ),
         ),
       ),
       body: Container(
@@ -241,14 +254,19 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
           child: Container(
             color: Colors.grey.shade100,
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(
-                18,
-              ), // Maintained your original outer padding
+              padding: R.hPad(context, base: 18.0),
               child: Container(
-                padding: const EdgeInsets.all(18),
+                margin: EdgeInsets.symmetric(vertical: R.sp(context, 18)),
+                padding: EdgeInsets.all(R.sp(context, 18)),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(R.radius(context, 18)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                    ),
+                  ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -264,7 +282,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
                       requiredField: true,
                     ),
 
-                    const SizedBox(height: 18),
+                    SizedBox(height: R.sp(context, 18)),
 
                     // =========================
                     // EMAIL
@@ -277,7 +295,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
                       keyboard: TextInputType.emailAddress,
                     ),
 
-                    const SizedBox(height: 18),
+                    SizedBox(height: R.sp(context, 18)),
 
                     // =========================
                     // COMPANY NAME
@@ -289,7 +307,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
                       controller: companyCtrl,
                     ),
 
-                    const SizedBox(height: 18),
+                    SizedBox(height: R.sp(context, 18)),
 
                     // =========================
                     // GST
@@ -301,7 +319,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
                       controller: gstCtrl,
                     ),
 
-                    const SizedBox(height: 18),
+                    SizedBox(height: R.sp(context, 18)),
 
                     // =========================
                     // CONTACT NUMBER
@@ -315,7 +333,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
                       keyboard: TextInputType.phone,
                     ),
 
-                    const SizedBox(height: 18),
+                    SizedBox(height: R.sp(context, 18)),
 
                     // =========================
                     // ADDRESS
@@ -328,14 +346,14 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
                       maxLines: 3,
                     ),
 
-                    const SizedBox(height: 18),
+                    SizedBox(height: R.sp(context, 18)),
 
                     // =========================
                     // CATEGORY
                     // =========================
                     buildCategoryDropdown(),
 
-                    const SizedBox(height: 28),
+                    SizedBox(height: R.sp(context, 28)),
 
                     // =========================
                     // BUTTONS
@@ -344,61 +362,58 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
                       children: [
                         Expanded(
                           child: SizedBox(
-                            height: 52,
-
+                            height: R.btnH(context),
                             child: OutlinedButton(
                               onPressed: () {
                                 Navigator.pop(context);
                               },
-
                               style: OutlinedButton.styleFrom(
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
+                                  borderRadius: BorderRadius.circular(
+                                    R.radius(context, 10),
+                                  ),
                                 ),
-
                                 side: BorderSide(color: Colors.grey.shade300),
                               ),
-
-                              child: const Text(
+                              child: Text(
                                 "Cancel",
                                 style: TextStyle(
                                   color: Colors.black54,
                                   fontWeight: FontWeight.w600,
+                                  fontSize: R.fs(context, 14),
                                 ),
                               ),
                             ),
                           ),
                         ),
 
-                        const SizedBox(width: 16),
+                        SizedBox(width: R.sp(context, 16)),
 
                         Expanded(
                           child: SizedBox(
-                            height: 52,
-
+                            height: R.btnH(context),
                             child: ElevatedButton.icon(
                               onPressed: saveSupplier,
-
                               style: ElevatedButton.styleFrom(
                                 elevation: 0,
                                 backgroundColor: AppColors.primary,
-
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
+                                  borderRadius: BorderRadius.circular(
+                                    R.radius(context, 10),
+                                  ),
                                 ),
                               ),
-
-                              icon: const Icon(
+                              icon: Icon(
                                 Icons.save_outlined,
                                 color: Colors.white,
-                                size: 18,
+                                size: R.icon(context, 18),
                               ),
-
-                              label: const Text(
+                              label: Text(
                                 "Save Supplier",
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
+                                  fontSize: R.fs(context, 14),
                                 ),
                               ),
                             ),

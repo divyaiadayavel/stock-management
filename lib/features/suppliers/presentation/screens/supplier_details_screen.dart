@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_curve.dart';
 import '../../../../core/storage/db_helper.dart';
+import '../../../../core/utils/responsive_helper.dart'; // Ensure this matches your file paths
 
 class SupplierDetailsScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> supplier;
@@ -74,41 +75,65 @@ class _SupplierDetailsScreenState extends ConsumerState<SupplierDetailsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.primary,
-
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         elevation: 0,
-
-        title: const Text(
-          "Supplier Details",
-          style: TextStyle(color: Colors.white),
+        iconTheme: IconThemeData(
+          color: Colors.white,
+          size: R.icon(context, 24),
         ),
-
+        title: Text(
+          "Supplier Details",
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: R.fs(context, 20),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.delete, color: Colors.white),
-
+            icon: Icon(
+              Icons.delete,
+              color: Colors.white,
+              size: R.icon(context, 24),
+            ),
             onPressed: () async {
               final confirm = await showDialog(
                 context: context,
-
                 builder: (_) => AlertDialog(
-                  title: const Text("Delete Supplier"),
-                  content: const Text("Are you sure?"),
-
+                  title: Text(
+                    "Delete Supplier",
+                    style: TextStyle(
+                      fontSize: R.fs(context, 18),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  content: Text(
+                    "Are you sure?",
+                    style: TextStyle(fontSize: R.fs(context, 14)),
+                  ),
                   actions: [
                     TextButton(
                       onPressed: () {
                         Navigator.pop(context, false);
                       },
-                      child: const Text("Cancel"),
+                      child: Text(
+                        "Cancel",
+                        style: TextStyle(fontSize: R.fs(context, 14)),
+                      ),
                     ),
-
                     ElevatedButton(
                       onPressed: () {
                         Navigator.pop(context, true);
                       },
-                      child: const Text("Delete"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: Text(
+                        "Delete",
+                        style: TextStyle(fontSize: R.fs(context, 14)),
+                      ),
                     ),
                   ],
                 ),
@@ -121,74 +146,89 @@ class _SupplierDetailsScreenState extends ConsumerState<SupplierDetailsScreen> {
           ),
         ],
       ),
-
       body: Container(
         color: AppColors.primary,
-
         child: ClipRRect(
           borderRadius: AppCurve.top(context),
-
           child: Container(
             color: Colors.grey.shade100,
-
-            padding: const EdgeInsets.all(20),
-
-            child: Column(
-              children: [
-                TextField(
-                  controller: nameCtrl,
-
-                  decoration: const InputDecoration(labelText: "Supplier Name"),
-                ),
-
-                const SizedBox(height: 20),
-
-                TextField(
-                  controller: contactCtrl,
-
-                  decoration: const InputDecoration(
-                    labelText: "Contact Number",
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                DropdownButtonFormField<String>(
-                  value: selectedCategory,
-
-                  items: categories.map((e) {
-                    return DropdownMenuItem(value: e, child: Text(e));
-                  }).toList(),
-
-                  onChanged: (value) {
-                    setState(() {
-                      selectedCategory = value;
-                    });
-                  },
-
-                  decoration: const InputDecoration(labelText: "Category"),
-                ),
-
-                const Spacer(),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-
-                  child: ElevatedButton(
-                    onPressed: updateSupplier,
-
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+            child: R.maxW(
+              Padding(
+                padding: R.hPad(context, base: 20.0),
+                child: Column(
+                  children: [
+                    SizedBox(height: R.sp(context, 20)),
+                    TextField(
+                      controller: nameCtrl,
+                      style: TextStyle(fontSize: R.fs(context, 14)),
+                      decoration: InputDecoration(
+                        labelText: "Supplier Name",
+                        labelStyle: TextStyle(fontSize: R.fs(context, 14)),
+                      ),
                     ),
-
-                    child: const Text(
-                      "Update Supplier",
-                      style: TextStyle(color: Colors.white),
+                    SizedBox(height: R.sp(context, 20)),
+                    TextField(
+                      controller: contactCtrl,
+                      style: TextStyle(fontSize: R.fs(context, 14)),
+                      decoration: InputDecoration(
+                        labelText: "Contact Number",
+                        labelStyle: TextStyle(fontSize: R.fs(context, 14)),
+                      ),
                     ),
-                  ),
+                    SizedBox(height: R.sp(context, 20)),
+                    DropdownButtonFormField<String>(
+                      value: selectedCategory,
+                      style: TextStyle(
+                        fontSize: R.fs(context, 14),
+                        color: Colors.black,
+                      ),
+                      items: categories.map((e) {
+                        return DropdownMenuItem(
+                          value: e,
+                          child: Text(
+                            e,
+                            style: TextStyle(fontSize: R.fs(context, 14)),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          selectedCategory = value;
+                        });
+                      },
+                      decoration: InputDecoration(
+                        labelText: "Category",
+                        labelStyle: TextStyle(fontSize: R.fs(context, 14)),
+                      ),
+                    ),
+                    const Spacer(),
+                    SizedBox(
+                      width: double.infinity,
+                      height: R.btnH(context),
+                      child: ElevatedButton(
+                        onPressed: updateSupplier,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(
+                              R.radius(context, 10),
+                            ),
+                          ),
+                        ),
+                        child: Text(
+                          "Update Supplier",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: R.fs(context, 16),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: R.sp(context, 20)),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),

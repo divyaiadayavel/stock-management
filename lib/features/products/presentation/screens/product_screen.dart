@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/product_provider.dart';
 import '../../../../core/constants/app_curve.dart';
+import '../../../../core/utils/responsive_helper.dart';
 
 class ProductScreen extends ConsumerStatefulWidget {
   const ProductScreen({super.key});
@@ -20,10 +21,10 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
   List<Map<String, dynamic>> products = [];
   List<Map<String, dynamic>> filteredProducts = [];
 
-  int total = 0;
-  int inStock = 0;
-  int lowStock = 0;
-  int outStock = 0;
+  int totalCount = 0;
+  int inStockCount = 0;
+  int lowStockCount = 0;
+  int outOfStockCount = 0;
 
   @override
   void initState() {
@@ -33,7 +34,6 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
 
   Future<void> loadProducts() async {
     final data = await DBHelper.getAllProducts();
-
     products = data;
     applyFilters();
   }
@@ -43,7 +43,6 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
       context,
       MaterialPageRoute(builder: (_) => const AddProductScreen()),
     );
-
     if (result == true) {
       loadProducts();
     }
@@ -54,7 +53,6 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
 
     // 🔍 SEARCH
     final currentSearch = ref.read(searchQueryProvider);
-
     if (currentSearch.isNotEmpty) {
       temp = temp.where((p) {
         return p["name"].toString().toLowerCase().contains(
@@ -63,48 +61,43 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
       }).toList();
     }
 
-    // 📊 TOTAL
-    total = products.length;
+    // ========================================================
+    // 📊 CALCULATE MASTER COUNTS FROM INITIAL PRODUCTS
+    // ========================================================
+    final calculatedTotal = products.length;
 
-    // ✅ IN STOCK
-    inStock = products.where((p) {
+    final calculatedInStock = products.where((p) {
       int qty = p["quantity"] ?? 0;
       int lsl = p["lsl"] ?? 10;
-
       return qty > lsl;
     }).length;
 
-    // ⚠️ LOW STOCK
-    lowStock = products.where((p) {
+    final calculatedLowStock = products.where((p) {
       int qty = p["quantity"] ?? 0;
       int lsl = p["lsl"] ?? 10;
-
       return qty > 0 && qty <= lsl;
     }).length;
 
-    // ❌ OUT OF STOCK
-    outStock = products.where((p) {
+    final calculatedOutOfStock = products.where((p) {
       int qty = p["quantity"] ?? 0;
       return qty <= 0;
     }).length;
 
-    // =========================
-    // FILTERS
-    // =========================
+    // ========================================================
+    // ⚙️ APPLY SELECTED STATUS FILTER TO RENDER LIST
+    // ========================================================
     final currentFilter = ref.read(selectedFilterProvider);
 
     if (currentFilter == "In Stock") {
       temp = temp.where((p) {
         int qty = p["quantity"] ?? 0;
         int lsl = p["lsl"] ?? 10;
-
         return qty > lsl;
       }).toList();
     } else if (currentFilter == "Low Stock") {
       temp = temp.where((p) {
         int qty = p["quantity"] ?? 0;
         int lsl = p["lsl"] ?? 10;
-
         return qty > 0 && qty <= lsl;
       }).toList();
     } else if (currentFilter == "Out Of Stock") {
@@ -120,21 +113,41 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
       ),
     );
 
-    filteredProducts = temp;
-
-    setState(() {});
+    // ========================================================
+    // 🔄 UPDATE UI STATE AT THE SAME TIME
+    // ========================================================
+    setState(() {
+      filteredProducts = temp;
+      totalCount = calculatedTotal;
+      inStockCount = calculatedInStock;
+      lowStockCount = calculatedLowStock;
+      outOfStockCount = calculatedOutOfStock;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    // ignore: unused_local_variable
     final selectedFilter = ref.watch(selectedFilterProvider);
-
+    // ignore: unused_local_variable
     final searchQuery = ref.watch(searchQueryProvider);
-
+    // ignore: unused_local_variable
     final filterNotifier = ref.read(selectedFilterProvider.notifier);
-
+    // ignore: unused_local_variable
     final searchNotifier = ref.read(searchQueryProvider.notifier);
-    final width = MediaQuery.of(context).size.width;
+
+    // ── responsive values ──────────────────────────────────────
+    final hPad = R.hPad(context, base: 16);
+    final imgSz = R.imgSize(context, 0.20);
+    final searchHeight = R.searchH(context);
+    final nameFs = R.fs(context, 16);
+    final priceFs = R.fs(context, 18);
+    final catFs = R.fs(context, 13);
+    final stockFs = R.fs(context, 13);
+    final badgeFs = R.fs(context, 12);
+    final cardRadius = R.radius(context, 18);
+    final cardPad = R.sp(context, 14);
+    final vGap = R.sp(context, 6);
 
     return Scaffold(
       backgroundColor: const Color(0xffF5F6FA),
@@ -144,13 +157,21 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
         backgroundColor: AppColors.primary,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text(
+        title: Text(
           "Products",
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            fontSize: R.fs(context, 18),
+          ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add, color: Colors.white),
+            icon: Icon(
+              Icons.add,
+              color: Colors.white,
+              size: R.icon(context, 24),
+            ),
             onPressed: openAddScreen,
           ),
         ],
@@ -165,16 +186,18 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
             color: const Color(0xffF5F6FA),
             child: Column(
               children: [
-                const SizedBox(height: 14),
+                SizedBox(height: R.sp(context, 14)),
 
-                // Fixed missing container wrapper for the Search field here
+                // ── Search bar ──────────────────────────────────
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  padding: hPad,
                   child: Container(
-                    height: 52,
+                    height: searchHeight,
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(
+                        R.radius(context, 14),
+                      ),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.04),
@@ -187,50 +210,66 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                         ref.read(searchQueryProvider.notifier).state = val;
                         applyFilters();
                       },
+                      style: TextStyle(fontSize: R.fs(context, 14)),
                       decoration: InputDecoration(
                         hintText: "Search products...",
-                        hintStyle: TextStyle(color: Colors.grey.shade500),
-                        prefixIcon: const Icon(Icons.search),
+                        hintStyle: TextStyle(
+                          color: Colors.grey.shade500,
+                          fontSize: R.fs(context, 14),
+                        ),
+                        prefixIcon: Icon(
+                          Icons.search,
+                          size: R.icon(context, 22),
+                        ),
                         border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 14,
+                        contentPadding: EdgeInsets.symmetric(
+                          vertical: R.sp(context, 14),
                         ),
                       ),
                     ),
                   ),
                 ),
 
-                const SizedBox(height: 14),
+                SizedBox(height: R.sp(context, 14)),
 
-                // ================= FILTERS =================
+                // =========================
+                // 🔹 EQUAL-WIDTH FILTER ROW (NO SCROLL)
+                // =========================
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    alignment: WrapAlignment.start,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: R.fluid(context, 14, 18),
+                  ),
+                  child: Row(
                     children: [
-                      _filterTab("All", total),
-                      _filterTab("In Stock", inStock),
-                      _filterTab("Low Stock", lowStock),
-                      _filterTab("Out Of Stock", outStock),
+                      Expanded(child: _filterTab("All", totalCount)),
+                      SizedBox(width: R.sp(context, 4)),
+                      Expanded(child: _filterTab("In Stock", inStockCount)),
+                      SizedBox(width: R.sp(context, 4)),
+                      Expanded(child: _filterTab("Low Stock", lowStockCount)),
+                      SizedBox(width: R.sp(context, 4)),
+                      Expanded(
+                        child: _filterTab("Out Of Stock", outOfStockCount),
+                      ),
                     ],
                   ),
                 ),
 
-                const SizedBox(height: 12),
+                SizedBox(height: R.sp(context, 12)),
 
                 // ================= PRODUCT LIST =================
                 Expanded(
                   child: filteredProducts.isEmpty
-                      ? const Center(
+                      ? Center(
                           child: Text(
                             "No Products Found",
-                            style: TextStyle(fontSize: 16, color: Colors.grey),
+                            style: TextStyle(
+                              fontSize: R.fs(context, 16),
+                              color: Colors.grey,
+                            ),
                           ),
                         )
                       : ListView.builder(
-                          padding: const EdgeInsets.only(bottom: 16),
+                          padding: EdgeInsets.only(bottom: R.sp(context, 16)),
                           itemCount: filteredProducts.length,
                           itemBuilder: (_, index) {
                             final p = filteredProducts[index];
@@ -249,14 +288,16 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                                 );
                               },
                               child: Container(
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 8,
+                                margin: EdgeInsets.symmetric(
+                                  horizontal: hPad.left,
+                                  vertical: R.sp(context, 8),
                                 ),
-                                padding: const EdgeInsets.all(14),
+                                padding: EdgeInsets.all(cardPad),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
-                                  borderRadius: BorderRadius.circular(18),
+                                  borderRadius: BorderRadius.circular(
+                                    cardRadius,
+                                  ),
                                   boxShadow: [
                                     BoxShadow(
                                       color: Colors.black.withOpacity(0.05),
@@ -270,14 +311,18 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                                   children: [
                                     // ================= IMAGE =================
                                     Container(
-                                      width: width * 0.20,
-                                      height: width * 0.20,
+                                      width: imgSz,
+                                      height: imgSz,
                                       decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(14),
+                                        borderRadius: BorderRadius.circular(
+                                          R.radius(context, 14),
+                                        ),
                                         color: Colors.grey.shade100,
                                       ),
                                       child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(14),
+                                        borderRadius: BorderRadius.circular(
+                                          R.radius(context, 14),
+                                        ),
                                         child:
                                             p["image_path"] != null &&
                                                 p["image_path"] != ""
@@ -285,15 +330,15 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                                                 File(p["image_path"]),
                                                 fit: BoxFit.cover,
                                               )
-                                            : const Icon(
+                                            : Icon(
                                                 Icons.inventory_2,
-                                                size: 40,
+                                                size: R.icon(context, 40),
                                                 color: Colors.grey,
                                               ),
                                       ),
                                     ),
 
-                                    const SizedBox(width: 14),
+                                    SizedBox(width: R.sp(context, 14)),
 
                                     // ================= DETAILS =================
                                     Expanded(
@@ -301,7 +346,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          // ================= NAME + PRICE =================
+                                          // NAME + PRICE
                                           Row(
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
@@ -312,17 +357,17 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                                                   maxLines: 2,
                                                   overflow:
                                                       TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                    fontSize: 16,
+                                                  style: TextStyle(
+                                                    fontSize: nameFs,
                                                     fontWeight: FontWeight.bold,
                                                   ),
                                                 ),
                                               ),
-                                              const SizedBox(width: 8),
+                                              SizedBox(width: R.sp(context, 8)),
                                               Text(
                                                 "₹ ${(p["selling_price"] as num?)?.toDouble().toStringAsFixed(0) ?? "0"}",
-                                                style: const TextStyle(
-                                                  fontSize: 18,
+                                                style: TextStyle(
+                                                  fontSize: priceFs,
                                                   fontWeight: FontWeight.bold,
                                                   color: Colors.black,
                                                 ),
@@ -330,29 +375,28 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                                             ],
                                           ),
 
-                                          const SizedBox(height: 6),
+                                          SizedBox(height: vGap),
 
-                                          // ================= CATEGORY =================
+                                          // CATEGORY
                                           Text(
                                             p["category"] ?? "",
                                             style: TextStyle(
-                                              fontSize: 13,
+                                              fontSize: catFs,
                                               color: Colors.grey.shade600,
                                             ),
                                           ),
 
-                                          const SizedBox(height: 10),
+                                          SizedBox(height: R.sp(context, 10)),
 
-                                          // ================= STOCK ROW =================
+                                          // STOCK ROW
                                           Row(
                                             mainAxisAlignment:
                                                 MainAxisAlignment.spaceBetween,
                                             children: [
-                                              // STOCK COUNT
                                               Text(
                                                 "Stock: $qty pcs",
                                                 style: TextStyle(
-                                                  fontSize: 13,
+                                                  fontSize: stockFs,
                                                   fontWeight: FontWeight.w600,
                                                   color: isOutStock
                                                       ? Colors.red
@@ -362,13 +406,12 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                                                 ),
                                               ),
 
-                                              // ================= BADGE =================
+                                              // BADGE
                                               Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 6,
-                                                    ),
+                                                padding: EdgeInsets.symmetric(
+                                                  horizontal: R.sp(context, 12),
+                                                  vertical: R.sp(context, 6),
+                                                ),
                                                 decoration: BoxDecoration(
                                                   color: isOutStock
                                                       ? Colors.red.withOpacity(
@@ -396,7 +439,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                                                       ? "Low Stock"
                                                       : "In Stock",
                                                   style: TextStyle(
-                                                    fontSize: 12,
+                                                    fontSize: badgeFs,
                                                     fontWeight: FontWeight.bold,
                                                     color: isOutStock
                                                         ? Colors.red
@@ -427,34 +470,38 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
   }
 
   Widget _filterTab(String title, int count) {
-    final isSelected = ref.read(selectedFilterProvider) == title;
+    final isSelected = ref.watch(selectedFilterProvider) == title;
+
+    // Shorten the string structure to guarantee space for the count bracket
+    String displayTitle = title;
+    if (title == "Low Stock") displayTitle = "Low";
+    if (title == "Out Of Stock") displayTitle = "Out";
 
     return GestureDetector(
       onTap: () {
         ref.read(selectedFilterProvider.notifier).state = title;
         applyFilters();
       },
-
       child: Container(
-        margin: const EdgeInsets.only(right: 4),
-
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-
+        padding: EdgeInsets.symmetric(
+          horizontal: R.sp(context, 2),
+          vertical: R.sp(context, 8),
+        ),
+        alignment: Alignment.center,
         decoration: BoxDecoration(
           color: isSelected ? AppColors.primary.withOpacity(0.1) : Colors.white,
-          borderRadius: BorderRadius.circular(25),
+          borderRadius: BorderRadius.circular(R.radius(context, 25)),
           border: Border.all(
             color: isSelected ? AppColors.primary : Colors.grey.shade300,
           ),
         ),
-
         child: Text(
-          "$title ($count)",
-
+          "$displayTitle ($count)",
+          maxLines: 1,
+          textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: 12,
+            fontSize: R.fs(context, 11),
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-
             color: isSelected ? AppColors.primary : Colors.grey.shade600,
           ),
         ),

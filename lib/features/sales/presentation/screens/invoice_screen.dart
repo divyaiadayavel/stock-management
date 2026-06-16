@@ -8,6 +8,7 @@ import 'package:printing/printing.dart';
 import '../../../dashboard/presentation/screens/main_navigation.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/storage/db_helper.dart';
+import '../../../../core/utils/responsive_helper.dart'; // Make sure this import path matches your directory structure
 import '../../../dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/invoice_provider.dart';
@@ -287,28 +288,29 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
   @override
   Widget build(BuildContext context) {
     final items = ref.watch(invoiceItemsProvider);
-
     final subtotal = ref.watch(subtotalProvider);
-
     final discount = ref.watch(discountProvider);
-
     final tax = ref.watch(taxProvider);
-
     final total = ref.watch(totalProvider);
+
     return Scaffold(
       backgroundColor: AppColors.background,
-
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-
-        title: const Text(
+        iconTheme: IconThemeData(
+          color: Colors.white,
+          size: R.icon(context, 24),
+        ),
+        title: Text(
           "Invoice",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: R.fs(context, 20),
+          ),
         ),
       ),
-
       body: Container(
         color: AppColors.primary,
         child: ClipRRect(
@@ -318,12 +320,15 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
             child: items.isEmpty
                 ? const Center(child: CircularProgressIndicator())
                 : SingleChildScrollView(
-                    padding: const EdgeInsets.all(14),
+                    padding: R.hPad(context, base: 14.0),
                     child: Container(
-                      padding: const EdgeInsets.all(18),
+                      margin: EdgeInsets.symmetric(vertical: R.sp(context, 14)),
+                      padding: EdgeInsets.all(R.sp(context, 18)),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius: BorderRadius.circular(
+                          R.radius(context, 18),
+                        ),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withOpacity(0.05),
@@ -337,61 +342,74 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
                           // ================= HEADER =================
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
                             crossAxisAlignment: CrossAxisAlignment.start,
-
                             children: [
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
-
-                                children: const [
+                                children: [
                                   Text(
                                     "Your Store",
                                     style: TextStyle(
-                                      fontSize: 22,
+                                      fontSize: R.fs(context, 22),
                                       fontWeight: FontWeight.bold,
                                       color: AppColors.primary,
                                     ),
                                   ),
-
-                                  SizedBox(height: 6),
-
-                                  Text("No. 45, Anna Nagar"),
-                                  Text("Chennai - 600080"),
-                                  Text("Ph: 9876543210"),
-                                  Text("GSTIN: 33ABCDE1234F1Z5"),
+                                  SizedBox(height: R.sp(context, 6)),
+                                  Text(
+                                    "No. 45, Anna Nagar",
+                                    style: TextStyle(
+                                      fontSize: R.fs(context, 14),
+                                    ),
+                                  ),
+                                  Text(
+                                    "Chennai - 600080",
+                                    style: TextStyle(
+                                      fontSize: R.fs(context, 14),
+                                    ),
+                                  ),
+                                  Text(
+                                    "Ph: 9876543210",
+                                    style: TextStyle(
+                                      fontSize: R.fs(context, 14),
+                                    ),
+                                  ),
+                                  Text(
+                                    "GSTIN: 33ABCDE1234F1Z5",
+                                    style: TextStyle(
+                                      fontSize: R.fs(context, 14),
+                                    ),
+                                  ),
                                 ],
                               ),
-
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.end,
-
                                 children: [
                                   Text(
                                     "INV-${widget.invoiceId}",
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontWeight: FontWeight.bold,
+                                      fontSize: R.fs(context, 14),
                                     ),
                                   ),
-
-                                  const SizedBox(height: 5),
-
+                                  SizedBox(height: R.sp(context, 5)),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 4,
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: R.sp(context, 10),
+                                      vertical: R.sp(context, 4),
                                     ),
-
                                     decoration: BoxDecoration(
                                       color: Colors.green.shade100,
-                                      borderRadius: BorderRadius.circular(20),
+                                      borderRadius: BorderRadius.circular(
+                                        R.radius(context, 20),
+                                      ),
                                     ),
-
-                                    child: const Text(
+                                    child: Text(
                                       "Paid",
                                       style: TextStyle(
                                         color: Colors.green,
                                         fontWeight: FontWeight.bold,
+                                        fontSize: R.fs(context, 12),
                                       ),
                                     ),
                                   ),
@@ -400,36 +418,38 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
                             ],
                           ),
 
-                          const SizedBox(height: 20),
+                          SizedBox(height: R.sp(context, 20)),
 
                           // ================= DATE =================
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
                             children: [
                               Text(
                                 "Date: ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}",
+                                style: TextStyle(fontSize: R.fs(context, 14)),
                               ),
-
-                              const Text("Customer: Walk-in Customer"),
+                              Text(
+                                "Customer: Walk-in Customer",
+                                style: TextStyle(fontSize: R.fs(context, 14)),
+                              ),
                             ],
                           ),
 
-                          const SizedBox(height: 20),
+                          SizedBox(height: R.sp(context, 20)),
 
                           // ================= TABLE HEADER =================
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 10,
-                              horizontal: 8,
+                            padding: EdgeInsets.symmetric(
+                              vertical: R.sp(context, 10),
+                              horizontal: R.sp(context, 8),
                             ),
-
                             decoration: BoxDecoration(
                               color: Colors.grey.shade200,
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(
+                                R.radius(context, 8),
+                              ),
                             ),
-
-                            child: const Row(
+                            child: Row(
                               children: [
                                 Expanded(
                                   flex: 4,
@@ -437,10 +457,10 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
                                     "Item",
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
+                                      fontSize: R.fs(context, 14),
                                     ),
                                   ),
                                 ),
-
                                 Expanded(
                                   flex: 2,
                                   child: Text(
@@ -448,10 +468,10 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
+                                      fontSize: R.fs(context, 14),
                                     ),
                                   ),
                                 ),
-
                                 Expanded(
                                   flex: 3,
                                   child: Text(
@@ -459,10 +479,10 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
                                     textAlign: TextAlign.right,
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
+                                      fontSize: R.fs(context, 14),
                                     ),
                                   ),
                                 ),
-
                                 Expanded(
                                   flex: 3,
                                   child: Text(
@@ -470,6 +490,7 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
                                     textAlign: TextAlign.right,
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
+                                      fontSize: R.fs(context, 14),
                                     ),
                                   ),
                                 ),
@@ -477,18 +498,17 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
                             ),
                           ),
 
-                          const SizedBox(height: 10),
+                          SizedBox(height: R.sp(context, 10)),
 
                           // ================= ITEMS =================
                           ListView.builder(
                             itemCount: items.length,
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
-
                             itemBuilder: (_, i) => _buildItemRow(items[i]),
                           ),
 
-                          const Divider(height: 30),
+                          Divider(height: R.sp(context, 30)),
 
                           // ================= TOTALS =================
                           _row("Subtotal", subtotal),
@@ -499,62 +519,63 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
 
                           _row("Total", total, bold: true),
 
-                          const SizedBox(height: 10),
+                          SizedBox(height: R.sp(context, 10)),
 
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
                             children: [
-                              const Text(
+                              Text(
                                 "Paid",
                                 style: TextStyle(
                                   color: Colors.green,
                                   fontWeight: FontWeight.bold,
+                                  fontSize: R.fs(context, 14),
                                 ),
                               ),
-
                               Text(
                                 "₹ ${total.toStringAsFixed(0)}",
-                                style: const TextStyle(
+                                style: TextStyle(
                                   color: Colors.green,
                                   fontWeight: FontWeight.bold,
+                                  fontSize: R.fs(context, 14),
                                 ),
                               ),
                             ],
                           ),
 
-                          const SizedBox(height: 6),
+                          SizedBox(height: R.sp(context, 6)),
 
                           _row("Balance", 0),
 
-                          const SizedBox(height: 30),
+                          SizedBox(height: R.sp(context, 30)),
 
                           // ================= BUTTONS =================
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceAround,
-
                             children: [
                               _btn(
                                 Icons.download,
                                 "Download",
                                 onTap: _downloadInvoice,
                               ),
-
                               _btn(Icons.share, "Share", onTap: _shareInvoice),
-
                               _btn(Icons.print, "Print", onTap: _printInvoice),
                             ],
                           ),
-                          const SizedBox(height: 25), // ✅ Space between rows
+
+                          SizedBox(height: R.sp(context, 25)),
+
                           SizedBox(
                             width: double.infinity,
-                            height: 50,
+                            height: R.btnH(context),
                             child: ElevatedButton(
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.primary,
                                 foregroundColor: Colors.white,
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(
+                                    R.radius(context, 12),
+                                  ),
                                 ),
                               ),
                               onPressed: () {
@@ -567,10 +588,10 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
                                   (route) => false,
                                 );
                               },
-                              child: const Text(
+                              child: Text(
                                 "Exit",
                                 style: TextStyle(
-                                  fontSize: 16,
+                                  fontSize: R.fs(context, 16),
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -589,29 +610,41 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
   // ================= ITEM ROW =================
   Widget _buildItemRow(Map<String, dynamic> item) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-
+      padding: EdgeInsets.symmetric(vertical: R.sp(context, 10)),
       child: Row(
         children: [
-          Expanded(flex: 4, child: Text(item["name"].toString())),
-
+          Expanded(
+            flex: 4,
+            child: Text(
+              item["name"].toString(),
+              style: TextStyle(fontSize: R.fs(context, 14)),
+            ),
+          ),
           Expanded(
             flex: 2,
-            child: Text("${item["qty"]}", textAlign: TextAlign.center),
+            child: Text(
+              "${item["qty"]}",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: R.fs(context, 14)),
+            ),
           ),
-
           Expanded(
             flex: 3,
-            child: Text("₹ ${item["price"]}", textAlign: TextAlign.right),
+            child: Text(
+              "₹ ${item["price"]}",
+              textAlign: TextAlign.right,
+              style: TextStyle(fontSize: R.fs(context, 14)),
+            ),
           ),
-
           Expanded(
             flex: 3,
             child: Text(
               "₹ ${item["amount"]}",
               textAlign: TextAlign.right,
-
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: R.fs(context, 14),
+              ),
             ),
           ),
         ],
@@ -622,19 +655,16 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
   // ================= TOTAL ROW =================
   Widget _row(String title, double value, {bool bold = false}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-
+      padding: EdgeInsets.symmetric(vertical: R.sp(context, 4)),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
         children: [
-          Text(title),
-
+          Text(title, style: TextStyle(fontSize: R.fs(context, 14))),
           Text(
             "₹ ${value.toStringAsFixed(0)}",
-
             style: TextStyle(
               fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+              fontSize: R.fs(context, 14),
             ),
           ),
         ],
@@ -646,31 +676,25 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
   Widget _btn(IconData icon, String text, {VoidCallback? onTap}) {
     return GestureDetector(
       onTap: onTap,
-
       child: Container(
-        width: 90,
-        padding: const EdgeInsets.symmetric(vertical: 12),
-
+        width: R.fluid(context, 90, 120),
+        padding: EdgeInsets.symmetric(vertical: R.sp(context, 12)),
         decoration: BoxDecoration(
           border: Border.all(color: Colors.grey.shade300),
-
-          borderRadius: BorderRadius.circular(12),
-
+          borderRadius: BorderRadius.circular(R.radius(context, 12)),
           color: Colors.white,
         ),
-
         child: Column(
           mainAxisSize: MainAxisSize.min,
-
           children: [
-            Icon(icon, color: AppColors.primary),
-
-            const SizedBox(height: 6),
-
+            Icon(icon, color: AppColors.primary, size: R.icon(context, 24)),
+            SizedBox(height: R.sp(context, 6)),
             Text(
               text,
-
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+              style: TextStyle(
+                fontSize: R.fs(context, 12),
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
@@ -682,10 +706,8 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
   pw.Widget _pdfCell(String text, {bool bold = false}) {
     return pw.Padding(
       padding: const pw.EdgeInsets.all(8),
-
       child: pw.Text(
         text,
-
         style: pw.TextStyle(
           fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
         ),
@@ -697,16 +719,12 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
   pw.Widget _pdfTotalRow(String title, double value, {bool bold = false}) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 4),
-
       child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-
         children: [
           pw.Text(title),
-
+          pw.Spacer(), // Push the value to the far right side of the row
           pw.Text(
             "₹ ${value.toStringAsFixed(0)}",
-
             style: pw.TextStyle(
               fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
             ),

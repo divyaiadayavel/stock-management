@@ -8,7 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/supplier_provider.dart';
 import '../../../../core/constants/app_curve.dart';
 import 'supplier_details_screen.dart';
-import 'supplier_details_screen.dart';
+import '../../../../core/utils/responsive_helper.dart'; // ← add this import
 
 class SuppliersScreen extends ConsumerStatefulWidget {
   const SuppliersScreen({super.key});
@@ -24,46 +24,38 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
   @override
   void initState() {
     super.initState();
-
     loadSuppliers();
   }
 
   // =========================
   // 🔹 LOAD SUPPLIERS
   // =========================
-
   Future<void> loadSuppliers() async {
     final data = await DBHelper.getSuppliers();
-
     final supplierCount = await DBHelper.getSupplierCount();
-
     final productCount = await DBHelper.getProductCount();
-
     final categories = data.map((e) => e["category"]).toSet().length;
-
     final purchaseAmount = await DBHelper.getTotalPurchaseAmount();
 
     ref.read(suppliersProvider.notifier).state = data;
-
     ref.read(totalSuppliersProvider.notifier).state = supplierCount;
-
     ref.read(totalCategoriesProvider.notifier).state = categories;
-
     ref.read(totalProductsProvider.notifier).state = productCount;
-
     ref.read(totalPurchasesProvider.notifier).state = purchaseAmount;
   }
-  // =========================
-  // 🔹 TOP CARD
-  // =========================
 
+  // =========================
+  // 🔹 TOP CARD (FIXED HORIZONTAL LAYOUT)
+  // =========================
   Widget _topCard(String title, String value, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(16),
-
+      // Fluid padding shrinks gracefully on smaller devices to prevent squeezing layout elements
+      padding: EdgeInsets.all(R.fluid(context, 10, 16)),
       decoration: BoxDecoration(
         color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(AppSizes.cardRadius),
+        borderRadius: BorderRadius.circular(
+          R.radius(context, AppSizes.cardRadius),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.03),
@@ -72,18 +64,23 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
           ),
         ],
       ),
-
       child: Row(
         children: [
           CircleAvatar(
-            radius: 22,
-
+            radius: R.fluid(
+              context,
+              18,
+              26,
+            ), // Scaled down slightly to guarantee room for text
             backgroundColor: color.withOpacity(0.20),
-
-            child: Icon(icon, color: color, size: AppSizes.iconMd),
+            child: Icon(
+              icon,
+              color: color,
+              size: R.icon(context, AppSizes.iconMd),
+            ),
           ),
 
-          const SizedBox(width: 12),
+          SizedBox(width: R.fluid(context, 6, 12)), // Scaled down gap
 
           Expanded(
             child: Column(
@@ -95,24 +92,34 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     value,
-                    style: const TextStyle(
-                      fontSize: 18,
+                    style: TextStyle(
+                      fontSize: R.fs(
+                        context,
+                        16,
+                      ), // Sized down base from 18 to 16 for better data fitment
                       fontWeight: FontWeight.bold,
                       color: Colors.black,
                     ),
                   ),
                 ),
 
-                const SizedBox(height: 4),
+                SizedBox(height: R.sp(context, 2)),
 
-                Text(
-                  title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.black.withOpacity(0.7),
-                    fontWeight: FontWeight.w500,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    title,
+                    maxLines:
+                        1, // Set to 1 line inside a scale-down box to absolutely prevent text spill
+                    style: TextStyle(
+                      fontSize: R.fs(
+                        context,
+                        11,
+                      ), // Baseline at 11 fits beautifully
+                      color: Colors.black.withOpacity(0.7),
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               ],
@@ -126,7 +133,6 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
   // =========================
   // 🔹 SUPPLIER CARD
   // =========================
-
   Widget supplierCard(Map<String, dynamic> supplier) {
     return GestureDetector(
       onTap: () async {
@@ -136,22 +142,18 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
             builder: (_) => SupplierDetailsScreen(supplier: supplier),
           ),
         );
-
         if (result == true) {
           loadSuppliers();
         }
       },
-
       child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
-
-        padding: const EdgeInsets.all(14),
-
+        margin: EdgeInsets.only(bottom: R.sp(context, 14)),
+        padding: EdgeInsets.all(R.sp(context, 14)),
         decoration: BoxDecoration(
           color: Colors.white,
-
-          borderRadius: BorderRadius.circular(AppSizes.cardRadius),
-
+          borderRadius: BorderRadius.circular(
+            R.radius(context, AppSizes.cardRadius),
+          ),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.04),
@@ -160,65 +162,54 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
             ),
           ],
         ),
-
         child: Row(
           children: [
             CircleAvatar(
-              radius: 28,
-
+              radius: R.fluid(context, 28, 38),
               backgroundColor: AppColors.primary.withOpacity(0.1),
-
               child: Text(
                 supplier["supplierName"][0].toUpperCase(),
-
-                style: const TextStyle(
-                  fontSize: 22,
+                style: TextStyle(
+                  fontSize: R.fs(context, 22),
                   fontWeight: FontWeight.bold,
                   color: AppColors.primary,
                 ),
               ),
             ),
 
-            const SizedBox(width: 14),
+            SizedBox(width: R.sp(context, 14)),
 
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-
                 children: [
                   Text(
                     supplier["supplierName"],
-
-                    style: const TextStyle(
-                      fontSize: 17,
+                    style: TextStyle(
+                      fontSize: R.fs(context, 17),
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-
-                  const SizedBox(height: 4),
-
+                  SizedBox(height: R.sp(context, 4)),
                   Text(
                     supplier["category"],
-
-                    style: const TextStyle(color: Colors.grey, fontSize: 13),
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: R.fs(context, 13),
+                    ),
                   ),
-
-                  const SizedBox(height: 8),
-
+                  SizedBox(height: R.sp(context, 8)),
                   Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.phone,
-                        size: AppSizes.iconSm,
+                        size: R.icon(context, AppSizes.iconSm),
                         color: AppColors.primary,
                       ),
-
-                      const SizedBox(width: 5),
-
+                      SizedBox(width: R.sp(context, 5)),
                       Text(
                         supplier["contactNumber"],
-
-                        style: const TextStyle(fontSize: 13),
+                        style: TextStyle(fontSize: R.fs(context, 13)),
                       ),
                     ],
                   ),
@@ -226,9 +217,9 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
               ),
             ),
 
-            const Icon(
+            Icon(
               Icons.arrow_forward_ios,
-              size: AppSizes.iconSm,
+              size: R.icon(context, AppSizes.iconSm),
               color: Colors.grey,
             ),
           ],
@@ -240,28 +231,37 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
   // =========================
   // 🔹 BUILD
   // =========================
-
   @override
   Widget build(BuildContext context) {
     final suppliers = ref.watch(filteredSuppliersProvider);
-
     final totalSuppliers = ref.watch(totalSuppliersProvider);
-
     final totalCategories = ref.watch(totalCategoriesProvider);
-
     final totalProducts = ref.watch(totalProductsProvider);
-
     final totalPurchases = ref.watch(totalPurchasesProvider);
+
+    // ── responsive values ──────────────────────────────────────
+    final hPad = R.hPad(context, base: 16);
+    final gridCols = R.gridCols(context, phone: 2, tablet: 4, desktop: 4);
+    final gridRatio = R.gridRatio(
+      context,
+      phone: 1.8,
+      tablet: 2.0,
+      desktop: 2.2,
+    );
+
     return Scaffold(
-      // Set the main Scaffold background color to primary
       backgroundColor: AppColors.background,
 
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         elevation: 0,
-        title: const Text(
+        title: Text(
           "Suppliers",
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            fontSize: R.fs(context, 18),
+          ),
         ),
         actions: [
           IconButton(
@@ -270,12 +270,15 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
                 context,
                 MaterialPageRoute(builder: (_) => const AddSupplierScreen()),
               );
-
               if (result == true) {
                 loadSuppliers();
               }
             },
-            icon: const Icon(Icons.add, color: Colors.white),
+            icon: Icon(
+              Icons.add,
+              color: Colors.white,
+              size: R.icon(context, 24),
+            ),
           ),
         ],
       ),
@@ -287,19 +290,22 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
           child: Container(
             color: Colors.grey.shade100,
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+              padding: hPad.copyWith(
+                top: R.sp(context, 16),
+                bottom: R.sp(context, 16),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // ==================== SEARCH BAR ====================
                   Container(
-                    height: 52,
-                    margin: const EdgeInsets.only(
-                      bottom: 16,
-                    ), // Spaces it perfectly away from cards below
+                    height: R.searchH(context),
+                    margin: EdgeInsets.only(bottom: R.sp(context, 16)),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(
+                        R.radius(context, 14),
+                      ),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.04),
@@ -312,36 +318,47 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
                       onChanged: (value) {
                         ref.read(searchSupplierProvider.notifier).state = value;
                       },
+                      style: TextStyle(fontSize: R.fs(context, 14)),
                       decoration: InputDecoration(
                         hintText: "Search suppliers...",
-                        hintStyle: TextStyle(color: Colors.grey.shade500),
-                        prefixIcon: const Icon(
+                        hintStyle: TextStyle(
+                          color: Colors.grey.shade500,
+                          fontSize: R.fs(context, 14),
+                        ),
+                        prefixIcon: Icon(
                           Icons.search,
                           color: Colors.grey,
+                          size: R.icon(context, 22),
                         ),
                         border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 14,
+                        contentPadding: EdgeInsets.symmetric(
+                          vertical: R.sp(context, 14),
                         ),
                       ),
                     ),
                   ),
+
                   // =========================
-                  // 🔹 TOP CARDS
+                  // 🔹 TOP CARDS (OVERFLOW-PROOF)
                   // =========================
                   GridView.count(
                     shrinkWrap: true,
-
                     physics: const NeverScrollableScrollPhysics(),
-
-                    crossAxisCount: 2,
-
-                    crossAxisSpacing: AppSizes.gridSpacing,
-
-                    mainAxisSpacing: AppSizes.gridSpacing,
-
-                    childAspectRatio: 1.8,
-
+                    crossAxisCount: R.gridCols(
+                      context,
+                      phone: 2,
+                      tablet: 2,
+                      desktop: 4,
+                    ),
+                    crossAxisSpacing: R.sp(context, 12),
+                    mainAxisSpacing: R.sp(context, 12),
+                    // Updated aspect ratio properties: a slightly larger phone ratio gives cards more horizontal room to breathe
+                    childAspectRatio: R.gridRatio(
+                      context,
+                      phone: 1.5,
+                      tablet: 1.6,
+                      desktop: 1.8,
+                    ),
                     children: [
                       _topCard(
                         "Total Suppliers",
@@ -349,21 +366,18 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
                         Icons.people,
                         Colors.blue,
                       ),
-
                       _topCard(
                         "Categories",
                         "$totalCategories",
                         Icons.category,
                         Colors.orange,
                       ),
-
                       _topCard(
                         "Total Products",
                         "$totalProducts",
                         Icons.inventory,
                         Colors.green,
                       ),
-
                       _topCard(
                         "Purchases",
                         "₹${totalPurchases.toStringAsFixed(0)}",
@@ -373,51 +387,49 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
                     ],
                   ),
 
-                  const SizedBox(height: 24),
+                  SizedBox(height: R.sp(context, 24)),
 
                   // =========================
                   // 🔹 HEADER
                   // =========================
                   Row(
                     children: [
-                      const Text(
+                      Text(
                         "Supplier List",
-
                         style: TextStyle(
-                          fontSize: 20,
+                          fontSize: R.fs(context, 20),
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-
                       const Spacer(),
-
                       TextButton(
                         onPressed: () {},
-                        child: const Text("View All"),
+                        child: Text(
+                          "View All",
+                          style: TextStyle(fontSize: R.fs(context, 14)),
+                        ),
                       ),
                     ],
                   ),
 
-                  const SizedBox(height: 12),
+                  SizedBox(height: R.sp(context, 12)),
 
                   // =========================
                   // 🔹 SUPPLIER LIST
                   // =========================
                   suppliers.isEmpty
                       ? Container(
-                          height: 250,
-
+                          height: R.fluid(context, 200, 300),
                           alignment: Alignment.center,
-
-                          child: const Text("No Suppliers Added"),
+                          child: Text(
+                            "No Suppliers Added",
+                            style: TextStyle(fontSize: R.fs(context, 14)),
+                          ),
                         )
                       : ListView.builder(
                           shrinkWrap: true,
-
                           physics: const NeverScrollableScrollPhysics(),
-
                           itemCount: suppliers.length,
-
                           itemBuilder: (context, index) {
                             return GestureDetector(
                               onTap: () async {
@@ -429,7 +441,6 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
                                     ),
                                   ),
                                 );
-
                                 if (result == true) {
                                   loadSuppliers();
                                 }

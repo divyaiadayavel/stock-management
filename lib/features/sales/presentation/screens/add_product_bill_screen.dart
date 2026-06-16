@@ -6,6 +6,7 @@ import '../../../../core/constants/app_curve.dart';
 import '../../../../core/storage/db_helper.dart';
 import '../providers/billing_provider.dart';
 import 'current_bill_screen.dart';
+import '../../../../core/utils/responsive_helper.dart';
 
 final searchProductProvider = StateProvider<String>((ref) => "");
 
@@ -106,7 +107,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
             child: isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(R.sp(context, 16)),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -133,7 +134,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 10),
+                            SizedBox(width: R.sp(context, 10)),
                             GestureDetector(
                               onTap: () async {
                                 final barcode = await Navigator.push(
@@ -175,8 +176,8 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                               },
 
                               child: Container(
-                                height: 50,
-                                width: 50,
+                                height: R.btnH(context),
+                                width: R.btnH(context),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   borderRadius: BorderRadius.circular(14),
@@ -193,7 +194,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                         const SizedBox(height: 20),
 
                         SizedBox(
-                          height: 42,
+                          height: R.searchH(context) - 8,
                           child: ListView.builder(
                             scrollDirection: Axis.horizontal,
                             itemCount: categories.length + 1,
@@ -211,14 +212,13 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
+                            Text(
                               "All Products",
                               style: TextStyle(
-                                fontSize: 18,
+                                fontSize: R.fs(context, 18),
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-
                             TextButton(
                               onPressed: () {
                                 setState(() {
@@ -240,14 +240,16 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                             final product = filteredProducts[index];
 
                             return Container(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 9,
+                              margin: EdgeInsets.only(bottom: R.sp(context, 8)),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: R.sp(context, 12),
+                                vertical: R.sp(context, 9),
                               ),
                               decoration: BoxDecoration(
                                 color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(
+                                  R.radius(context, 12),
+                                ),
                                 border: Border.all(color: Colors.grey.shade200),
                               ),
                               child: Row(
@@ -265,9 +267,9 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                           product["name"] ?? "",
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontWeight: FontWeight.bold,
-                                            fontSize: 13.5,
+                                            fontSize: R.fs(context, 13.5),
                                           ),
                                         ),
 
@@ -277,20 +279,27 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                         Row(
                                           children: [
                                             _metaChip(
+                                              context: context,
                                               label: "Price",
                                               value:
                                                   "₹${product["selling_price"]}",
                                               valueColor: Colors.black87,
                                             ),
-                                            const SizedBox(width: 12),
+
+                                            SizedBox(width: R.sp(context, 12)),
+
                                             _metaChip(
+                                              context: context,
                                               label: "Disc",
                                               value:
                                                   "${product["discount"] ?? 0}%",
                                               valueColor: Colors.green,
                                             ),
-                                            const SizedBox(width: 12),
+
+                                            SizedBox(width: R.sp(context, 12)),
+
                                             _metaChip(
+                                              context: context,
                                               label: "Stock",
                                               value: "${product["quantity"]}u",
                                               valueColor: Colors.blue,
@@ -303,7 +312,11 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
 
                                   // ── RIGHT: fixed 130px wide — never shifts left text ────
                                   SizedBox(
-                                    width: 130,
+                                    width: R.isDesktop(context)
+                                        ? 180
+                                        : R.isTablet(context)
+                                        ? 160
+                                        : 130,
                                     child: Consumer(
                                       builder: (context, ref, child) {
                                         final billingState = ref.watch(
@@ -357,7 +370,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                             // [ − | qty | + ]
                                             Expanded(
                                               child: Container(
-                                                height: 34,
+                                                height: R.btnH(context) - 16,
                                                 decoration: BoxDecoration(
                                                   border: Border.all(
                                                     color: AppColors.primary
@@ -659,8 +672,8 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
       ),
       bottomNavigationBar: SafeArea(
         child: Container(
-          margin: const EdgeInsets.all(12),
-          height: 70,
+          margin: EdgeInsets.all(R.sp(context, 12)),
+          height: R.btnH(context) + 10,
           decoration: BoxDecoration(
             color: AppColors.primary,
             borderRadius: BorderRadius.circular(14),
@@ -722,9 +735,9 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
 
                     Text(
                       "₹ ${billingState.total.toStringAsFixed(2)}",
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Colors.white,
-                        fontSize: 20,
+                        fontSize: R.fs(context, 20),
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -735,7 +748,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
               Padding(
                 padding: const EdgeInsets.only(right: 12),
                 child: SizedBox(
-                  height: 40,
+                  height: R.btnH(context) - 12,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
@@ -775,7 +788,10 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
       },
       child: Container(
         margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: EdgeInsets.symmetric(
+          horizontal: R.sp(context, 14),
+          vertical: R.sp(context, 10),
+        ),
         decoration: BoxDecoration(
           color: isSelected ? AppColors.primary : Colors.white,
           borderRadius: BorderRadius.circular(10),
@@ -787,7 +803,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
           title,
           style: TextStyle(
             color: isSelected ? Colors.white : Colors.black,
-            fontSize: 12,
+            fontSize: R.fs(context, 12),
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -797,6 +813,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
 
   // ── _metaChip helper (inside State class, outside build) ───────
   Widget _metaChip({
+    required BuildContext context,
     required String label,
     required String value,
     required Color valueColor,
@@ -805,13 +822,16 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 10)),
+        Text(
+          label,
+          style: TextStyle(color: Colors.grey, fontSize: R.fs(context, 10)),
+        ),
         Text(
           value,
           style: TextStyle(
             color: valueColor,
             fontWeight: FontWeight.bold,
-            fontSize: 12,
+            fontSize: R.fs(context, 12),
           ),
         ),
       ],

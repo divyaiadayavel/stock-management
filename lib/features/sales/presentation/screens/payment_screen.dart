@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/utils/responsive_helper.dart'; // Make sure this path is correct
 import 'invoice_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/payment_provider.dart';
@@ -23,35 +24,41 @@ class PaymentScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedMethod = ref.watch(paymentProvider);
-
     final paymentNotifier = ref.read(paymentProvider.notifier);
+
     return Scaffold(
       backgroundColor: AppColors.background,
-
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(
+            Icons.arrow_back,
+            color: Colors.white,
+            size: R.icon(context, 24),
+          ),
           onPressed: () => Navigator.pop(context),
         ),
-
-        title: const Text(
+        title: Text(
           "Payment",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: R.fs(context, 20),
+          ),
         ),
-
         centerTitle: false,
         backgroundColor: AppColors.primary,
         elevation: 0,
-
         actions: [
           IconButton(
-            icon: const Icon(Icons.receipt_long, color: Colors.white),
-
+            icon: Icon(
+              Icons.receipt_long,
+              color: Colors.white,
+              size: R.icon(context, 24),
+            ),
             onPressed: () {},
           ),
         ],
       ),
-
       body: Container(
         color: AppColors.primary,
         child: ClipRRect(
@@ -59,79 +66,68 @@ class PaymentScreen extends ConsumerWidget {
           child: Container(
             color: Colors.grey.shade100,
             child: SingleChildScrollView(
-              // Set to horizontal: 20 to preserve your exact original padding consistency
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
+              // Dynamically switches paddings based on screen breakpoint (Centers and caps at 960px on desktop)
+              padding: R.hPad(context, base: 20.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 20),
+                  SizedBox(height: R.sp(context, 20)),
 
                   // ================= AMOUNT CARD =================
                   Container(
                     width: double.infinity,
-
-                    padding: const EdgeInsets.all(24),
-
+                    padding: EdgeInsets.all(R.sp(context, 24)),
                     decoration: BoxDecoration(
                       color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(
+                        R.radius(context, 16),
+                      ),
                     ),
-
                     child: Column(
                       children: [
-                        const Text(
+                        Text(
                           "TOTAL PAYABLE AMOUNT",
-
                           style: TextStyle(
                             color: Colors.white70,
-                            fontSize: 12,
+                            fontSize: R.fs(context, 12),
                             letterSpacing: 1,
                           ),
                         ),
-
-                        const SizedBox(height: 8),
-
+                        SizedBox(height: R.sp(context, 8)),
                         Text(
                           "₹${totalAmount.toStringAsFixed(2)}",
-
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
-                            fontSize: 32,
+                            fontSize: R.fs(context, 32),
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-
-                        const SizedBox(height: 12),
-
+                        SizedBox(height: R.sp(context, 12)),
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: R.sp(context, 12),
+                            vertical: R.sp(context, 6),
                           ),
-
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(
+                              R.radius(context, 20),
+                            ),
                           ),
-
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
-
                             children: [
-                              const Icon(
+                              Icon(
                                 Icons.receipt_long,
                                 color: Colors.white,
-                                size: 16,
+                                size: R.icon(context, 16),
                               ),
-
-                              const SizedBox(width: 6),
-
+                              SizedBox(width: R.sp(context, 6)),
                               Text(
                                 invoiceNumber,
-
-                                style: const TextStyle(
+                                style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: 14,
+                                  fontSize: R.fs(context, 14),
                                 ),
                               ),
                             ],
@@ -141,22 +137,22 @@ class PaymentScreen extends ConsumerWidget {
                     ),
                   ),
 
-                  const SizedBox(height: 30),
+                  SizedBox(height: R.sp(context, 30)),
 
-                  const Text(
+                  Text(
                     "Select Payment Method",
-
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: R.fs(context, 18),
                       fontWeight: FontWeight.bold,
                       color: Colors.black87,
                     ),
                   ),
 
-                  const SizedBox(height: 16),
+                  SizedBox(height: R.sp(context, 16)),
 
                   // ================= CASH =================
                   _buildPaymentOption(
+                    context: context,
                     selectedMethod: selectedMethod,
                     paymentNotifier: paymentNotifier,
                     title: "Cash",
@@ -165,10 +161,11 @@ class PaymentScreen extends ConsumerWidget {
                     value: "Cash",
                   ),
 
-                  const SizedBox(height: 12),
+                  SizedBox(height: R.sp(context, 12)),
 
                   // ================= UPI =================
                   _buildPaymentOption(
+                    context: context,
                     selectedMethod: selectedMethod,
                     paymentNotifier: paymentNotifier,
                     title: "UPI / Digital Payment",
@@ -178,58 +175,61 @@ class PaymentScreen extends ConsumerWidget {
                     isExpanded: selectedMethod == "UPI",
                   ),
 
-                  const SizedBox(height: 60),
+                  SizedBox(height: R.sp(context, 60)),
 
                   // ================= SECURITY =================
                   Center(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-
-                      children: const [
+                      children: [
                         Icon(
                           Icons.verified_user_outlined,
-                          size: 16,
+                          size: R.icon(context, 16),
                           color: Colors.grey,
                         ),
-
-                        SizedBox(width: 4),
-
+                        SizedBox(width: R.sp(context, 4)),
                         Text(
                           "Secure 256-bit encrypted transaction",
-
-                          style: TextStyle(color: Colors.grey, fontSize: 12),
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontSize: R.fs(context, 12),
+                          ),
                         ),
                       ],
                     ),
                   ),
 
-                  const SizedBox(height: 16),
+                  SizedBox(height: R.sp(context, 16)),
 
                   // ================= INVOICE BUTTON =================
                   SizedBox(
                     width: double.infinity,
-                    height: 55,
-
+                    height: R.btnH(
+                      context,
+                    ), // Responsive button height scaling from 50 to 64
                     child: OutlinedButton.icon(
-                      icon: const Icon(Icons.receipt_long, color: Colors.white),
-
-                      label: const Text(
+                      icon: Icon(
+                        Icons.receipt_long,
+                        color: Colors.white,
+                        size: R.icon(context, 20),
+                      ),
+                      label: Text(
                         "Open Invoice",
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
+                          fontSize: R.fs(context, 16),
                         ),
                       ),
-
                       style: OutlinedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         elevation: 0,
-
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(
+                            R.radius(context, 12),
+                          ),
                         ),
                       ),
-
                       onPressed: () {
                         // ✅ Check payment method selected or not
                         if (selectedMethod == null) {
@@ -252,7 +252,7 @@ class PaymentScreen extends ConsumerWidget {
                     ),
                   ),
 
-                  const SizedBox(height: 20),
+                  SizedBox(height: R.sp(context, 20)),
                 ],
               ),
             ),
@@ -264,6 +264,7 @@ class PaymentScreen extends ConsumerWidget {
 
   // ================= PAYMENT OPTION =================
   Widget _buildPaymentOption({
+    required BuildContext context,
     required String? selectedMethod,
     required StateController<String?> paymentNotifier,
     required String title,
@@ -278,70 +279,58 @@ class PaymentScreen extends ConsumerWidget {
       onTap: () {
         paymentNotifier.state = value;
       },
-
       child: Container(
-        padding: const EdgeInsets.all(16),
-
+        padding: EdgeInsets.all(R.sp(context, 16)),
         decoration: BoxDecoration(
           color: Colors.white,
-
-          borderRadius: BorderRadius.circular(12),
-
+          borderRadius: BorderRadius.circular(R.radius(context, 12)),
           border: Border.all(
             color: isSelected ? AppColors.primary : Colors.grey.shade300,
-
             width: isSelected ? 2 : 1,
           ),
         ),
-
         child: Column(
           children: [
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(8),
-
+                  padding: EdgeInsets.all(R.sp(context, 8)),
                   decoration: BoxDecoration(
                     color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(R.radius(context, 8)),
                   ),
-
-                  child: Icon(icon, color: AppColors.primary),
+                  child: Icon(
+                    icon,
+                    color: AppColors.primary,
+                    size: R.icon(context, 24),
+                  ),
                 ),
-
-                const SizedBox(width: 16),
-
+                SizedBox(width: R.sp(context, 16)),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-
                     children: [
                       Text(
                         title,
-
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: 16,
+                          fontSize: R.fs(context, 16),
                         ),
                       ),
-
                       Text(
                         subtitle,
-
                         style: TextStyle(
                           color: Colors.grey.shade600,
-                          fontSize: 12,
+                          fontSize: R.fs(context, 12),
                         ),
                       ),
                     ],
                   ),
                 ),
-
                 Radio<String>(
                   value: value,
                   groupValue: selectedMethod,
                   activeColor: AppColors.primary,
-
                   onChanged: (val) {
                     paymentNotifier.state = val!;
                   },
@@ -351,42 +340,39 @@ class PaymentScreen extends ConsumerWidget {
 
             // ================= UPI FIELD =================
             if (isExpanded) ...[
-              const SizedBox(height: 16),
-
+              SizedBox(height: R.sp(context, 16)),
               TextField(
                 controller: _upiController,
-
-                decoration: const InputDecoration(
+                style: TextStyle(fontSize: R.fs(context, 14)),
+                decoration: InputDecoration(
                   labelText: "UPI ID",
+                  labelStyle: TextStyle(fontSize: R.fs(context, 14)),
                   hintText: "username@bank",
-                  border: OutlineInputBorder(),
-
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                  hintStyle: TextStyle(fontSize: R.fs(context, 14)),
+                  border: const OutlineInputBorder(),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                 ),
               ),
-
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8.0),
-
+              Padding(
+                padding: EdgeInsets.symmetric(vertical: R.sp(context, 8.0)),
                 child: Text(
                   "OR",
-
-                  style: TextStyle(color: Colors.grey, fontSize: 12),
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: R.fs(context, 12),
+                  ),
                 ),
               ),
-
               OutlinedButton.icon(
                 onPressed: () {},
-
-                icon: const Icon(Icons.qr_code_scanner),
-
-                label: const Text("Scan QR Code"),
-
+                icon: Icon(Icons.qr_code_scanner, size: R.icon(context, 20)),
+                label: Text(
+                  "Scan QR Code",
+                  style: TextStyle(fontSize: R.fs(context, 14)),
+                ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primary,
-
-                  minimumSize: const Size(double.infinity, 45),
-
+                  minimumSize: Size(double.infinity, R.fluid(context, 45, 55)),
                   side: const BorderSide(color: AppColors.primary),
                 ),
               ),

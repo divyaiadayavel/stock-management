@@ -1,100 +1,156 @@
-// import 'dart:convert';
-// import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'api_config.dart';
 
-// class ApiService {
-//   // 🔗 CHANGE THIS TO YOUR SERVER URL
-//   static const String baseUrl = "https://your-api-url.com/api";
+class APIService {
+  // ==========================================
+  // 📦 PRODUCTS API ENDPOINTS
+  // ==========================================
 
-//   // =========================
-//   // 🔁 COMMON POST METHOD
-//   // =========================
-//   static Future<Map<String, dynamic>> post(
-//     String endpoint,
-//     Map<String, dynamic> data,
-//   ) async {
-//     try {
-//       final res = await http.post(
-//         Uri.parse("$baseUrl/$endpoint"),
-//         body: jsonEncode(data),
-//         headers: {"Content-Type": "application/json"},
-//       );
+  static Future<List<Map<String, dynamic>>> getAllProducts() async {
+    try {
+      final response = await http.get(
+        Uri.parse(ApiConfig.getProducts),
+        headers: ApiConfig.jsonHeaders,
+      );
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        return List<Map<String, dynamic>>.from(decoded['data'] ?? decoded);
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
 
-//       final decoded = jsonDecode(res.body);
+  static Future<bool> addProduct(Map<String, dynamic> productData) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.addProduct),
+        headers: ApiConfig.jsonHeaders,
+        body: jsonEncode(productData),
+      );
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      return false;
+    }
+  }
 
-//       return decoded;
-//     } catch (e) {
-//       return {"status": false, "message": "Server error: $e"};
-//     }
-//   }
+  static Future<bool> updateProduct(Map<String, dynamic> productData) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.updateProduct),
+        headers: ApiConfig.jsonHeaders,
+        body: jsonEncode(productData),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
 
-//   // =========================
-//   // 🔐 LOGIN USER
-//   // =========================
-//   static Future<Map<String, dynamic>> login(
-//     String email,
-//     String password,
-//   ) async {
-//     return post("login.php", {"email": email, "password": password});
-//   }
+  static Future<bool> deleteProduct(int id) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.deleteProduct),
+        headers: ApiConfig.jsonHeaders,
+        body: jsonEncode({'id': id}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
 
-//   // =========================
-//   // 📝 REGISTER USER
-//   // =========================
-//   static Future<Map<String, dynamic>> register(
-//     String name,
-//     String email,
-//     String password,
-//   ) async {
-//     return post("register.php", {
-//       "name": name,
-//       "email": email,
-//       "password": password,
-//     });
-//   }
+  static Future<bool> updateStockQuantity(int id, int changeAmount) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.updateStock),
+        headers: ApiConfig.jsonHeaders,
+        body: jsonEncode({'id': id, 'changeAmount': changeAmount}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
 
-//   // =========================
-//   // 📧 FORGOT PASSWORD
-//   // =========================
-//   static Future<Map<String, dynamic>> forgotPassword(String email) async {
-//     return post("forgot_password.php", {"email": email});
-//   }
+  // ==========================================
+  // 🚚 SUPPLIERS API ENDPOINTS
+  // ==========================================
 
-//   // =========================
-//   // 🔢 VERIFY OTP
-//   // =========================
-//   static Future<Map<String, dynamic>> verifyOtp(
-//     String email,
-//     String otp,
-//   ) async {
-//     return post("verify_otp.php", {"email": email, "otp": otp});
-//   }
+  static Future<List<Map<String, dynamic>>> getSuppliers() async {
+    try {
+      final response = await http.get(
+        Uri.parse(ApiConfig.getSuppliers),
+        headers: ApiConfig.jsonHeaders,
+      );
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        return List<Map<String, dynamic>>.from(decoded['data'] ?? decoded);
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
 
-//   // =========================
-//   // 🔑 RESET PASSWORD
-//   // =========================
-//   static Future<Map<String, dynamic>> resetPassword(
-//     String email,
-//     String password,
-//   ) async {
-//     return post("reset_password.php", {"email": email, "password": password});
-//   }
+  static Future<bool> addSupplier(Map<String, dynamic> supplierData) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.addSupplier),
+        headers: ApiConfig.jsonHeaders,
+        body: jsonEncode(supplierData),
+      );
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      return false;
+    }
+  }
 
-//   // =========================
-//   // 🧪 MOCK LOGIN (OPTIONAL)
-//   // =========================
-//   static Future<Map<String, dynamic>> mockLogin(
-//     String email,
-//     String password,
-//   ) async {
-//     await Future.delayed(const Duration(seconds: 1));
+  static Future<bool> deleteSupplier(int id) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.deleteSupplier),
+        headers: ApiConfig.jsonHeaders,
+        body: jsonEncode({'id': id}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
 
-//     return {
-//       "status": true,
-//       "data": {
-//         "id": 1,
-//         "name": "Test User",
-//         "role": "admin", // change: admin / staff / cashier
-//       },
-//     };
-//   }
-// }
+  // ==========================================
+  // 🧾 INVOICES & SALES ENDPOINTS
+  // ==========================================
+
+  static Future<int?> createInvoice({
+    required List<Map<String, dynamic>> items,
+    required double subtotal,
+    required double discount,
+    required double tax,
+    required double total,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.createInvoice),
+        headers: ApiConfig.jsonHeaders,
+        body: jsonEncode({
+          'items': items,
+          'subtotal': subtotal,
+          'discount': discount,
+          'tax': tax,
+          'total': total,
+        }),
+      );
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final decoded = jsonDecode(response.body);
+        return decoded['invoiceId'];
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+}

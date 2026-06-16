@@ -8,6 +8,7 @@ import '../../../../core/storage/db_helper.dart';
 import '../providers/billing_provider.dart';
 import 'payment_screen.dart';
 import 'add_product_bill_screen.dart';
+import '../../../../core/utils/responsive_helper.dart'; // ← add this import
 
 class CurrentBillScreen extends ConsumerStatefulWidget {
   const CurrentBillScreen({super.key});
@@ -20,27 +21,37 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
   @override
   Widget build(BuildContext context) {
     final billingState = ref.watch(billingProvider);
-
     final billingNotifier = ref.read(billingProvider.notifier);
 
     final originalSubtotal = billingState.cart.fold(
       0.0,
       (sum, item) => sum + item.subtotal,
     );
-
     final totalDiscount = billingState.cart.fold(
       0.0,
       (sum, item) => sum + item.discountAmount,
     );
-
     final subtotal = billingState.cart.fold(
       0.0,
       (sum, item) => sum + item.total,
     );
-
     final tax = billingState.tax;
-
     final total = subtotal + tax;
+
+    // ── responsive values ──────────────────────────────────────
+    final hPad = R.hPad(context, base: 16);
+    final btnH = R.btnH(context);
+    final headerFs = R.fs(context, 13);
+    final itemNameFs = R.fs(context, 13);
+    final priceFs = R.fs(context, 13);
+    final totalFs = R.fs(context, 13);
+    final imgSz = R.fluid(context, 45, 70);
+    final iconSz = R.icon(context, 16);
+    final cardRadius = R.radius(context, 8);
+    final summaryTitleFs = R.fs(context, 15);
+    final summaryTotalFs = R.fs(context, 18);
+    final summaryPad = R.sp(context, 6);
+
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
 
@@ -48,29 +59,36 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
         backgroundColor: AppColors.primary,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text(
-          ("Current Bill"),
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        title: Text(
+          "Billing",
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: R.fs(context, 18),
+          ),
         ),
       ),
 
       body: Container(
         color: AppColors.primary,
-
         child: ClipRRect(
           borderRadius: AppCurve.top(context),
-
           child: Container(
             color: AppColors.background,
-
             child: Column(
               children: [
+                // ── Add Products button ──────────────────────────
                 Container(
-                  margin: const EdgeInsets.all(16),
+                  margin: EdgeInsets.all(R.sp(context, 16)),
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
-                      minimumSize: const Size(double.infinity, 50),
+                      minimumSize: Size(double.infinity, btnH),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                          R.radius(context, 12),
+                        ),
+                      ),
                     ),
                     onPressed: () {
                       Navigator.push(
@@ -80,117 +98,141 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                         ),
                       );
                     },
-                    icon: const Icon(Icons.add, color: Colors.white),
-                    label: const Text(
+                    icon: Icon(
+                      Icons.add,
+                      color: Colors.white,
+                      size: iconSz + 4,
+                    ),
+                    label: Text(
                       "Add Products",
                       style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
+                        fontSize: R.fs(context, 15),
                       ),
                     ),
                   ),
                 ),
+
+                // ── Table header ─────────────────────────────────
                 Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: hPad.left,
+                    vertical: R.sp(context, 8),
                   ),
                   child: Row(
-                    children: const [
+                    children: [
                       Expanded(
                         flex: 4,
                         child: Text(
                           "Item",
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: headerFs,
+                          ),
                         ),
                       ),
-
                       Expanded(
                         flex: 2,
                         child: Text(
                           "Price",
                           textAlign: TextAlign.center,
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: headerFs,
+                          ),
                         ),
                       ),
-
                       Expanded(
                         flex: 3,
                         child: Text(
                           "Qty",
                           textAlign: TextAlign.center,
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: headerFs,
+                          ),
                         ),
                       ),
-
                       Expanded(
                         flex: 2,
                         child: Text(
                           "Total",
                           textAlign: TextAlign.right,
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: headerFs,
+                          ),
                         ),
                       ),
-
                       SizedBox(
-                        width: 32,
-                        child: Icon(Icons.delete_outline, size: 18),
+                        width: R.fluid(context, 32, 44),
+                        child: Icon(Icons.delete_outline, size: iconSz),
                       ),
                     ],
                   ),
                 ),
+
+                // ── Cart items ────────────────────────────────────
                 Expanded(
                   child: billingState.cart.isEmpty
-                      ? const Center(
+                      ? Center(
                           child: Text(
                             "No Products Added",
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: R.fs(context, 16),
                               fontWeight: FontWeight.w500,
                             ),
                           ),
                         )
                       : ListView.builder(
-                          padding: const EdgeInsets.all(16),
-
+                          padding: EdgeInsets.symmetric(
+                            horizontal: hPad.left,
+                            vertical: R.sp(context, 8),
+                          ),
                           itemCount: billingState.cart.length,
-
                           itemBuilder: (context, index) {
                             final item = billingState.cart[index];
+                            final deleteBtnW = R.fluid(context, 32, 44);
 
                             return Container(
-                              margin: const EdgeInsets.only(bottom: 10),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 10,
+                              margin: EdgeInsets.only(
+                                bottom: R.sp(context, 10),
+                              ),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: R.sp(context, 10),
+                                vertical: R.sp(context, 10),
                               ),
                               decoration: BoxDecoration(
                                 color: Colors.white,
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(cardRadius),
                                 border: Border.all(color: Colors.grey.shade300),
                               ),
                               child: Row(
                                 children: [
                                   // IMAGE
                                   SizedBox(
-                                    width: 45,
-                                    height: 45,
+                                    width: imgSz,
+                                    height: imgSz,
                                     child:
                                         item.imagePath != null &&
                                             item.imagePath!.isNotEmpty
                                         ? ClipRRect(
                                             borderRadius: BorderRadius.circular(
-                                              6,
+                                              R.radius(context, 6),
                                             ),
                                             child: Image.file(
                                               File(item.imagePath!),
                                               fit: BoxFit.cover,
                                             ),
                                           )
-                                        : const Icon(Icons.inventory),
+                                        : Icon(
+                                            Icons.inventory,
+                                            size: R.icon(context, 24),
+                                          ),
                                   ),
 
-                                  const SizedBox(width: 8),
+                                  SizedBox(width: R.sp(context, 8)),
 
                                   // ITEM NAME
                                   Expanded(
@@ -199,8 +241,8 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                                       item.name,
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 13,
+                                      style: TextStyle(
+                                        fontSize: itemNameFs,
                                         fontWeight: FontWeight.w500,
                                       ),
                                     ),
@@ -213,6 +255,7 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                                       "₹${item.price.toStringAsFixed(0)}",
                                       textAlign: TextAlign.center,
                                       overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(fontSize: priceFs),
                                     ),
                                   ),
 
@@ -227,32 +270,28 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                                           onTap: () {
                                             billingNotifier.decreaseQty(index);
                                           },
-                                          child: const Icon(
+                                          child: Icon(
                                             Icons.remove,
-                                            size: 16,
+                                            size: iconSz,
                                           ),
                                         ),
-
                                         Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 4,
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: R.sp(context, 4),
                                           ),
                                           child: Text(
                                             item.qty.toString(),
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontWeight: FontWeight.bold,
+                                              fontSize: R.fs(context, 13),
                                             ),
                                           ),
                                         ),
-
                                         InkWell(
                                           onTap: () {
                                             billingNotifier.increaseQty(index);
                                           },
-                                          child: const Icon(
-                                            Icons.add,
-                                            size: 16,
-                                          ),
+                                          child: Icon(Icons.add, size: iconSz),
                                         ),
                                       ],
                                     ),
@@ -265,22 +304,23 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                                       "₹${item.total.toStringAsFixed(0)}",
                                       textAlign: TextAlign.right,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontWeight: FontWeight.bold,
+                                        fontSize: totalFs,
                                       ),
                                     ),
                                   ),
 
                                   // DELETE
                                   SizedBox(
-                                    width: 32,
+                                    width: deleteBtnW,
                                     child: IconButton(
                                       padding: EdgeInsets.zero,
                                       constraints: const BoxConstraints(),
-                                      icon: const Icon(
+                                      icon: Icon(
                                         Icons.delete_outline,
                                         color: Colors.red,
-                                        size: 20,
+                                        size: R.icon(context, 20),
                                       ),
                                       onPressed: () async {
                                         final confirm = await showDialog<bool>(
@@ -308,7 +348,6 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                                             ],
                                           ),
                                         );
-
                                         if (confirm == true) {
                                           billingNotifier.removeItem(index);
                                         }
@@ -322,34 +361,55 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                         ),
                 ),
 
+                // ── Summary panel ─────────────────────────────────
                 SafeArea(
                   top: false,
                   child: Container(
-                    padding: const EdgeInsets.all(16),
-
-                    decoration: const BoxDecoration(
+                    padding: EdgeInsets.all(R.sp(context, 16)),
+                    decoration: BoxDecoration(
                       color: Colors.white,
-
                       borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(24),
+                        top: Radius.circular(R.radius(context, 24)),
                       ),
                     ),
-
                     child: Column(
                       children: [
-                        _amountRow("Subtotal", originalSubtotal),
-
-                        _amountRow("Discount", totalDiscount),
-
-                        _amountRow("Tax", tax),
-
+                        _amountRow(
+                          context,
+                          "Subtotal",
+                          originalSubtotal,
+                          titleFs: summaryTitleFs,
+                          padding: summaryPad,
+                        ),
+                        _amountRow(
+                          context,
+                          "Discount",
+                          totalDiscount,
+                          titleFs: summaryTitleFs,
+                          padding: summaryPad,
+                        ),
+                        _amountRow(
+                          context,
+                          "Tax",
+                          tax,
+                          titleFs: summaryTitleFs,
+                          padding: summaryPad,
+                        ),
                         const Divider(),
+                        _amountRow(
+                          context,
+                          "Total",
+                          total,
+                          isBold: true,
+                          titleFs: summaryTotalFs,
+                          padding: summaryPad,
+                        ),
 
-                        _amountRow("Total", total, isBold: true),
-                        const SizedBox(height: 20),
+                        SizedBox(height: R.sp(context, 20)),
 
                         Row(
                           children: [
+                            // CLEAR BILL
                             Expanded(
                               child: ElevatedButton(
                                 onPressed: () async {
@@ -359,7 +419,7 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                                       return AlertDialog(
                                         shape: RoundedRectangleBorder(
                                           borderRadius: BorderRadius.circular(
-                                            16,
+                                            R.radius(context, 16),
                                           ),
                                         ),
                                         title: const Text("Clear Bill"),
@@ -394,9 +454,7 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
 
                                   if (confirm == true) {
                                     billingNotifier.clearCart();
-
                                     Navigator.pop(context);
-
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
                                         content: Text(
@@ -406,30 +464,32 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                                     );
                                   }
                                 },
-
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppColors.primary
                                       .withOpacity(0.1),
                                   foregroundColor: AppColors.primary,
                                   elevation: 0,
-                                  minimumSize: const Size(double.infinity, 55),
+                                  minimumSize: Size(double.infinity, btnH),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(
+                                      R.radius(context, 12),
+                                    ),
                                   ),
                                 ),
-
                                 child: Text(
                                   "Clear Bill",
                                   style: TextStyle(
                                     color: AppColors.primary,
                                     fontWeight: FontWeight.bold,
+                                    fontSize: R.fs(context, 15),
                                   ),
                                 ),
                               ),
                             ),
 
-                            const SizedBox(width: 12),
+                            SizedBox(width: R.sp(context, 12)),
 
+                            // PAY
                             Expanded(
                               child: ElevatedButton(
                                 onPressed: () async {
@@ -445,7 +505,6 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                                             "qty": item.qty,
                                           };
                                         }).toList(),
-
                                         subtotal: subtotal,
                                         discount: billingState.discount,
                                         tax: tax,
@@ -466,24 +525,25 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                                     ),
                                   );
                                 },
-
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.green.withOpacity(
                                     0.1,
                                   ),
                                   foregroundColor: Colors.green,
                                   elevation: 0,
-                                  minimumSize: const Size(double.infinity, 55),
+                                  minimumSize: Size(double.infinity, btnH),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(
+                                      R.radius(context, 12),
+                                    ),
                                   ),
                                 ),
-
-                                child: const Text(
+                                child: Text(
                                   "Pay",
                                   style: TextStyle(
                                     color: Colors.green,
                                     fontWeight: FontWeight.bold,
+                                    fontSize: R.fs(context, 15),
                                   ),
                                 ),
                               ),
@@ -502,25 +562,31 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
     );
   }
 
-  Widget _amountRow(String title, double amount, {bool isBold = false}) {
+  Widget _amountRow(
+    BuildContext context,
+    String title,
+    double amount, {
+    bool isBold = false,
+    double? titleFs,
+    double padding = 6,
+  }) {
+    final fs = titleFs ?? R.fs(context, isBold ? 18 : 15);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: EdgeInsets.symmetric(vertical: padding),
       child: Row(
         children: [
           Text(
             title,
             style: TextStyle(
-              fontSize: isBold ? 18 : 15,
+              fontSize: isBold ? fs * 1.1 : fs,
               fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
             ),
           ),
-
           const Spacer(),
-
           Text(
             "₹${amount.toStringAsFixed(2)}",
             style: TextStyle(
-              fontSize: isBold ? 18 : 15,
+              fontSize: isBold ? fs * 1.1 : fs,
               fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
             ),
           ),
