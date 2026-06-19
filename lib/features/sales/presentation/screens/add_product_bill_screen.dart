@@ -86,7 +86,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
       return isAscending ? nameA.compareTo(nameB) : nameB.compareTo(nameA);
     });
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor: Colors.white,
 
       appBar: AppBar(
         backgroundColor: AppColors.primary,
@@ -94,7 +94,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
         iconTheme: const IconThemeData(color: Colors.white),
         title: const Text(
           "Add Product Bill",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
         ),
       ),
 
@@ -125,11 +125,33 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                 decoration: InputDecoration(
                                   hintText: "Search product / barcode",
                                   prefixIcon: const Icon(Icons.search),
+
                                   filled: true,
                                   fillColor: Colors.white,
+
+                                  // ✅ Grey Border
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(14),
-                                    borderSide: BorderSide.none,
+                                    borderSide: BorderSide(
+                                      color: Colors.grey.shade300,
+                                      width: 1,
+                                    ),
+                                  ),
+
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    borderSide: BorderSide(
+                                      color: Colors.grey.shade300,
+                                      width: 1,
+                                    ),
+                                  ),
+
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    borderSide: const BorderSide(
+                                      color: AppColors.primary,
+                                      width: 1.5,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -181,6 +203,10 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: Colors.grey.shade300,
+                                    width: 1,
+                                  ),
                                 ),
                                 child: const Icon(
                                   Icons.qr_code_scanner,
@@ -216,7 +242,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                               "All Products",
                               style: TextStyle(
                                 fontSize: R.fs(context, 18),
-                                fontWeight: FontWeight.bold,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                             TextButton(
@@ -268,7 +294,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
-                                            fontWeight: FontWeight.bold,
+                                            fontWeight: FontWeight.w500,
                                             fontSize: R.fs(context, 13.5),
                                           ),
                                         ),
@@ -465,7 +491,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                                     .black,
                                                                 fontWeight:
                                                                     FontWeight
-                                                                        .bold,
+                                                                        .w500,
                                                                 fontSize: 13,
                                                                 height: 1.2,
                                                               ),
@@ -738,7 +764,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: R.fs(context, 20),
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -765,7 +791,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                     },
                     child: const Text(
                       "View Bill",
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      style: TextStyle(fontWeight: FontWeight.w500),
                     ),
                   ),
                 ),
@@ -830,7 +856,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
           value,
           style: TextStyle(
             color: valueColor,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w500,
             fontSize: R.fs(context, 12),
           ),
         ),

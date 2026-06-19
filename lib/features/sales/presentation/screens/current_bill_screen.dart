@@ -63,7 +63,7 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
           "Billing",
           style: TextStyle(
             color: Colors.white,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w500,
             fontSize: R.fs(context, 18),
           ),
         ),
@@ -80,7 +80,7 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                 // ── Add Products button ──────────────────────────
                 Container(
                   margin: EdgeInsets.all(R.sp(context, 16)),
-                  child: ElevatedButton.icon(
+                  child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       minimumSize: Size(double.infinity, btnH),
@@ -98,78 +98,51 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                         ),
                       );
                     },
-                    icon: Icon(
-                      Icons.add,
-                      color: Colors.white,
-                      size: iconSz + 4,
-                    ),
-                    label: Text(
-                      "Add Products",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: R.fs(context, 15),
-                      ),
-                    ),
-                  ),
-                ),
+                    child: Row(
+                      children: [
+                        Container(
+                          height: R.fluid(context, 32, 40),
+                          width: R.fluid(context, 32, 40),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white54,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: const Icon(Icons.add, color: Colors.white),
+                        ),
 
-                // ── Table header ─────────────────────────────────
-                Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: hPad.left,
-                    vertical: R.sp(context, 8),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 4,
-                        child: Text(
-                          "Item",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: headerFs,
+                        SizedBox(width: R.sp(context, 12)),
+
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Add Products",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: R.fs(context, 16),
+                                ),
+                              ),
+
+                              SizedBox(height: R.sp(context, 2)),
+
+                              Text(
+                                "Add more items to your bill",
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: R.fs(context, 12),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Text(
-                          "Price",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: headerFs,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        flex: 3,
-                        child: Text(
-                          "Qty",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: headerFs,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Text(
-                          "Total",
-                          textAlign: TextAlign.right,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: headerFs,
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: R.fluid(context, 32, 44),
-                        child: Icon(Icons.delete_outline, size: iconSz),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
 
@@ -185,182 +158,264 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                             ),
                           ),
                         )
-                      : ListView.builder(
-                          padding: EdgeInsets.symmetric(
+                      : Container(
+                          margin: EdgeInsets.symmetric(
                             horizontal: hPad.left,
                             vertical: R.sp(context, 8),
                           ),
-                          itemCount: billingState.cart.length,
-                          itemBuilder: (context, index) {
-                            final item = billingState.cart[index];
-                            final deleteBtnW = R.fluid(context, 32, 44);
-
-                            return Container(
-                              margin: EdgeInsets.only(
-                                bottom: R.sp(context, 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(cardRadius),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.04),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
                               ),
-                              padding: EdgeInsets.symmetric(
-                                horizontal: R.sp(context, 10),
-                                vertical: R.sp(context, 10),
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(cardRadius),
-                                border: Border.all(color: Colors.grey.shade300),
-                              ),
-                              child: Row(
-                                children: [
-                                  // IMAGE
-                                  SizedBox(
-                                    width: imgSz,
-                                    height: imgSz,
-                                    child:
-                                        item.imagePath != null &&
-                                            item.imagePath!.isNotEmpty
-                                        ? ClipRRect(
-                                            borderRadius: BorderRadius.circular(
-                                              R.radius(context, 6),
-                                            ),
-                                            child: Image.file(
-                                              File(item.imagePath!),
-                                              fit: BoxFit.cover,
-                                            ),
-                                          )
-                                        : Icon(
-                                            Icons.inventory,
-                                            size: R.icon(context, 24),
-                                          ),
-                                  ),
-
-                                  SizedBox(width: R.sp(context, 8)),
-
-                                  // ITEM NAME
-                                  Expanded(
-                                    flex: 4,
-                                    child: Text(
-                                      item.name,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: itemNameFs,
-                                        fontWeight: FontWeight.w500,
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              // HEADER
+                              Padding(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: R.sp(context, 12),
+                                  vertical: R.sp(context, 12),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      flex: 4,
+                                      child: Text(
+                                        "Item",
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: headerFs,
+                                        ),
                                       ),
                                     ),
-                                  ),
-
-                                  // PRICE
-                                  Expanded(
-                                    flex: 2,
-                                    child: Text(
-                                      "₹${item.price.toStringAsFixed(0)}",
-                                      textAlign: TextAlign.center,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(fontSize: priceFs),
-                                    ),
-                                  ),
-
-                                  // QTY
-                                  Expanded(
-                                    flex: 3,
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        InkWell(
-                                          onTap: () {
-                                            billingNotifier.decreaseQty(index);
-                                          },
-                                          child: Icon(
-                                            Icons.remove,
-                                            size: iconSz,
-                                          ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text(
+                                        "Price",
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: headerFs,
                                         ),
-                                        Padding(
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: R.sp(context, 4),
-                                          ),
-                                          child: Text(
-                                            item.qty.toString(),
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: R.fs(context, 13),
-                                            ),
-                                          ),
-                                        ),
-                                        InkWell(
-                                          onTap: () {
-                                            billingNotifier.increaseQty(index);
-                                          },
-                                          child: Icon(Icons.add, size: iconSz),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-
-                                  // TOTAL
-                                  Expanded(
-                                    flex: 2,
-                                    child: Text(
-                                      "₹${item.total.toStringAsFixed(0)}",
-                                      textAlign: TextAlign.right,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: totalFs,
                                       ),
                                     ),
-                                  ),
-
-                                  // DELETE
-                                  SizedBox(
-                                    width: deleteBtnW,
-                                    child: IconButton(
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(),
-                                      icon: Icon(
-                                        Icons.delete_outline,
-                                        color: Colors.red,
-                                        size: R.icon(context, 20),
+                                    Expanded(
+                                      flex: 3,
+                                      child: Text(
+                                        "Qty",
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: headerFs,
+                                        ),
                                       ),
-                                      onPressed: () async {
-                                        final confirm = await showDialog<bool>(
-                                          context: context,
-                                          builder: (_) => AlertDialog(
-                                            title: const Text("Delete Product"),
-                                            content: Text(
-                                              "Delete ${item.name} ?",
-                                            ),
-                                            actions: [
-                                              TextButton(
-                                                onPressed: () => Navigator.pop(
-                                                  context,
-                                                  false,
-                                                ),
-                                                child: const Text("Cancel"),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text(
+                                        "Total",
+                                        textAlign: TextAlign.right,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: headerFs,
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(width: R.fluid(context, 32, 44)),
+                                  ],
+                                ),
+                              ),
+
+                              Divider(height: 1),
+
+                              Expanded(
+                                child: ListView.separated(
+                                  itemCount: billingState.cart.length,
+                                  separatorBuilder: (_, __) =>
+                                      const Divider(height: 1),
+                                  itemBuilder: (context, index) {
+                                    final item = billingState.cart[index];
+                                    final deleteBtnW = R.fluid(context, 32, 44);
+
+                                    return Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: R.sp(context, 10),
+                                        vertical: R.sp(context, 10),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          SizedBox(
+                                            width: imgSz,
+                                            height: imgSz,
+                                            child:
+                                                item.imagePath != null &&
+                                                    item.imagePath!.isNotEmpty
+                                                ? ClipRRect(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          R.radius(context, 6),
+                                                        ),
+                                                    child: Image.file(
+                                                      File(item.imagePath!),
+                                                      fit: BoxFit.cover,
+                                                    ),
+                                                  )
+                                                : Icon(
+                                                    Icons.inventory,
+                                                    size: R.icon(context, 24),
+                                                  ),
+                                          ),
+
+                                          SizedBox(width: R.sp(context, 8)),
+
+                                          Expanded(
+                                            flex: 4,
+                                            child: Text(
+                                              item.name,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: itemNameFs,
+                                                fontWeight: FontWeight.w500,
                                               ),
-                                              ElevatedButton(
-                                                onPressed: () => Navigator.pop(
-                                                  context,
-                                                  true,
-                                                ),
-                                                child: const Text("Delete"),
-                                              ),
-                                            ],
+                                            ),
                                           ),
-                                        );
-                                        if (confirm == true) {
-                                          billingNotifier.removeItem(index);
-                                        }
-                                      },
-                                    ),
-                                  ),
-                                ],
+
+                                          Expanded(
+                                            flex: 2,
+                                            child: Text(
+                                              "₹${item.price.toStringAsFixed(0)}",
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ),
+
+                                          Expanded(
+                                            flex: 3,
+                                            child: Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                InkWell(
+                                                  onTap: () {
+                                                    billingNotifier.decreaseQty(
+                                                      index,
+                                                    );
+                                                  },
+                                                  child: Icon(
+                                                    Icons.remove,
+                                                    size: iconSz,
+                                                  ),
+                                                ),
+                                                Padding(
+                                                  padding: EdgeInsets.symmetric(
+                                                    horizontal: R.sp(
+                                                      context,
+                                                      4,
+                                                    ),
+                                                  ),
+                                                  child: Text(
+                                                    item.qty.toString(),
+                                                    style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                ),
+                                                InkWell(
+                                                  onTap: () {
+                                                    billingNotifier.increaseQty(
+                                                      index,
+                                                    );
+                                                  },
+                                                  child: Icon(
+                                                    Icons.add,
+                                                    size: iconSz,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+
+                                          Expanded(
+                                            flex: 2,
+                                            child: Text(
+                                              "₹${item.total.toStringAsFixed(0)}",
+                                              textAlign: TextAlign.right,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w500,
+                                                fontSize: totalFs,
+                                              ),
+                                            ),
+                                          ),
+
+                                          SizedBox(
+                                            width: deleteBtnW,
+                                            child: IconButton(
+                                              icon: Icon(
+                                                Icons.delete_outline,
+                                                color: Colors.red,
+                                                size: R.icon(context, 20),
+                                              ),
+                                              onPressed: () async {
+                                                final confirm =
+                                                    await showDialog<bool>(
+                                                      context: context,
+                                                      builder: (_) => AlertDialog(
+                                                        title: const Text(
+                                                          "Delete Product",
+                                                        ),
+                                                        content: Text(
+                                                          "Delete ${item.name} ?",
+                                                        ),
+                                                        actions: [
+                                                          TextButton(
+                                                            onPressed: () =>
+                                                                Navigator.pop(
+                                                                  context,
+                                                                  false,
+                                                                ),
+                                                            child: const Text(
+                                                              "Cancel",
+                                                            ),
+                                                          ),
+                                                          ElevatedButton(
+                                                            onPressed: () =>
+                                                                Navigator.pop(
+                                                                  context,
+                                                                  true,
+                                                                ),
+                                                            child: const Text(
+                                                              "Delete",
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    );
+
+                                                if (confirm == true) {
+                                                  billingNotifier.removeItem(
+                                                    index,
+                                                  );
+                                                }
+                                              },
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
                               ),
-                            );
-                          },
+                            ],
+                          ),
                         ),
                 ),
-
                 // ── Summary panel ─────────────────────────────────
                 SafeArea(
                   top: false,
@@ -368,12 +423,51 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                     padding: EdgeInsets.all(R.sp(context, 16)),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(R.radius(context, 24)),
+                      borderRadius: BorderRadius.circular(
+                        R.radius(context, 16),
                       ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: Column(
                       children: [
+                        // 🔹 BILL SUMMARY HEADER
+                        Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(R.sp(context, 8)),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(
+                                  R.radius(context, 8),
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.receipt_long,
+                                color: AppColors.primary,
+                                size: R.icon(context, 18),
+                              ),
+                            ),
+
+                            SizedBox(width: R.sp(context, 10)),
+
+                            Text(
+                              "Bill Summary",
+                              style: TextStyle(
+                                fontSize: R.fs(context, 16),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        SizedBox(height: R.sp(context, 16)),
+
                         _amountRow(
                           context,
                           "Subtotal",
@@ -480,7 +574,7 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                                   "Clear Bill",
                                   style: TextStyle(
                                     color: AppColors.primary,
-                                    fontWeight: FontWeight.bold,
+                                    fontWeight: FontWeight.w500,
                                     fontSize: R.fs(context, 15),
                                   ),
                                 ),
@@ -542,7 +636,7 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                                   "Pay",
                                   style: TextStyle(
                                     color: Colors.green,
-                                    fontWeight: FontWeight.bold,
+                                    fontWeight: FontWeight.w500,
                                     fontSize: R.fs(context, 15),
                                   ),
                                 ),

@@ -102,7 +102,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         : "Action: Remove from Stock",
                     style: TextStyle(
                       color: isAdding ? Colors.green : Colors.red,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
@@ -156,14 +156,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         : Colors.green;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         elevation: 0,
 
         title: const Text(
           "Product Details",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
         ),
 
         centerTitle: true,
@@ -187,7 +187,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         child: ClipRRect(
           borderRadius: AppCurve.top(context),
           child: Container(
-            color: const Color(0xFFF5F6FA),
+            color: Colors.white,
             child: R.maxW(
               SingleChildScrollView(
                 padding: EdgeInsets.fromLTRB(
@@ -203,7 +203,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(
-                          R.radius(context, 24),
+                          R.radius(context, 12),
+                        ),
+                        border: Border.all(
+                          color: Colors.grey.shade300,
+                          width: 1,
                         ),
                         boxShadow: [
                           BoxShadow(
@@ -213,152 +217,221 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                           ),
                         ],
                       ),
-
                       child: Stack(
                         children: [
-                          // DELETE BUTTON
-                          Positioned(
-                            top: 0,
-                            right: 0,
-                            child: IconButton(
-                              icon: const Icon(
-                                Icons.delete_outline,
-                                color: Colors.red,
-                              ),
-                              onPressed: () async {
-                                final confirm = await showDialog<bool>(
-                                  context: context,
-                                  builder: (context) {
-                                    return AlertDialog(
-                                      title: const Text("Delete Product"),
-                                      content: Text(
-                                        "Are you sure you want to delete ${currentProduct["name"]}?",
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () {
-                                            Navigator.pop(context, false);
-                                          },
-                                          child: const Text("Cancel"),
-                                        ),
-
-                                        ElevatedButton(
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.red,
-                                          ),
-                                          onPressed: () {
-                                            Navigator.pop(context, true);
-                                          },
-                                          child: const Text(
-                                            "Delete",
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                );
-
-                                if (confirm == true) {
-                                  await DBHelper.deleteProduct(
-                                    currentProduct["id"],
-                                  );
-
-                                  Navigator.pop(context, true);
-
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        "Product deleted successfully",
-                                      ),
-                                    ),
-                                  );
-                                }
-                              },
-                            ),
-                          ),
-
                           // CARD CONTENT
                           Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Row(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child:
-                                      currentProduct["image_path"] != null &&
-                                          currentProduct["image_path"] != ""
-                                      ? Image.file(
-                                          File(currentProduct["image_path"]),
-                                          height: R.imgSize(context, 0.18),
-                                          width: R.imgSize(context, 0.18),
-                                          fit: BoxFit.cover,
-                                        )
-                                      : Container(
-                                          height: R.imgSize(context, 0.18),
-                                          width: R.imgSize(context, 0.18),
-                                          color: Colors.grey.shade200,
-                                          child: const Icon(Icons.image),
-                                        ),
+                                Center(
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child:
+                                        currentProduct["image_path"] != null &&
+                                            currentProduct["image_path"] != ""
+                                        ? Image.file(
+                                            File(currentProduct["image_path"]),
+                                            height: R.fluid(context, 180, 320),
+                                            width: double.infinity,
+                                            fit: BoxFit.cover,
+                                          )
+                                        : Container(
+                                            height: R.fluid(context, 180, 320),
+                                            width: double.infinity,
+                                            color: Colors.grey.shade200,
+                                            child: const Icon(
+                                              Icons.image,
+                                              size: 50,
+                                            ),
+                                          ),
+                                  ),
                                 ),
 
-                                SizedBox(width: R.sp(context, 12)),
+                                const SizedBox(height: 20),
 
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        currentProduct["name"],
-                                        style: TextStyle(
-                                          fontSize: R.fs(context, 16),
-                                          fontWeight: FontWeight.bold,
+                                _rowItem(
+                                  "Product Name",
+                                  currentProduct["name"],
+                                ),
+                                _rowItem(
+                                  "Category",
+                                  currentProduct["category"],
+                                ),
+                                _rowItem(
+                                  "Selling Price",
+                                  "₹ ${currentProduct["selling_price"]}",
+                                ),
+                                _rowItem("Stock", "$qty Units"),
+                                _rowItem("Status", status),
+
+                                const SizedBox(height: 25),
+
+                                Row(
+                                  children: [
+                                    // EDIT
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        onPressed: () async {
+                                          final result = await Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) =>
+                                                  AddProductScreen(
+                                                    product: currentProduct,
+                                                  ),
+                                            ),
+                                          );
+
+                                          if (result == true) {
+                                            refreshProduct();
+                                          }
+                                        },
+                                        icon: Icon(
+                                          Icons.edit,
+                                          color: AppColors.primary,
+                                          size: 18,
+                                        ),
+                                        label: Text(
+                                          "Edit",
+                                          style: TextStyle(
+                                            color: AppColors.primary,
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: R.fs(context, 15),
+                                          ),
+                                        ),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: AppColors.primary
+                                              .withOpacity(0.1),
+                                          foregroundColor: AppColors.primary,
+                                          elevation: 0,
+                                          minimumSize: const Size.fromHeight(
+                                            45,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              R.radius(context, 12),
+                                            ),
+                                          ),
                                         ),
                                       ),
+                                    ),
 
-                                      Text(currentProduct["category"] ?? ""),
-                                      Container(
-                                        margin: const EdgeInsets.only(top: 6),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 14,
-                                          vertical: 6,
+                                    const SizedBox(width: 8),
+
+                                    // UPDATE STOCK
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        onPressed: _showUpdateStockDialog,
+                                        icon: const Icon(
+                                          Icons.inventory_2_outlined,
+                                          color: Colors.green,
+                                          size: 18,
+                                        ),
+                                        label: Text(
+                                          "Update",
+                                          style: TextStyle(
+                                            color: Colors.green,
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: R.fs(context, 15),
+                                          ),
+                                        ),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.green
+                                              .withOpacity(0.1),
+                                          foregroundColor: Colors.green,
+                                          elevation: 0,
+                                          minimumSize: const Size.fromHeight(
+                                            45,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              R.radius(context, 12),
+                                            ),
+                                          ),
                                         ),
                                       ),
+                                    ),
 
-                                      const SizedBox(height: 18),
+                                    const SizedBox(width: 8),
 
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: _compactStat(
-                                              "Selling Price",
-                                              "₹ ${currentProduct["selling_price"]}",
-                                              Colors.black,
+                                    // DELETE
+                                    SizedBox(
+                                      width: 45,
+                                      height: 45,
+                                      child: ElevatedButton(
+                                        onPressed: () async {
+                                          final confirm = await showDialog<bool>(
+                                            context: context,
+                                            builder: (context) {
+                                              return AlertDialog(
+                                                title: const Text(
+                                                  "Delete Product",
+                                                ),
+                                                content: Text(
+                                                  "Are you sure you want to delete ${currentProduct["name"]}?",
+                                                ),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () {
+                                                      Navigator.pop(
+                                                        context,
+                                                        false,
+                                                      );
+                                                    },
+                                                    child: const Text("Cancel"),
+                                                  ),
+                                                  ElevatedButton(
+                                                    style:
+                                                        ElevatedButton.styleFrom(
+                                                          backgroundColor:
+                                                              Colors.red,
+                                                        ),
+                                                    onPressed: () {
+                                                      Navigator.pop(
+                                                        context,
+                                                        true,
+                                                      );
+                                                    },
+                                                    child: const Text(
+                                                      "Delete",
+                                                      style: TextStyle(
+                                                        color: Colors.white,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              );
+                                            },
+                                          );
+
+                                          if (confirm == true) {
+                                            await DBHelper.deleteProduct(
+                                              currentProduct["id"],
+                                            );
+                                            Navigator.pop(context, true);
+                                          }
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.red
+                                              .withOpacity(0.1),
+                                          elevation: 0,
+                                          padding: EdgeInsets.zero,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              R.radius(context, 12),
                                             ),
                                           ),
-
-                                          Expanded(
-                                            child: _compactStat(
-                                              "Stock",
-                                              "$qty units",
-                                              Colors.black,
-                                            ),
-                                          ),
-
-                                          Expanded(
-                                            child: _compactStat(
-                                              "Status",
-                                              status,
-                                              statusColor,
-                                            ),
-                                          ),
-                                        ],
+                                        ),
+                                        child: const Icon(
+                                          Icons.delete_outline,
+                                          color: Colors.red,
+                                          size: 20,
+                                        ),
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -368,96 +441,23 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     ),
                     SizedBox(height: R.sp(context, 16)),
 
-                    // 🔹 BUTTONS
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SizedBox(
-                            height: 40,
-                            child: OutlinedButton.icon(
-                              icon: const Icon(Icons.edit_outlined),
-
-                              label: Text(
-                                "Edit",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: R.fs(context, 18),
-                                ),
-                              ),
-
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.primary,
-
-                                side: const BorderSide(
-                                  color: AppColors.primary,
-                                ),
-
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                              ),
-
-                              onPressed: () async {
-                                final result = await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => AddProductScreen(
-                                      product: currentProduct,
-                                    ),
-                                  ),
-                                );
-
-                                if (result == true) {
-                                  refreshProduct();
-                                }
-                              },
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(width: 12),
-
-                        Expanded(
-                          child: SizedBox(
-                            height: 40,
-                            child: ElevatedButton.icon(
-                              icon: const Icon(Icons.inventory_2_outlined),
-
-                              label: const Text(
-                                "Update Stock",
-                                style: TextStyle(fontWeight: FontWeight.w600),
-                              ),
-
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary,
-
-                                foregroundColor: Colors.white,
-
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                              ),
-
-                              onPressed: _showUpdateStockDialog,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: R.sp(context, 20)),
-
-                    // 🔹 INFO SECTION
+                    // INFO SECTION
                     Container(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(
+                          R.radius(context, 12),
+                        ),
+                        border: Border.all(
+                          color: Colors.grey.shade300,
+                          width: 1,
+                        ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(.04),
+                            color: Colors.black.withOpacity(.05),
                             blurRadius: 25,
-                            offset: const Offset(0, 8),
+                            offset: const Offset(0, 10),
                           ),
                         ],
                       ),
@@ -467,22 +467,30 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                           Text(
                             "Product Information",
                             style: TextStyle(
-                              fontSize: R.fs(context, 16),
-                              fontWeight: FontWeight.bold,
+                              fontSize: R.fs(context, 18),
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
-                          const SizedBox(height: 10),
-                          _row("Category", currentProduct["category"]),
-                          _row("HSN Code", currentProduct["hsn_code"]),
-                          _row("Product Code", currentProduct["barcode"]),
-                          _row(
+
+                          SizedBox(height: R.sp(context, 20)),
+
+                          _infoRow("Category", currentProduct["category"]),
+                          _infoRow("HSN Code", currentProduct["hsn_code"]),
+                          _infoRow("Product Code", currentProduct["barcode"]),
+                          _infoRow(
                             "Purchase Price",
                             "₹ ${currentProduct["purchase_price"]}",
                           ),
-                          _row("Quantity", "$qty"),
-                          _row("Unit", currentProduct["unit"]),
-                          _row("Expiry Date", currentProduct["expiry_date"]),
-                          _row("Description", currentProduct["description"]),
+                          _infoRow("Quantity", "$qty"),
+                          _infoRow("Unit", currentProduct["unit"]),
+                          _infoRow(
+                            "Expiry Date",
+                            currentProduct["expiry_date"],
+                          ),
+                          _infoRow(
+                            "Description",
+                            currentProduct["description"],
+                          ),
                         ],
                       ),
                     ),
@@ -505,45 +513,66 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         ),
         Text(
           value,
-          style: TextStyle(fontWeight: FontWeight.bold, color: color),
+          style: TextStyle(fontWeight: FontWeight.w500, color: color),
         ),
       ],
     );
   }
 
-  Widget _row(String title, dynamic value) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: R.fs(context, 16),
-                  color: Colors.grey,
-                ),
-              ),
-
-              Flexible(
-                child: Text(
-                  value?.toString() ?? "",
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black,
-                  ),
-                ),
-              ),
-            ],
+  Widget _rowItem(String title, dynamic value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 4,
+            child: Text(
+              title,
+              style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
+            ),
           ),
-        ),
+          Expanded(
+            flex: 5,
+            child: Text(
+              value?.toString() ?? "",
+              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-        const Divider(height: 1),
-      ],
+  Widget _infoRow(String title, dynamic value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 4,
+            child: Text(
+              title,
+              style: TextStyle(
+                fontSize: R.fs(context, 15),
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ),
+
+          Expanded(
+            flex: 5,
+            child: Text(
+              value?.toString() ?? "-",
+              style: TextStyle(
+                fontSize: R.fs(context, 16),
+                fontWeight: FontWeight.w500,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -560,7 +589,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           textAlign: TextAlign.center,
           style: TextStyle(
             color: valueColor,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w500,
             fontSize: 16,
           ),
         ),

@@ -33,6 +33,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   int totalSuppliers = 0;
   int lowStock = 0;
 
+  // 🔹 NEW: Baseline variables for previous timeframe (e.g., last month)
+  int pastProducts = 0;
+  int pastSales = 0;
+  int pastSuppliers = 0;
+  int pastLowStock = 0;
+
   @override
   void initState() {
     super.initState();
@@ -73,6 +79,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     lowStock = lowStocks;
     salesData = chartData;
     chartLabels = labels;
+
+    // 🔹 NEW: Fetching real historical data from SQLite
+    pastProducts = await DBHelper.getPastProductCount();
+    pastSales = await DBHelper.getPastSalesCount();
+    pastSuppliers = await DBHelper.getPastSupplierCount();
+    pastLowStock = await DBHelper.getPastLowStockCount();
 
     ref.read(graphVisibilityProvider.notifier).state = graphVisible;
     setState(() {});
@@ -155,7 +167,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         title: Text(
           "Dashboard",
           style: TextStyle(
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w500,
             color: Colors.white,
             fontSize: R.fs(context, 18),
           ),
@@ -177,7 +189,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         child: ClipRRect(
           borderRadius: AppCurve.top(context),
           child: Container(
-            color: Colors.grey.shade100,
+            color: AppColors.background,
             child: SingleChildScrollView(
               padding: hPad.copyWith(
                 top: R.sp(context, AppSpacing.md),
@@ -198,6 +210,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         context,
                         AppTextStyles.heading.fontSize ?? 22,
                       ),
+                      fontWeight: FontWeight.w500, // Added right here!
                     ),
                   ),
 
@@ -232,6 +245,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         "$totalProducts",
                         Icons.inventory,
                         Colors.blue,
+                        percentage: MetricHelper.calculatePercentage(
+                          totalProducts,
+                          pastProducts,
+                        ).abs(),
+                        isPositive: MetricHelper.checkIsPositive(
+                          totalProducts,
+                          pastProducts,
+                        ),
                       ),
                       _topCard(
                         context,
@@ -239,6 +260,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         "$lowStock",
                         Icons.warning,
                         Colors.red,
+                        percentage: MetricHelper.calculatePercentage(
+                          lowStock,
+                          pastLowStock,
+                        ).abs(),
+                        isPositive: MetricHelper.checkIsPositive(
+                          lowStock,
+                          pastLowStock,
+                        ),
                       ),
                       _topCard(
                         context,
@@ -246,6 +275,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         "₹ $totalSales",
                         Icons.shopping_cart,
                         Colors.green,
+                        percentage: MetricHelper.calculatePercentage(
+                          totalSales,
+                          pastSales,
+                        ).abs(),
+                        isPositive: MetricHelper.checkIsPositive(
+                          totalSales,
+                          pastSales,
+                        ),
                       ),
                       _topCard(
                         context,
@@ -253,10 +290,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         "$totalSuppliers",
                         Icons.people,
                         Colors.purple,
+                        percentage: MetricHelper.calculatePercentage(
+                          totalSuppliers,
+                          pastSuppliers,
+                        ).abs(),
+                        isPositive: MetricHelper.checkIsPositive(
+                          totalSuppliers,
+                          pastSuppliers,
+                        ),
                       ),
                     ],
                   ),
-
                   SizedBox(height: R.sp(context, 24)),
 
                   // =====================================================
@@ -266,7 +310,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     "Quick Actions",
                     style: TextStyle(
                       fontSize: sectionFs,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w500,
                       color: Colors.black,
                     ),
                   ),
@@ -299,7 +343,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           context: context,
                           icon: Icons.add,
                           title: "Add Product",
-                          color: Colors.black54,
+                          color: Colors.blue,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -318,7 +362,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           context: context,
                           icon: Icons.inventory_2_outlined,
                           title: "Stock In",
-                          color: Colors.black54,
+                          color: Colors.blue,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -344,7 +388,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         "Sales Overview",
                         style: TextStyle(
                           fontSize: sectionFs,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
 
@@ -377,6 +421,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(
                           R.radius(context, AppSizes.cardRadius),
+                        ),
+                        border: Border.all(
+                          color: Colors.grey.shade300, // border color
+                          width: 1, // stroke width
                         ),
                       ),
                       child: Column(
@@ -610,8 +658,10 @@ Widget _topCard(
   String title,
   String value,
   IconData icon,
-  Color color,
-) {
+  Color color, {
+  required double percentage,
+  required bool isPositive,
+}) {
   return Container(
     padding: EdgeInsets.all(R.sp(context, 12)),
     decoration: BoxDecoration(
@@ -638,16 +688,57 @@ Widget _topCard(
                 overflow: TextOverflow.ellipsis,
               ),
               SizedBox(height: R.sp(context, 4)),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  value,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: R.fs(context, 14),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      value,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: R.fs(context, 14),
+                      ),
+                    ),
                   ),
-                ),
+
+                  SizedBox(height: R.sp(context, 4)),
+
+                  Row(
+                    children: [
+                      Icon(
+                        isPositive ? Icons.trending_up : Icons.trending_down,
+                        size: R.icon(context, 12),
+                        color: isPositive ? Colors.green : Colors.red,
+                      ),
+
+                      SizedBox(width: R.sp(context, 2)),
+
+                      Text(
+                        "${percentage.toStringAsFixed(1)}%",
+                        style: TextStyle(
+                          color: isPositive ? Colors.green : Colors.red,
+                          fontWeight: FontWeight.w500,
+                          fontSize: R.fs(context, 9),
+                        ),
+                      ),
+
+                      SizedBox(width: R.sp(context, 3)),
+
+                      Expanded(
+                        child: Text(
+                          "from last month",
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: R.fs(context, 8),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ],
           ),
@@ -691,4 +782,21 @@ Widget _quickActionCard({
       ),
     ),
   );
+}
+
+// =====================================================
+// 🔹 METRIC CALCULATION HELPER
+// =====================================================
+class MetricHelper {
+  // Calculates the percentage change between current and previous values
+  static double calculatePercentage(num current, num previous) {
+    if (previous == 0) return 0.0; // Prevent division by zero
+    double change = ((current - previous) / previous) * 100;
+    return double.parse(change.toStringAsFixed(1));
+  }
+
+  // Determines if the trend is positive (growth) or negative
+  static bool checkIsPositive(num current, num previous) {
+    return current >= previous;
+  }
 }

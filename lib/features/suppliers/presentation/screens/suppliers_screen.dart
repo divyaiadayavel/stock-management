@@ -20,6 +20,27 @@ class SuppliersScreen extends ConsumerStatefulWidget {
 class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
   List<Map<String, dynamic>> filteredSuppliers = [];
   String searchText = '';
+  String selectedCategoryFilter = "All";
+
+  final List<String> categoryFilters = [
+    "All",
+    "Electronics",
+    "Mobile",
+    "Accessories",
+    "Fashion",
+    "Grocery",
+    "Stationery",
+    "Food",
+    "Beauty",
+    "Furniture",
+    "Medical",
+    "Sports",
+    "Hardware",
+    "Home Appliances",
+    "Books",
+    "Toys",
+    "Footwear",
+  ];
 
   @override
   void initState() {
@@ -42,6 +63,20 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
     ref.read(totalCategoriesProvider.notifier).state = categories;
     ref.read(totalProductsProvider.notifier).state = productCount;
     ref.read(totalPurchasesProvider.notifier).state = purchaseAmount;
+
+    applyCategoryFilter();
+  }
+
+  void applyCategoryFilter() async {
+    final data = await DBHelper.getSuppliers();
+
+    if (selectedCategoryFilter == "All") {
+      ref.read(suppliersProvider.notifier).state = data;
+    } else {
+      ref.read(suppliersProvider.notifier).state = data.where((supplier) {
+        return supplier["category"] == selectedCategoryFilter;
+      }).toList();
+    }
   }
 
   // =========================
@@ -97,7 +132,7 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
                         context,
                         16,
                       ), // Sized down base from 18 to 16 for better data fitment
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w500,
                       color: Colors.black,
                     ),
                   ),
@@ -154,6 +189,10 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
           borderRadius: BorderRadius.circular(
             R.radius(context, AppSizes.cardRadius),
           ),
+
+          // ✅ Grey Border
+          border: Border.all(color: Colors.grey.shade300, width: 1),
+
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.04),
@@ -171,7 +210,7 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
                 supplier["supplierName"][0].toUpperCase(),
                 style: TextStyle(
                   fontSize: R.fs(context, 22),
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w500,
                   color: AppColors.primary,
                 ),
               ),
@@ -187,7 +226,7 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
                     supplier["supplierName"],
                     style: TextStyle(
                       fontSize: R.fs(context, 17),
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   SizedBox(height: R.sp(context, 4)),
@@ -258,7 +297,7 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
         title: Text(
           "Suppliers",
           style: TextStyle(
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w500,
             color: Colors.white,
             fontSize: R.fs(context, 18),
           ),
@@ -288,7 +327,7 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
         child: ClipRRect(
           borderRadius: AppCurve.top(context),
           child: Container(
-            color: Colors.grey.shade100,
+            color: Colors.white,
             child: SingleChildScrollView(
               padding: hPad.copyWith(
                 top: R.sp(context, 16),
@@ -325,14 +364,39 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
                           color: Colors.grey.shade500,
                           fontSize: R.fs(context, 14),
                         ),
+
                         prefixIcon: Icon(
                           Icons.search,
                           color: Colors.grey,
                           size: R.icon(context, 22),
                         ),
-                        border: InputBorder.none,
+
                         contentPadding: EdgeInsets.symmetric(
                           vertical: R.sp(context, 14),
+                        ),
+
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(
+                            R.radius(context, 14),
+                          ),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(
+                            R.radius(context, 14),
+                          ),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(
+                            R.radius(context, 14),
+                          ),
+                          borderSide: const BorderSide(
+                            color: AppColors.primary,
+                            width: 1.5,
+                          ),
                         ),
                       ),
                     ),
@@ -398,15 +462,89 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
                         "Supplier List",
                         style: TextStyle(
                           fontSize: R.fs(context, 20),
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
+
                       const Spacer(),
-                      TextButton(
-                        onPressed: () {},
-                        child: Text(
-                          "View All",
-                          style: TextStyle(fontSize: R.fs(context, 14)),
+
+                      SizedBox(
+                        width: R.fluid(context, 140, 180),
+                        child: DropdownButtonFormField<String>(
+                          value: selectedCategoryFilter,
+                          isExpanded: true,
+                          menuMaxHeight: 250,
+
+                          dropdownColor: Colors.white,
+                          elevation: 2,
+                          borderRadius: BorderRadius.circular(16),
+
+                          decoration: InputDecoration(
+                            hintText: "Filter",
+
+                            prefixIcon: Icon(
+                              Icons.filter_list,
+                              color: Colors.grey.shade500,
+                              size: R.icon(context, 18),
+                            ),
+
+                            filled: true,
+                            fillColor: Colors.white,
+
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: R.sp(context, 12),
+                              vertical: R.sp(context, 12),
+                            ),
+
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                R.radius(context, 10),
+                              ),
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade300,
+                              ),
+                            ),
+
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                R.radius(context, 10),
+                              ),
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade300,
+                              ),
+                            ),
+
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                R.radius(context, 10),
+                              ),
+                              borderSide: const BorderSide(
+                                color: AppColors.primary,
+                                width: 1.5,
+                              ),
+                            ),
+                          ),
+
+                          items: categoryFilters.map((category) {
+                            return DropdownMenuItem<String>(
+                              value: category,
+                              child: Text(
+                                category,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: R.fs(context, 13)),
+                              ),
+                            );
+                          }).toList(),
+
+                          onChanged: (value) {
+                            if (value == null) return;
+
+                            setState(() {
+                              selectedCategoryFilter = value;
+                            });
+
+                            applyCategoryFilter();
+                          },
                         ),
                       ),
                     ],

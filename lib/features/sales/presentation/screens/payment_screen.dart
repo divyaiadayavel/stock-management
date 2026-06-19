@@ -41,7 +41,7 @@ class PaymentScreen extends ConsumerWidget {
           "Payment",
           style: TextStyle(
             color: Colors.white,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w500,
             fontSize: R.fs(context, 20),
           ),
         ),
@@ -64,7 +64,7 @@ class PaymentScreen extends ConsumerWidget {
         child: ClipRRect(
           borderRadius: AppCurve.top(context),
           child: Container(
-            color: Colors.grey.shade100,
+            color: Colors.white,
             child: SingleChildScrollView(
               // Dynamically switches paddings based on screen breakpoint (Centers and caps at 960px on desktop)
               padding: R.hPad(context, base: 20.0),
@@ -82,6 +82,7 @@ class PaymentScreen extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(
                         R.radius(context, 16),
                       ),
+                      border: Border.all(color: Colors.grey.shade300, width: 1),
                     ),
                     child: Column(
                       children: [
@@ -99,7 +100,7 @@ class PaymentScreen extends ConsumerWidget {
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: R.fs(context, 32),
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                         SizedBox(height: R.sp(context, 12)),
@@ -113,6 +114,7 @@ class PaymentScreen extends ConsumerWidget {
                             borderRadius: BorderRadius.circular(
                               R.radius(context, 20),
                             ),
+                            border: Border.all(color: Colors.white38, width: 1),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -143,7 +145,7 @@ class PaymentScreen extends ConsumerWidget {
                     "Select Payment Method",
                     style: TextStyle(
                       fontSize: R.fs(context, 18),
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w500,
                       color: Colors.black87,
                     ),
                   ),
@@ -217,7 +219,7 @@ class PaymentScreen extends ConsumerWidget {
                         "Open Invoice",
                         style: TextStyle(
                           color: Colors.white,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w500,
                           fontSize: R.fs(context, 16),
                         ),
                       ),
@@ -313,7 +315,7 @@ class PaymentScreen extends ConsumerWidget {
                       Text(
                         title,
                         style: TextStyle(
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w500,
                           fontSize: R.fs(context, 16),
                         ),
                       ),

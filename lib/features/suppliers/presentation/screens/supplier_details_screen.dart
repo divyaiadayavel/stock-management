@@ -87,7 +87,7 @@ class _SupplierDetailsScreenState extends ConsumerState<SupplierDetailsScreen> {
           style: TextStyle(
             color: Colors.white,
             fontSize: R.fs(context, 20),
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w500,
           ),
         ),
         actions: [
@@ -105,7 +105,7 @@ class _SupplierDetailsScreenState extends ConsumerState<SupplierDetailsScreen> {
                     "Delete Supplier",
                     style: TextStyle(
                       fontSize: R.fs(context, 18),
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   content: Text(
@@ -220,7 +220,7 @@ class _SupplierDetailsScreenState extends ConsumerState<SupplierDetailsScreen> {
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: R.fs(context, 16),
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),

@@ -185,18 +185,25 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     final showGstFields = ref.read(showGstProvider);
 
     try {
-      // ✅ VALIDATION
-      if (nameController.text.isEmpty ||
-          purchaseController.text.isEmpty ||
-          sellingController.text.isEmpty ||
-          quantityController.text.isEmpty) {
+      if (image == null ||
+          nameController.text.trim().isEmpty ||
+          quantityController.text.trim().isEmpty ||
+          lslController.text.trim().isEmpty ||
+          unitController.text.trim().isEmpty ||
+          purchaseController.text.trim().isEmpty ||
+          sellingController.text.trim().isEmpty ||
+          selectedCategory == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Please fill required fields")),
+          const SnackBar(
+            content: Text(
+              "Please fill all required fields and select a product image",
+            ),
+          ),
         );
-
         return;
       }
 
+      // DBHelper.addProduct(...)
       // ✅ SAVE PRODUCT
       await DBHelper.addProduct(
         name: nameController.text.trim(),
@@ -254,6 +261,8 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   Widget inputField({
     required String label,
     required TextEditingController controller,
+    required IconData icon,
+    bool requiredField = false,
     TextInputType? keyboard,
     int maxLines = 1,
     Widget? suffixIcon,
@@ -262,14 +271,27 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+        RichText(
+          text: TextSpan(
+            text: label,
+            style: TextStyle(
+              color: Colors.black,
+              fontWeight: FontWeight.w500,
+              fontSize: R.fs(context, 13),
+            ),
+            children: requiredField
+                ? const [
+                    TextSpan(
+                      text: " *",
+                      style: TextStyle(color: Colors.black),
+                    ),
+                  ]
+                : [],
+          ),
         ),
 
-        const SizedBox(height: 8),
+        SizedBox(height: R.sp(context, 8)),
 
         TextField(
           controller: controller,
@@ -277,21 +299,42 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           maxLines: maxLines,
           readOnly: readOnly,
           onTap: onTap,
-
+          style: TextStyle(fontSize: R.fs(context, 14)),
           decoration: InputDecoration(
             hintText: "Enter $label",
+
+            prefixIcon: Icon(
+              icon,
+              color: Colors.grey.shade500,
+              size: R.icon(context, 20),
+            ),
+
             suffixIcon: suffixIcon,
 
             filled: true,
             fillColor: Colors.white,
 
             contentPadding: EdgeInsets.symmetric(
-              horizontal: R.sp(context, 16),
-              vertical: R.sp(context, 16),
+              horizontal: R.fluid(context, 14, 18),
+              vertical: R.fluid(context, 14, 18),
             ),
+
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide.none,
+              borderRadius: BorderRadius.circular(R.radius(context, 10)),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(R.radius(context, 10)),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(R.radius(context, 10)),
+              borderSide: const BorderSide(
+                color: AppColors.primary,
+                width: 1.5,
+              ),
             ),
           ),
         ),
@@ -311,7 +354,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         title,
         style: TextStyle(
           fontSize: R.fs(context, 18),
-          fontWeight: FontWeight.bold,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );
@@ -356,7 +399,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     final width = MediaQuery.of(context).size.width;
 
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         elevation: 0,
@@ -366,7 +409,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
               ? "Add Products"
               : "Edit Product", // Dynamic Title
           style: const TextStyle(
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w500,
             color: Colors.white,
           ),
         ),
@@ -380,13 +423,23 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           child: Container(
             color: Colors.grey.shade100,
 
-            child: R.maxW(
-              SingleChildScrollView(
-                padding: EdgeInsets.all(R.sp(context, 12)),
-
+            child: SingleChildScrollView(
+              padding: R.hPad(context, base: 18),
+              child: Container(
+                margin: EdgeInsets.symmetric(vertical: R.sp(context, 18)),
+                padding: EdgeInsets.all(R.sp(context, 18)),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(R.radius(context, 18)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-
                   children: [
                     // =====================================================
                     // 🔹 PRODUCT MEDIA
@@ -495,10 +548,13 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                     inputField(
                       label: "Product Name",
                       controller: nameController,
+                      icon: Icons.inventory_2_outlined,
+                      requiredField: true,
                     ),
                     inputField(
-                      label: "Product code",
+                      label: "Product Code",
                       controller: productcodeController,
+                      icon: Icons.qr_code,
                     ),
 
                     const SizedBox(height: 20),
@@ -524,15 +580,42 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                           borderRadius: BorderRadius.circular(16),
 
                           decoration: InputDecoration(
+                            hintText: "Select category",
+
+                            prefixIcon: Icon(
+                              Icons.category_outlined,
+                              color: Colors.grey.shade500,
+                            ),
+
                             filled: true,
                             fillColor: Colors.white,
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: R.sp(context, 16),
-                              vertical: R.sp(context, 16),
-                            ),
+
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide.none,
+                              borderRadius: BorderRadius.circular(
+                                R.radius(context, 10),
+                              ),
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade300,
+                              ),
+                            ),
+
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                R.radius(context, 10),
+                              ),
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade300,
+                              ),
+                            ),
+
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                R.radius(context, 10),
+                              ),
+                              borderSide: const BorderSide(
+                                color: AppColors.primary,
+                                width: 1.5,
+                              ),
                             ),
                           ),
                           items: categories.map((e) {
@@ -583,37 +666,38 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                     if (showGstFields)
                       Column(
                         children: [
-                          // SGST
                           inputField(
                             label: "State GST (SGST) %",
                             controller: sgstController,
+                            icon: Icons.percent,
                             keyboard: TextInputType.number,
                           ),
 
                           const SizedBox(height: 20),
 
-                          // CGST
                           inputField(
                             label: "Central GST (CGST) %",
                             controller: cgstController,
+                            icon: Icons.percent,
                             keyboard: TextInputType.number,
                           ),
 
                           const SizedBox(height: 20),
 
-                          // HSN
                           inputField(
                             label: "HSN Code",
                             controller: hsnController,
-                          ),
-                          // DISCOUNT
-                          inputField(
-                            label: "Discount %",
-                            controller: discountController,
-                            keyboard: TextInputType.number,
+                            icon: Icons.numbers,
                           ),
 
                           const SizedBox(height: 20),
+
+                          inputField(
+                            label: "Discount %",
+                            controller: discountController,
+                            icon: Icons.discount_outlined,
+                            keyboard: TextInputType.number,
+                          ),
 
                           const SizedBox(height: 20),
                         ],
@@ -668,17 +752,42 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                           borderRadius: BorderRadius.circular(16),
 
                           decoration: InputDecoration(
+                            hintText: "Select category",
+
+                            prefixIcon: Icon(
+                              Icons.category_outlined,
+                              color: Colors.grey.shade500,
+                            ),
+
                             filled: true,
                             fillColor: Colors.white,
 
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 16,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                R.radius(context, 10),
+                              ),
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade300,
+                              ),
                             ),
 
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide.none,
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                R.radius(context, 10),
+                              ),
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade300,
+                              ),
+                            ),
+
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                R.radius(context, 10),
+                              ),
+                              borderSide: const BorderSide(
+                                color: AppColors.primary,
+                                width: 1.5,
+                              ),
                             ),
                           ),
 
@@ -707,6 +816,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                     // 🔹 EXPIRY DATE
                     inputField(
                       label: "Expiry Date",
+                      icon: Icons.calendar_month_outlined,
                       controller: expiryController,
                       readOnly: true,
 
@@ -716,7 +826,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                     ),
 
                     const SizedBox(height: 32),
-
                     // =====================================================
                     // 🔹 STOCK DETAILS
                     // =====================================================
@@ -724,23 +833,27 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
                     Row(
                       children: [
-                        // Quantity
+                        // Quantity wrapped in Expanded
                         Expanded(
                           child: inputField(
                             label: "Quantity",
                             controller: quantityController,
+                            icon: Icons.production_quantity_limits,
                             keyboard: TextInputType.number,
+                            requiredField: true,
                           ),
                         ),
 
                         SizedBox(width: R.sp(context, 14)),
 
-                        // Low Stock Limit
+                        // Low Stock Limit wrapped in Expanded
                         Expanded(
                           child: inputField(
                             label: "Low Stock Limit",
                             controller: lslController,
+                            icon: Icons.warning_amber_rounded,
                             keyboard: TextInputType.number,
+                            requiredField: true,
                           ),
                         ),
                       ],
@@ -775,20 +888,44 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                           borderRadius: BorderRadius.circular(16),
 
                           decoration: InputDecoration(
+                            hintText: "Select Unit",
+
+                            prefixIcon: Icon(
+                              Icons.straighten,
+                              color: Colors.grey.shade500,
+                            ),
+
                             filled: true,
                             fillColor: Colors.white,
 
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 16,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                R.radius(context, 10),
+                              ),
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade300,
+                              ),
                             ),
 
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide.none,
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                R.radius(context, 10),
+                              ),
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade300,
+                              ),
+                            ),
+
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                R.radius(context, 10),
+                              ),
+                              borderSide: const BorderSide(
+                                color: AppColors.primary,
+                                width: 1.5,
+                              ),
                             ),
                           ),
-
                           items: ["Kg", "gram", "litre", "piece", "box"].map((
                             unit,
                           ) {
@@ -811,6 +948,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                     inputField(
                       label: "Description",
                       controller: descriptionController,
+                      icon: Icons.description_outlined,
                       maxLines: 4,
                     ),
 
@@ -823,26 +961,31 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
                     Row(
                       children: [
+                        // Purchase Price wrapped in Expanded
                         Expanded(
                           child: inputField(
                             label: "Purchase Price",
                             controller: purchaseController,
+                            icon: Icons.currency_rupee,
                             keyboard: TextInputType.number,
+                            requiredField: true,
                           ),
                         ),
 
                         const SizedBox(width: 14),
 
+                        // Selling Price wrapped in Expanded
                         Expanded(
                           child: inputField(
                             label: "Selling Price",
                             controller: sellingController,
+                            icon: Icons.sell_outlined,
                             keyboard: TextInputType.number,
+                            requiredField: true,
                           ),
                         ),
                       ],
                     ),
-
                     const SizedBox(height: 22),
 
                     // 🔹 PROFIT BUTTON
@@ -865,7 +1008,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                           "Calculate Profit Margin",
                           style: TextStyle(
                             color: Colors.white,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),
@@ -896,7 +1039,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                             "${profitMargin.toStringAsFixed(1)}%",
                             style: TextStyle(
                               fontSize: R.fs(context, 34),
-                              fontWeight: FontWeight.bold,
+                              fontWeight: FontWeight.w500,
                               color: profitMargin > 0
                                   ? Colors.green
                                   : Colors.red,

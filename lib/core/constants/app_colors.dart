@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 class AppColors {
   static const primary = Color(0xFF2F6BFF);
-  static const background = Color(0xFFF5F6FA);
+  static const background = Colors.white;
 
   static const card = Colors.white;
 

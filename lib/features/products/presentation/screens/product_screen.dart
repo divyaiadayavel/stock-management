@@ -138,19 +138,19 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
 
     // ── responsive values ──────────────────────────────────────
     final hPad = R.hPad(context, base: 16);
-    final imgSz = R.imgSize(context, 0.20);
+    final imgSz = R.imgSize(context, 0.16);
     final searchHeight = R.searchH(context);
-    final nameFs = R.fs(context, 16);
-    final priceFs = R.fs(context, 18);
-    final catFs = R.fs(context, 13);
-    final stockFs = R.fs(context, 13);
-    final badgeFs = R.fs(context, 12);
-    final cardRadius = R.radius(context, 18);
-    final cardPad = R.sp(context, 14);
+    final nameFs = R.fs(context, 14);
+    final priceFs = R.fs(context, 14);
+    final catFs = R.fs(context, 10);
+    final stockFs = R.fs(context, 11);
+    final badgeFs = R.fs(context, 10);
+    final cardRadius = R.radius(context, 10);
+    final cardPad = R.sp(context, 10);
     final vGap = R.sp(context, 6);
 
     return Scaffold(
-      backgroundColor: const Color(0xffF5F6FA),
+      backgroundColor: Colors.white,
 
       // ================= APP BAR =================
       appBar: AppBar(
@@ -160,7 +160,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
         title: Text(
           "Products",
           style: TextStyle(
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w500,
             color: Colors.white,
             fontSize: R.fs(context, 18),
           ),
@@ -183,7 +183,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
         child: ClipRRect(
           borderRadius: AppCurve.top(context),
           child: Container(
-            color: const Color(0xffF5F6FA),
+            color: Colors.white,
             child: Column(
               children: [
                 SizedBox(height: R.sp(context, 14)),
@@ -196,8 +196,10 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(
-                        R.radius(context, 14),
+                        R.radius(context, 12),
                       ),
+                      border: Border.all(color: Colors.grey.shade300, width: 1),
+
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.04),
@@ -298,13 +300,10 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                                   borderRadius: BorderRadius.circular(
                                     cardRadius,
                                   ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
+                                  border: Border.all(
+                                    color: Colors.grey.shade300,
+                                    width: 1,
+                                  ),
                                 ),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -315,7 +314,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                                       height: imgSz,
                                       decoration: BoxDecoration(
                                         borderRadius: BorderRadius.circular(
-                                          R.radius(context, 14),
+                                          R.radius(context, 8),
                                         ),
                                         color: Colors.grey.shade100,
                                       ),
@@ -359,7 +358,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                                                       TextOverflow.ellipsis,
                                                   style: TextStyle(
                                                     fontSize: nameFs,
-                                                    fontWeight: FontWeight.bold,
+                                                    fontWeight: FontWeight.w500,
                                                   ),
                                                 ),
                                               ),
@@ -368,7 +367,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                                                 "₹ ${(p["selling_price"] as num?)?.toDouble().toStringAsFixed(0) ?? "0"}",
                                                 style: TextStyle(
                                                   fontSize: priceFs,
-                                                  fontWeight: FontWeight.bold,
+                                                  fontWeight: FontWeight.w500,
                                                   color: Colors.black,
                                                 ),
                                               ),
@@ -397,7 +396,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                                                 "Stock: $qty pcs",
                                                 style: TextStyle(
                                                   fontSize: stockFs,
-                                                  fontWeight: FontWeight.w600,
+                                                  fontWeight: FontWeight.w500,
                                                   color: isOutStock
                                                       ? Colors.red
                                                       : isLowStock
@@ -409,8 +408,8 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                                               // BADGE
                                               Container(
                                                 padding: EdgeInsets.symmetric(
-                                                  horizontal: R.sp(context, 12),
-                                                  vertical: R.sp(context, 6),
+                                                  horizontal: R.sp(context, 5),
+                                                  vertical: R.sp(context, 2),
                                                 ),
                                                 decoration: BoxDecoration(
                                                   color: isOutStock
@@ -440,7 +439,8 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                                                       : "In Stock",
                                                   style: TextStyle(
                                                     fontSize: badgeFs,
-                                                    fontWeight: FontWeight.bold,
+                                                    fontWeight:
+                                                        FontWeight.normal,
                                                     color: isOutStock
                                                         ? Colors.red
                                                         : isLowStock

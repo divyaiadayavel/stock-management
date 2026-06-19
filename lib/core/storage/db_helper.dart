@@ -88,6 +88,17 @@ class DBHelper {
             "ALTER TABLE products ADD COLUMN discount REAL DEFAULT 0",
           );
         } catch (e) {}
+        // --- ADDED FOR HISTORICAL DASHBOARD ---
+        try {
+          await db.execute(
+            "ALTER TABLE products ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP",
+          );
+        } catch (e) {}
+        try {
+          await db.execute(
+            "ALTER TABLE suppliers ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP",
+          );
+        } catch (e) {}
       },
     );
   }
@@ -1197,6 +1208,47 @@ class DBHelper {
       // If no profile exists at all, create one with this field
       await dbClient.insert("profile", {field: value});
     }
+  }
+  // =====================================================
+  // 🔹 HISTORICAL DASHBOARD QUERIES (30 Days Ago)
+  // =====================================================
+
+  static Future<int> getPastProductCount() async {
+    final dbClient = await db;
+    final result = await dbClient.rawQuery('''
+      SELECT COUNT(*) as count FROM products 
+      WHERE created_at <= date('now', '-30 days')
+    ''');
+    return (result.first["count"] as num?)?.toInt() ?? 0;
+  }
+
+  static Future<int> getPastSalesCount() async {
+    final dbClient = await db;
+    // Uses the 'date' column in your invoices table to match your getSalesCount logic
+    final result = await dbClient.rawQuery('''
+      SELECT SUM(total) as totalSales FROM invoices 
+      WHERE date <= date('now', '-30 days')
+    ''');
+    return (result.first["totalSales"] as num?)?.toInt() ?? 0;
+  }
+
+  static Future<int> getPastSupplierCount() async {
+    final dbClient = await db;
+    final result = await dbClient.rawQuery('''
+      SELECT COUNT(*) as count FROM suppliers 
+      WHERE created_at <= date('now', '-30 days')
+    ''');
+    return (result.first["count"] as num?)?.toInt() ?? 0;
+  }
+
+  static Future<int> getPastLowStockCount() async {
+    final dbClient = await db;
+    // Uses quantity <= 5 to match your existing getLowStockCount logic
+    final result = await dbClient.rawQuery('''
+      SELECT COUNT(*) as count FROM products 
+      WHERE quantity <= 5 AND created_at <= date('now', '-30 days')
+    ''');
+    return (result.first["count"] as num?)?.toInt() ?? 0;
   }
 
   // =========================

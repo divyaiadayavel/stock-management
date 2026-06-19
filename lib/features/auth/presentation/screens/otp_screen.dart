@@ -63,7 +63,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
         foregroundColor: Colors.black,
         title: const Text(
           "OTP Verification",
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(fontWeight: FontWeight.w500),
         ),
       ),
       body: SafeArea(
@@ -80,7 +80,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                   "Verify Code",
                   style: TextStyle(
                     fontSize: 28,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w500,
                     color: Colors.black,
                   ),
                 ),
@@ -101,7 +101,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                 const Text(
                   "OTP Code",
                   style: TextStyle(
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
                     color: Colors.black,
                   ),
                 ),
@@ -146,7 +146,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                             "Verify OTP",
                             style: TextStyle(
                               color: Colors.white,
-                              fontWeight: FontWeight.bold,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                   ),
@@ -169,7 +169,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                       "Resend Code",
                       style: TextStyle(
                         color: AppColors.primary,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),

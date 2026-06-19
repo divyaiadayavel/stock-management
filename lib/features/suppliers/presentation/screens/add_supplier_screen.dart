@@ -22,16 +22,22 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
   final addressCtrl = TextEditingController();
 
   final List<String> categories = [
-    "Groceries",
-    "Beverages",
-    "Snacks",
-    "Personal Care",
-    "Stationery",
     "Electronics",
-    "Dairy",
-    "Bakery",
-    "Vegetables",
-    "Fruits",
+    "Mobile",
+    "Accessories",
+    "Fashion",
+    "Grocery",
+    "Stationery",
+    "Food",
+    "Beauty",
+    "Furniture",
+    "Medical",
+    "Sports",
+    "Hardware",
+    "Home Appliances",
+    "Books",
+    "Toys",
+    "Footwear",
   ];
 
   // =========================
@@ -54,7 +60,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
             text: title,
             style: TextStyle(
               color: Colors.black,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
               fontSize: R.fs(context, 13),
             ),
             children: requiredField
@@ -128,13 +134,13 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
             text: "Product Category",
             style: TextStyle(
               color: Colors.black,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
               fontSize: R.fs(context, 13),
             ),
             children: const [
               TextSpan(
                 text: " *",
-                style: TextStyle(color: Colors.red),
+                style: TextStyle(color: Colors.black),
               ),
             ],
           ),
@@ -241,7 +247,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
         title: Text(
           "Add New Suppliers",
           style: TextStyle(
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w500,
             color: Colors.white,
             fontSize: R.fs(context, 20),
           ),
@@ -379,7 +385,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
                                 "Cancel",
                                 style: TextStyle(
                                   color: Colors.black54,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w500,
                                   fontSize: R.fs(context, 14),
                                 ),
                               ),
@@ -412,7 +418,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
                                 "Save Supplier",
                                 style: TextStyle(
                                   color: Colors.white,
-                                  fontWeight: FontWeight.bold,
+                                  fontWeight: FontWeight.w500,
                                   fontSize: R.fs(context, 14),
                                 ),
                               ),
