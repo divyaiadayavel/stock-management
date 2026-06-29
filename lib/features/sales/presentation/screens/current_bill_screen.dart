@@ -110,7 +110,11 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                               width: 1.5,
                             ),
                           ),
-                          child: const Icon(Icons.add, color: Colors.white),
+                          child: const Icon(
+                            Icons.add,
+                            color: Colors.white,
+                            size: 30,
+                          ),
                         ),
 
                         SizedBox(width: R.sp(context, 12)),

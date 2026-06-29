@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../products/presentation/screens/barcode_scanner_screen.dart';
+import 'scanner_bill_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_curve.dart';
 import '../../../../core/storage/db_helper.dart';
@@ -158,45 +158,14 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                             ),
                             SizedBox(width: R.sp(context, 10)),
                             GestureDetector(
-                              onTap: () async {
-                                final barcode = await Navigator.push(
+                              onTap: () {
+                                Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) =>
-                                        const BarcodeScannerScreen(),
+                                    builder: (_) => const ScannerBillScreen(),
                                   ),
                                 );
-
-                                if (barcode == null ||
-                                    barcode.toString().isEmpty)
-                                  return;
-
-                                final product =
-                                    await DBHelper.getProductByBarcode(
-                                      barcode.toString(),
-                                    );
-
-                                if (product != null) {
-                                  ref
-                                      .read(billingProvider.notifier)
-                                      .addToCart(product, 1);
-
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        "${product['name']} added to bill",
-                                      ),
-                                    ),
-                                  );
-                                } else {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text("Product not found"),
-                                    ),
-                                  );
-                                }
                               },
-
                               child: Container(
                                 height: R.btnH(context),
                                 width: R.btnH(context),
@@ -327,7 +296,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                             _metaChip(
                                               context: context,
                                               label: "Stock",
-                                              value: "${product["quantity"]}u",
+                                              value: "${product["quantity"]}",
                                               valueColor: Colors.blue,
                                             ),
                                           ],

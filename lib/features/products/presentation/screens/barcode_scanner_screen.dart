@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 class BarcodeScannerScreen extends StatefulWidget {
   const BarcodeScannerScreen({super.key});
@@ -10,6 +11,12 @@ class BarcodeScannerScreen extends StatefulWidget {
 
 class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
   bool isScanned = false;
+  final AudioPlayer _player = AudioPlayer();
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +27,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
         children: [
           // 1. Camera
           MobileScanner(
-            onDetect: (capture) {
+            onDetect: (capture) async {
               if (isScanned) return;
 
               final barcodes = capture.barcodes;
@@ -29,6 +36,9 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                 final code = barcode.rawValue ?? "";
 
                 isScanned = true;
+
+                await _player.play(AssetSource('sounds/scanner_beep.mp3'));
+
                 Navigator.pop(context, code);
                 break;
               }

@@ -1,20 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// Global Core Constants (4 levels up)
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/storage/db_helper.dart';
 import '../../../sales/presentation/screens/current_bill_screen.dart';
-import '../../../sales/presentation/screens/add_product_bill_screen.dart';
 import '../../../products/presentation/screens/add_product_screen.dart';
 import '../../../products/presentation/screens/product_screen.dart';
 import '../providers/dashboard_provider.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/constants/app_curve.dart';
-import '../../../../core/utils/responsive_helper.dart'; // ← add this import
+import '../../../../core/utils/responsive_helper.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -24,20 +20,18 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
-  final List<String> filters = ["Day", "Week", "Month", "Year"];
-
-  List<double> salesData = List.filled(7, 0);
-  List<String> chartLabels = [];
   int totalProducts = 0;
   int totalSales = 0;
   int totalSuppliers = 0;
   int lowStock = 0;
 
-  // 🔹 NEW: Baseline variables for previous timeframe (e.g., last month)
   int pastProducts = 0;
   int pastSales = 0;
   int pastSuppliers = 0;
   int pastLowStock = 0;
+
+  double todaySalesAmount = 0.0;
+  double receivablesAmount = 0.0;
 
   @override
   void initState() {
@@ -45,108 +39,41 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     loadDashboardData();
   }
 
-  // =====================================================
-  // 🔹 LOAD DASHBOARD DATA
-  // =====================================================
   Future<void> loadDashboardData() async {
-    final selectedFilter = ref.read(dashboardFilterProvider);
     final products = await DBHelper.getProductCount();
     final sales = await DBHelper.getSalesCount();
     final suppliers = await DBHelper.getSupplierCount();
     final lowStocks = await DBHelper.getLowStockCount();
-    final graphVisible = await DBHelper.getGraphVisibility();
-
-    List<double> chartData = [];
-    List<String> labels = [];
-
-    if (selectedFilter == "Day") {
-      chartData = await DBHelper.getLast7DaysSales();
-      labels = getLast7Days();
-    } else if (selectedFilter == "Week") {
-      chartData = await DBHelper.getLast7WeeksSales();
-      labels = getLast7Weeks();
-    } else if (selectedFilter == "Month") {
-      chartData = await DBHelper.getLast7MonthsSales();
-      labels = getLast7Months();
-    } else if (selectedFilter == "Year") {
-      chartData = await DBHelper.getLast7YearsSales();
-      labels = getLast7Years();
-    }
 
     totalProducts = products;
     totalSales = sales;
     totalSuppliers = suppliers;
     lowStock = lowStocks;
-    salesData = chartData;
-    chartLabels = labels;
 
-    // 🔹 NEW: Fetching real historical data from SQLite
     pastProducts = await DBHelper.getPastProductCount();
     pastSales = await DBHelper.getPastSalesCount();
     pastSuppliers = await DBHelper.getPastSupplierCount();
     pastLowStock = await DBHelper.getPastLowStockCount();
 
-    ref.read(graphVisibilityProvider.notifier).state = graphVisible;
+    todaySalesAmount = 290000;
+    receivablesAmount = 48000;
+
     setState(() {});
   }
 
-  List<String> getLast7Days() {
-    final now = DateTime.now();
-    return List.generate(7, (index) {
-      final date = now.subtract(Duration(days: 6 - index));
-      return "${_getMonthShort(date.month)} ${date.day}";
-    });
-  }
-
-  List<String> getLast7Weeks() {
-    final now = DateTime.now();
-    return List.generate(7, (index) {
-      // Go back (6 - index) weeks from today to get each week's Monday
-      final weekStart = now.subtract(Duration(days: (6 - index) * 7));
-      // Week number within the month: ceil(day / 7)
-      final weekOfMonth = ((weekStart.day - 1) ~/ 7) + 1;
-      return "${_getMonthShort(weekStart.month)} W$weekOfMonth";
-    });
-  }
-
-  List<String> getLast7Months() {
-    final now = DateTime.now();
-    return List.generate(7, (index) {
-      final date = DateTime(now.year, now.month - (6 - index));
-      return _getMonthShort(date.month);
-    });
-  }
-
-  List<String> getLast7Years() {
-    final now = DateTime.now();
-    return List.generate(7, (index) => "${now.year - (6 - index)}");
-  }
-
-  String _getMonthShort(int month) {
-    const months = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
-    ];
-    return months[month - 1];
+  String _formatIndianCurrency(double amount) {
+    if (amount >= 100000) {
+      return "₹${(amount / 100000).toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '')}L";
+    } else if (amount >= 1000) {
+      return "₹${(amount / 1000).toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '')}k";
+    } else {
+      return "₹${amount.toStringAsFixed(0)}";
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final selectedFilter = ref.watch(dashboardFilterProvider);
-    final showGraph = ref.watch(graphVisibilityProvider);
-
-    // ── responsive values ──────────────────────────────────────
-    final hPad = R.hPad(context, base: AppSpacing.md);
+    final hPad = R.hPad(context, base: AppSpacing.lg);
     final gridCols = R.gridCols(context, phone: 2, tablet: 4, desktop: 4);
     final gridRatio = R.gridRatio(
       context,
@@ -154,495 +81,351 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       tablet: 2.0,
       desktop: 2.2,
     );
-    final sectionFs = R.fs(context, 18);
-    final chartH = R.fluid(context, 220, 320);
 
     return Scaffold(
       backgroundColor: AppColors.background,
-
-      // 🔹 APP BAR
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        elevation: 0,
-        title: Text(
-          "Dashboard",
-          style: TextStyle(
-            fontWeight: FontWeight.w500,
-            color: Colors.white,
-            fontSize: R.fs(context, 18),
+      // ── NO APPBAR ────────────────────────────────────────
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: hPad.copyWith(
+            top: R.sp(context, AppSpacing.lg),
+            bottom: R.sp(context, AppSpacing.xxl),
           ),
-        ),
-        actions: [
-          Padding(
-            padding: EdgeInsets.all(R.sp(context, 12)),
-            child: Icon(
-              Icons.notifications,
-              color: Colors.white,
-              size: R.icon(context, 24),
-            ),
-          ),
-        ],
-      ),
-
-      body: Container(
-        color: AppColors.primary,
-        child: ClipRRect(
-          borderRadius: AppCurve.top(context),
-          child: Container(
-            color: AppColors.background,
-            child: SingleChildScrollView(
-              padding: hPad.copyWith(
-                top: R.sp(context, AppSpacing.md),
-                bottom: R.sp(context, AppSpacing.md),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // =====================================================
+              // 🔹 INLINE HEADER  (replaces AppBar)
+              // =====================================================
+              Row(
                 children: [
-                  SizedBox(height: R.sp(context, 20)),
-
-                  // =====================================================
-                  // 🔹 HEADER
-                  // =====================================================
-                  Text(
-                    "Welcome, Admin 👋",
-                    style: AppTextStyles.heading.copyWith(
-                      fontSize: R.fs(
-                        context,
-                        AppTextStyles.heading.fontSize ?? 22,
-                      ),
-                      fontWeight: FontWeight.w500, // Added right here!
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Good morning, Admin 👋",
+                          style: AppTextStyles.heading,
+                        ),
+                        SizedBox(height: R.sp(context, AppSpacing.xs)),
+                        Text(
+                          "Here's what's happening today.",
+                          style: AppTextStyles.subHeading,
+                        ),
+                      ],
                     ),
                   ),
 
-                  SizedBox(height: R.sp(context, 4)),
-
-                  Text(
-                    "Here's what's happening today.",
-                    style: AppTextStyles.subHeading.copyWith(
-                      fontSize: R.fs(
-                        context,
-                        AppTextStyles.subHeading.fontSize ?? 14,
-                      ),
-                    ),
-                  ),
-
-                  SizedBox(height: R.sp(context, 20)),
-
-                  // =====================================================
-                  // 🔹 TOP 4 CARDS
-                  // =====================================================
-                  GridView.count(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    crossAxisCount: gridCols,
-                    crossAxisSpacing: R.sp(context, 12),
-                    mainAxisSpacing: R.sp(context, 12),
-                    childAspectRatio: gridRatio,
-                    children: [
-                      _topCard(
-                        context,
-                        "Total Products",
-                        "$totalProducts",
-                        Icons.inventory,
-                        Colors.blue,
-                        percentage: MetricHelper.calculatePercentage(
-                          totalProducts,
-                          pastProducts,
-                        ).abs(),
-                        isPositive: MetricHelper.checkIsPositive(
-                          totalProducts,
-                          pastProducts,
-                        ),
-                      ),
-                      _topCard(
-                        context,
-                        "Low Stock Items",
-                        "$lowStock",
-                        Icons.warning,
-                        Colors.red,
-                        percentage: MetricHelper.calculatePercentage(
-                          lowStock,
-                          pastLowStock,
-                        ).abs(),
-                        isPositive: MetricHelper.checkIsPositive(
-                          lowStock,
-                          pastLowStock,
-                        ),
-                      ),
-                      _topCard(
-                        context,
-                        "Total Sales",
-                        "₹ $totalSales",
-                        Icons.shopping_cart,
-                        Colors.green,
-                        percentage: MetricHelper.calculatePercentage(
-                          totalSales,
-                          pastSales,
-                        ).abs(),
-                        isPositive: MetricHelper.checkIsPositive(
-                          totalSales,
-                          pastSales,
-                        ),
-                      ),
-                      _topCard(
-                        context,
-                        "Suppliers",
-                        "$totalSuppliers",
-                        Icons.people,
-                        Colors.purple,
-                        percentage: MetricHelper.calculatePercentage(
-                          totalSuppliers,
-                          pastSuppliers,
-                        ).abs(),
-                        isPositive: MetricHelper.checkIsPositive(
-                          totalSuppliers,
-                          pastSuppliers,
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: R.sp(context, 24)),
-
-                  // =====================================================
-                  // 🔹 QUICK ACTIONS
-                  // =====================================================
-                  Text(
-                    "Quick Actions",
-                    style: TextStyle(
-                      fontSize: sectionFs,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.black,
-                    ),
-                  ),
-
-                  SizedBox(height: R.sp(context, 16)),
-
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _quickActionCard(
-                          context: context,
-                          icon: Icons.shopping_cart_outlined,
-                          title: "Add Bill",
-                          color: Colors.blue,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => CurrentBillScreen(),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-
-                      SizedBox(width: R.sp(context, 12)),
-
-                      Expanded(
-                        child: _quickActionCard(
-                          context: context,
-                          icon: Icons.add,
-                          title: "Add Product",
-                          color: Colors.blue,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const AddProductScreen(),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-
-                      SizedBox(width: R.sp(context, 12)),
-
-                      Expanded(
-                        child: _quickActionCard(
-                          context: context,
-                          icon: Icons.inventory_2_outlined,
-                          title: "Stock In",
-                          color: Colors.blue,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const ProductScreen(),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  SizedBox(height: R.sp(context, 24)),
-
-                  // =====================================================
-                  // 🔹 SALES OVERVIEW GRAPH
-                  // =====================================================
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "Sales Overview",
-                        style: TextStyle(
-                          fontSize: sectionFs,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-
-                      Row(
-                        children: [
-                          Text(
-                            "Show Graph",
-                            style: TextStyle(fontSize: R.fs(context, 12)),
-                          ),
-                          Switch(
-                            value: showGraph,
-                            onChanged: (value) async {
-                              ref.read(graphVisibilityProvider.notifier).state =
-                                  value;
-                              await DBHelper.saveGraphVisibility(value);
-                            },
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-
-                  SizedBox(height: R.sp(context, 12)),
-
-                  // ✅ GRAPH VISIBLE ONLY WHEN SWITCH IS ON
-                  if (showGraph)
-                    Container(
-                      padding: EdgeInsets.all(R.sp(context, AppSpacing.md)),
-                      decoration: BoxDecoration(
+                  // Avatar / initials
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: AppColors.primary,
+                    child: Text(
+                      "A",
+                      style: AppTextStyles.button.copyWith(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(
-                          R.radius(context, AppSizes.cardRadius),
-                        ),
-                        border: Border.all(
-                          color: Colors.grey.shade300, // border color
-                          width: 1, // stroke width
-                        ),
+                        fontSize: 14,
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    ),
+                  ),
+                ],
+              ),
+
+              SizedBox(height: R.sp(context, AppSpacing.lg)),
+
+              // =====================================================
+              // 🔹 HERO INVENTORY CARD  (dark blue gradient)
+              // =====================================================
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.all(R.sp(context, AppSpacing.xl)),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF1A3A6B), Color(0xFF0A1628)],
+                  ),
+                  borderRadius: BorderRadius.circular(AppSizes.radiusLg),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withOpacity(0.3),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Top row: label + badge
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          "SALES VALUE",
+                          style: AppTextStyles.small.copyWith(
+                            color: Colors.white60,
+                            letterSpacing: 1.2,
+                            fontSize: R.fs(context, 11),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.green.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(
+                              AppSizes.radiusSm,
+                            ),
+                          ),
+                          child: Row(
                             children: [
-                              DropdownButton<String>(
-                                value: selectedFilter,
-                                underline: const SizedBox(),
-                                style: TextStyle(
-                                  fontSize: R.fs(context, 14),
-                                  color: Colors.black,
+                              Icon(
+                                Icons.trending_up,
+                                color: AppColors.green,
+                                size: R.icon(context, 12),
+                              ),
+                              SizedBox(width: R.sp(context, 4)),
+                              Text(
+                                "${MetricHelper.calculatePercentage(totalProducts, pastProducts).abs().toStringAsFixed(1)}%",
+                                style: AppTextStyles.small.copyWith(
+                                  color: AppColors.green,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: R.fs(context, 11),
                                 ),
-                                items: filters
-                                    .map(
-                                      (e) => DropdownMenuItem(
-                                        value: e,
-                                        child: Text(e),
-                                      ),
-                                    )
-                                    .toList(),
-                                onChanged: (val) async {
-                                  ref
-                                          .read(
-                                            dashboardFilterProvider.notifier,
-                                          )
-                                          .state =
-                                      val!;
-                                  await loadDashboardData();
-                                },
                               ),
                             ],
                           ),
+                        ),
+                      ],
+                    ),
 
-                          SizedBox(height: R.sp(context, 20)),
+                    SizedBox(height: R.sp(context, AppSpacing.sm)),
 
-                          SizedBox(
-                            height: chartH,
-                            child: Builder(
-                              builder: (context) {
-                                double highestSale = salesData.isEmpty
-                                    ? 0
-                                    : salesData.reduce((a, b) => a > b ? a : b);
-                                double maxValue = highestSale < 500000
-                                    ? 500000
-                                    : highestSale + 100000;
-                                double interval = 100000;
-
-                                return LineChart(
-                                  LineChartData(
-                                    minY: 0,
-                                    maxY: maxValue,
-                                    gridData: FlGridData(
-                                      show: true,
-                                      drawVerticalLine: false,
-                                    ),
-                                    borderData: FlBorderData(
-                                      show: true,
-                                      border: const Border(
-                                        left: BorderSide(color: Colors.black12),
-                                        bottom: BorderSide(
-                                          color: Colors.black12,
-                                        ),
-                                        top: BorderSide(
-                                          color: Colors.transparent,
-                                        ),
-                                        right: BorderSide(
-                                          color: Colors.transparent,
-                                        ),
-                                      ),
-                                    ),
-                                    titlesData: FlTitlesData(
-                                      topTitles: AxisTitles(
-                                        sideTitles: SideTitles(
-                                          showTitles: false,
-                                        ),
-                                      ),
-                                      rightTitles: AxisTitles(
-                                        sideTitles: SideTitles(
-                                          showTitles: false,
-                                        ),
-                                      ),
-                                      leftTitles: AxisTitles(
-                                        sideTitles: SideTitles(
-                                          showTitles: true,
-                                          reservedSize: R.fluid(
-                                            context,
-                                            40,
-                                            56,
-                                          ),
-                                          interval: interval,
-                                          getTitlesWidget: (value, _) {
-                                            final labelFs = R.fs(context, 10);
-                                            if (value == 0) {
-                                              return Text(
-                                                "0",
-                                                style: TextStyle(
-                                                  fontSize: labelFs,
-                                                ),
-                                              );
-                                            }
-                                            if (value == 100000) {
-                                              return Text(
-                                                "1L",
-                                                style: TextStyle(
-                                                  fontSize: labelFs,
-                                                ),
-                                              );
-                                            }
-                                            if (value == 200000) {
-                                              return Text(
-                                                "2L",
-                                                style: TextStyle(
-                                                  fontSize: labelFs,
-                                                ),
-                                              );
-                                            }
-                                            if (value == 300000) {
-                                              return Text(
-                                                "3L",
-                                                style: TextStyle(
-                                                  fontSize: labelFs,
-                                                ),
-                                              );
-                                            }
-                                            if (value == 400000) {
-                                              return Text(
-                                                "4L",
-                                                style: TextStyle(
-                                                  fontSize: labelFs,
-                                                ),
-                                              );
-                                            }
-                                            if (value == 500000) {
-                                              return Text(
-                                                "5L",
-                                                style: TextStyle(
-                                                  fontSize: labelFs,
-                                                ),
-                                              );
-                                            }
-                                            return const SizedBox();
-                                          },
-                                        ),
-                                      ),
-                                      bottomTitles: AxisTitles(
-                                        sideTitles: SideTitles(
-                                          showTitles: true,
-                                          getTitlesWidget: (value, _) {
-                                            int i = value.toInt();
-                                            if (i < 0 ||
-                                                i >= chartLabels.length) {
-                                              return const SizedBox();
-                                            }
-                                            return Padding(
-                                              padding: EdgeInsets.only(
-                                                top: R.sp(context, 8),
-                                              ),
-                                              child: Text(
-                                                chartLabels[i],
-                                                style: TextStyle(
-                                                  fontSize: R.fs(context, 10),
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                    ),
-                                    lineBarsData: [
-                                      LineChartBarData(
-                                        spots: List.generate(
-                                          salesData.length,
-                                          (i) => FlSpot(
-                                            i.toDouble(),
-                                            salesData[i],
-                                          ),
-                                        ),
-                                        isCurved: true,
-                                        curveSmoothness: 0.35,
-                                        barWidth: 4,
-                                        color: Colors.blue,
-                                        isStrokeCapRound: true,
-                                        dotData: FlDotData(
-                                          show: true,
-                                          getDotPainter:
-                                              (spot, percent, barData, index) {
-                                                return FlDotCirclePainter(
-                                                  radius: R.fluid(
-                                                    context,
-                                                    4,
-                                                    6,
-                                                  ),
-                                                  color: Colors.white,
-                                                  strokeWidth: 3,
-                                                  strokeColor: Colors.blue,
-                                                );
-                                              },
-                                        ),
-                                        belowBarData: BarAreaData(
-                                          show: true,
-                                          color: Colors.blue.withOpacity(0.12),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
+                    // Big value
+                    Text(
+                      _formatIndianCurrency(todaySalesAmount),
+                      style: AppTextStyles.heading.copyWith(
+                        color: Colors.white,
+                        fontSize: R.fs(context, 36),
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
+
+                    SizedBox(height: R.sp(context, AppSpacing.sm)),
+
+                    // Sub stats row
+                    Row(
+                      children: [
+                        Text(
+                          "$totalProducts units · $totalSales SKUs",
+                          style: AppTextStyles.small.copyWith(
+                            color: Colors.white54,
+                            fontSize: R.fs(context, 12),
+                          ),
+                        ),
+                        const Spacer(),
+                        // Mini bar chart visual
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: List.generate(5, (i) {
+                            final heights = [12.0, 18.0, 14.0, 22.0, 16.0];
+                            return Padding(
+                              padding: const EdgeInsets.only(left: 3),
+                              child: Container(
+                                width: 6,
+                                height: heights[i],
+                                decoration: BoxDecoration(
+                                  color: i == 3
+                                      ? AppColors.cyan
+                                      : Colors.white.withOpacity(0.35),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              SizedBox(height: R.sp(context, AppSpacing.sectionGap)),
+
+              // =====================================================
+              // 🔹 NEEDS ATTENTION  (colored mini-cards)
+              // =====================================================
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("Needs attention", style: AppTextStyles.sectionTitle),
+                  TextButton(
+                    onPressed: () {},
+                    child: Text(
+                      "View all",
+                      style: AppTextStyles.small.copyWith(
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
                 ],
               ),
-            ),
+
+              SizedBox(height: R.sp(context, AppSpacing.sm)),
+              Row(
+                children: [
+                  Expanded(
+                    child: _attentionCard(
+                      context,
+                      icon: Icons.inventory,
+                      iconColor: AppColors.cyan,
+                      bgColor: AppColors.cyan.withOpacity(0.08),
+                      count: "$totalProducts",
+                      countColor: AppColors.cyan,
+                      label: "Total Products",
+                      subLabel: "Products in inventory",
+                      percentage: MetricHelper.calculatePercentage(
+                        totalProducts,
+                        pastProducts,
+                      ).abs(),
+                      isPositive: MetricHelper.checkIsPositive(
+                        totalProducts,
+                        pastProducts,
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: R.sp(context, AppSpacing.sm)),
+                  Expanded(
+                    child: _attentionCard(
+                      context,
+                      icon: Icons.warning,
+                      iconColor: AppColors.red,
+                      bgColor: AppColors.red.withOpacity(0.08),
+                      count: "$lowStock",
+                      countColor: AppColors.red,
+                      label: "Low Stock Items",
+                      subLabel: "Need restocking",
+                      percentage: MetricHelper.calculatePercentage(
+                        lowStock,
+                        pastLowStock,
+                      ).abs(),
+                      isPositive: MetricHelper.checkIsPositive(
+                        lowStock,
+                        pastLowStock,
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: R.sp(context, AppSpacing.sm)),
+                  Expanded(
+                    child: _attentionCard(
+                      context,
+                      icon: Icons.people,
+                      iconColor: AppColors.primary,
+                      bgColor: AppColors.primary.withOpacity(0.08),
+                      count: "$totalSuppliers",
+                      countColor: AppColors.primary,
+                      label: "Suppliers",
+                      subLabel: "Active suppliers",
+                      percentage: MetricHelper.calculatePercentage(
+                        totalSuppliers,
+                        pastSuppliers,
+                      ).abs(),
+                      isPositive: MetricHelper.checkIsPositive(
+                        totalSuppliers,
+                        pastSuppliers,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              SizedBox(height: R.sp(context, AppSpacing.sectionGap)),
+
+              // =====================================================
+              // 🔹 DAILY SUMMARY CARDS
+              // =====================================================
+              Row(
+                children: [
+                  Expanded(
+                    child: _summaryCard(
+                      context,
+                      "Today's sales",
+                      _formatIndianCurrency(todaySalesAmount),
+                      icon: Icons.attach_money_rounded,
+                      iconColor: AppColors.green,
+                    ),
+                  ),
+                  SizedBox(width: R.sp(context, AppSpacing.md)),
+                  Expanded(
+                    child: _summaryCard(
+                      context,
+                      "Receivables",
+                      _formatIndianCurrency(receivablesAmount),
+                      icon: Icons.credit_card_outlined,
+                      iconColor: AppColors.primary,
+                    ),
+                  ),
+                ],
+              ),
+
+              SizedBox(height: R.sp(context, AppSpacing.sectionGap)),
+
+              // =====================================================
+              // 🔹 QUICK ACTIONS  (icon circles like reference image)
+              // =====================================================
+              Text("Quick Actions", style: AppTextStyles.sectionTitle),
+              SizedBox(height: R.sp(context, AppSpacing.lg)),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _quickActionCircle(
+                    context: context,
+                    icon: Icons.currency_rupee,
+                    label: "New Sale",
+                    filled: true,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => CurrentBillScreen()),
+                    ),
+                  ),
+                  _quickActionCircle(
+                    context: context,
+                    icon: Icons.inventory_2_outlined,
+                    label: "Stock In",
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ProductScreen()),
+                    ),
+                  ),
+                  _quickActionCircle(
+                    context: context,
+                    icon: Icons.outbox_outlined,
+                    label: "Stock Out",
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ProductScreen()),
+                    ),
+                  ),
+                  _quickActionCircle(
+                    context: context,
+                    icon: Icons.add,
+                    label: "Add Product",
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AddProductScreen(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              SizedBox(height: R.sp(context, AppSpacing.sectionGap)),
+            ],
           ),
         ),
       ),
@@ -651,94 +434,184 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 }
 
 // =====================================================
-// 🔹 TOP CARD  (now context-aware)
+// 🔹 ATTENTION CARD  (colored pastel bg)
 // =====================================================
-Widget _topCard(
-  BuildContext context,
-  String title,
-  String value,
-  IconData icon,
-  Color color, {
+Widget _attentionCard(
+  BuildContext context, {
+  required IconData icon,
+  required Color iconColor,
+  required Color bgColor,
+  required String count,
+  required Color countColor,
+  required String label,
+  required String subLabel,
   required double percentage,
   required bool isPositive,
 }) {
   return Container(
-    padding: EdgeInsets.all(R.sp(context, 12)),
+    padding: EdgeInsets.all(R.sp(context, AppSpacing.md)),
     decoration: BoxDecoration(
-      color: color.withOpacity(0.08),
-      borderRadius: BorderRadius.circular(R.radius(context, 16)),
+      color: bgColor,
+      borderRadius: BorderRadius.circular(AppSizes.radiusLg),
+      border: Border.all(color: iconColor.withOpacity(0.15)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: iconColor, size: AppSizes.iconMd),
+        SizedBox(height: R.sp(context, AppSpacing.xs)),
+        Text(
+          count,
+          style: AppTextStyles.cardValue.copyWith(
+            color: countColor,
+            fontSize: R.fs(context, 20),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(
+          label,
+          style: AppTextStyles.small.copyWith(
+            fontWeight: FontWeight.w600,
+            fontSize: R.fs(context, 11),
+          ),
+        ),
+        Text(
+          subLabel,
+          style: AppTextStyles.small.copyWith(
+            color: AppColors.textSecondary,
+            fontSize: R.fs(context, 10),
+          ),
+        ),
+        Row(
+          children: [
+            Icon(
+              isPositive ? Icons.trending_up : Icons.trending_down,
+              size: R.icon(context, 10),
+              color: isPositive ? AppColors.green : AppColors.red,
+            ),
+            SizedBox(width: R.sp(context, 4)),
+            Flexible(
+              child: Text(
+                "${percentage.toStringAsFixed(1)}%",
+                style: AppTextStyles.small.copyWith(
+                  color: isPositive ? AppColors.green : AppColors.red,
+                  fontSize: R.fs(context, 9),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+// =====================================================
+// 🔹 QUICK ACTION  (icon circle like reference image)
+// =====================================================
+Widget _quickActionCircle({
+  required BuildContext context,
+  required IconData icon,
+  required String label,
+  bool filled = false,
+  VoidCallback? onTap,
+}) {
+  return GestureDetector(
+    onTap: onTap,
+    child: Column(
+      children: [
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: filled ? AppColors.primary : AppColors.card,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: filled ? AppColors.primary : AppColors.border,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withOpacity(filled ? 0.25 : 0.08),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Icon(
+            icon,
+            color: filled ? Colors.white : AppColors.primary,
+            size: AppSizes.iconMd,
+          ),
+        ),
+        SizedBox(height: R.sp(context, AppSpacing.xs)),
+        Text(
+          label,
+          style: AppTextStyles.small.copyWith(
+            fontSize: R.fs(context, 11),
+            color: AppColors.textSecondary,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    ),
+  );
+}
+
+// =====================================================
+// 🔹 SUMMARY CARD  (unchanged logic, added icon)
+// =====================================================
+Widget _summaryCard(
+  BuildContext context,
+  String title,
+  String value, {
+  required IconData icon,
+  required Color iconColor,
+}) {
+  return Container(
+    padding: EdgeInsets.all(R.sp(context, AppSpacing.md)),
+    decoration: BoxDecoration(
+      color: AppColors.card,
+      border: Border.all(color: AppColors.border),
+      borderRadius: BorderRadius.circular(AppSizes.radiusLg),
     ),
     child: Row(
       children: [
-        CircleAvatar(
-          radius: R.fluid(context, 20, 28),
-          backgroundColor: color.withOpacity(0.2),
-          child: Icon(icon, color: color, size: R.icon(context, 22)),
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: iconColor.withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: iconColor, size: AppSizes.iconMd),
         ),
-        SizedBox(width: R.sp(context, 10)),
+        SizedBox(width: R.sp(context, AppSpacing.sm)),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
                 title,
-                style: TextStyle(fontSize: R.fs(context, 11)),
-                maxLines: 2,
+                style: AppTextStyles.cardTitle.copyWith(
+                  fontSize: R.fs(context, 12),
+                  color: AppColors.textSecondary,
+                ),
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              SizedBox(height: R.sp(context, 4)),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      value,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w500,
-                        fontSize: R.fs(context, 14),
-                      ),
-                    ),
+              SizedBox(height: R.sp(context, AppSpacing.xs)),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  style: AppTextStyles.cardValue.copyWith(
+                    fontSize: R.fs(context, 18),
                   ),
-
-                  SizedBox(height: R.sp(context, 4)),
-
-                  Row(
-                    children: [
-                      Icon(
-                        isPositive ? Icons.trending_up : Icons.trending_down,
-                        size: R.icon(context, 12),
-                        color: isPositive ? Colors.green : Colors.red,
-                      ),
-
-                      SizedBox(width: R.sp(context, 2)),
-
-                      Text(
-                        "${percentage.toStringAsFixed(1)}%",
-                        style: TextStyle(
-                          color: isPositive ? Colors.green : Colors.red,
-                          fontWeight: FontWeight.w500,
-                          fontSize: R.fs(context, 9),
-                        ),
-                      ),
-
-                      SizedBox(width: R.sp(context, 3)),
-
-                      Expanded(
-                        child: Text(
-                          "from last month",
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: R.fs(context, 8),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                  maxLines: 1,
+                ),
               ),
             ],
           ),
@@ -749,53 +622,15 @@ Widget _topCard(
 }
 
 // =====================================================
-// 🔹 QUICK ACTION CARD  (now context-aware)
-// =====================================================
-Widget _quickActionCard({
-  required BuildContext context,
-  required IconData icon,
-  required String title,
-  required Color color,
-  VoidCallback? onTap,
-}) {
-  return GestureDetector(
-    onTap: onTap,
-    child: Container(
-      padding: EdgeInsets.symmetric(vertical: R.sp(context, 18)),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(R.radius(context, 16)),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: R.icon(context, 26)),
-          SizedBox(height: R.sp(context, 10)),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: R.fs(context, 12),
-              color: Colors.black87,
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-// =====================================================
-// 🔹 METRIC CALCULATION HELPER
+// 🔹 METRIC HELPER  (unchanged)
 // =====================================================
 class MetricHelper {
-  // Calculates the percentage change between current and previous values
   static double calculatePercentage(num current, num previous) {
-    if (previous == 0) return 0.0; // Prevent division by zero
+    if (previous == 0) return 0.0;
     double change = ((current - previous) / previous) * 100;
     return double.parse(change.toStringAsFixed(1));
   }
 
-  // Determines if the trend is positive (growth) or negative
   static bool checkIsPositive(num current, num previous) {
     return current >= previous;
   }
