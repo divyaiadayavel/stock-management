@@ -19,15 +19,13 @@ import 'business/customize_screen.dart';
 // staff/
 import 'staff/roles_permissions_screen.dart';
 
-// operations/hardware/
-import 'operations/hardware/printers_hardware_screen.dart';
 
 // operations/data/
 import 'operations/data/backup_sync_screen.dart';
 import 'operations/data/notifications_screen.dart';
 
 // operations/inventory/
-import 'operations/inventory/inventory_preferences_screen.dart';
+import 'operations/printers_hardware/printer_management/printers_hardware_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -415,7 +413,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const PrintersHardwareScreen(),
+                          builder: (context) => PrintersHardwareScreen(),
                         ),
                       );
                     },

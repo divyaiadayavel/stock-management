@@ -153,4 +153,145 @@ class APIService {
       return null;
     }
   }
+
+  // ==========================================
+  // 🖨️ PRINTERS & HARDWARE API ENDPOINTS
+  // ==========================================
+
+  static Future<List<Map<String, dynamic>>> getSavedPrinters(int userId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('${ApiConfig.getSavedPrinters}?user_id=$userId'),
+        headers: ApiConfig.jsonHeaders,
+      );
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded['success'] == true) {
+          return List<Map<String, dynamic>>.from(decoded['data']['printers'] ?? []);
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  static Future<bool> saveDefaultPrinter(Map<String, dynamic> printerData) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.saveDefaultPrinter),
+        headers: ApiConfig.jsonHeaders,
+        body: jsonEncode(printerData),
+      );
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        return decoded['success'] == true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<bool> deletePrinter(int userId, String printerId) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.deletePrinter),
+        headers: ApiConfig.jsonHeaders,
+        body: jsonEncode({'user_id': userId, 'printerId': printerId}),
+      );
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        return decoded['success'] == true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> getReceiptSettings(int userId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('${ApiConfig.getReceiptSettings}?user_id=$userId'),
+        headers: ApiConfig.jsonHeaders,
+      );
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded['success'] == true) {
+          return Map<String, dynamic>.from(decoded['data']['receiptSettings'] ?? {});
+        }
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static Future<bool> saveReceiptSettings(Map<String, dynamic> settingsData) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.saveReceiptSettings),
+        headers: ApiConfig.jsonHeaders,
+        body: jsonEncode(settingsData),
+      );
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        return decoded['success'] == true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // ==========================================
+  // 🧾 PRINTED BILLS BACKUP ENDPOINTS
+  // ==========================================
+  // Every print attempt (Test Print or a real sale receipt later),
+  // success or failure, gets written to a dedicated `printed_bills`
+  // MySQL table on the server — not on-device SQLite — so bills can be
+  // audited or reprinted from any device.
+
+  static Future<bool> savePrintedBill(Map<String, dynamic> billData) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.savePrintedBill),
+        headers: ApiConfig.jsonHeaders,
+        body: jsonEncode(billData),
+      );
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        return decoded['success'] == true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getPrintedBills(
+    int userId, {
+    int limit = 50,
+    String? status,
+  }) async {
+    try {
+      final query = StringBuffer('?user_id=$userId&limit=$limit');
+      if (status != null) query.write('&status=$status');
+
+      final response = await http.get(
+        Uri.parse('${ApiConfig.getPrintedBills}$query'),
+        headers: ApiConfig.jsonHeaders,
+      );
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded['success'] == true) {
+          return List<Map<String, dynamic>>.from(decoded['data']['bills'] ?? []);
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
 }

@@ -5,6 +5,7 @@ plugins {
 }
 
 android {
+
     namespace = "com.example.stock_management"
 
     compileSdk = 36
@@ -20,9 +21,12 @@ android {
     }
 
     defaultConfig {
+
         applicationId = "com.example.stock_management"
 
+        // Production recommendation
         minSdk = flutter.minSdkVersion
+
         targetSdk = 36
 
         versionCode = flutter.versionCode
@@ -31,9 +35,18 @@ android {
 
     buildTypes {
         release {
+
+            // Replace with your production signing later
             signingConfig = signingConfigs.getByName("debug")
+
             isMinifyEnabled = false
             isShrinkResources = false
+        }
+    }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
 }
