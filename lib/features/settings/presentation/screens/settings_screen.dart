@@ -5,7 +5,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/app_colors.dart';
-// import '../../../../core/constants/app_curve.dart';
+import '../../../../core/constants/app_sizes.dart';
+import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/constants/app_text_styles.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../domain/entities/business_profile.dart';
 
@@ -18,7 +20,6 @@ import 'business/customize_screen.dart';
 
 // staff/
 import 'staff/roles_permissions_screen.dart';
-
 
 // operations/data/
 import 'operations/data/backup_sync_screen.dart';
@@ -50,9 +51,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (!mounted) return;
 
       ref.read(storeNameProvider.notifier).state = profile.storeName;
-
       ref.read(taglineProvider.notifier).state = profile.tagline;
-
       ref.read(logoPathProvider.notifier).state = profile.logoPath;
     } catch (e) {
       debugPrint("Error loading profile: $e");
@@ -73,7 +72,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           builder: (context, setPopupState) {
             return AlertDialog(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(AppSizes.radiusXl),
               ),
               title: const Text("Edit Branding"),
               content: SingleChildScrollView(
@@ -84,13 +83,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       children: [
                         CircleAvatar(
                           radius: 50,
-                          backgroundColor: Colors.blue.shade50,
+                          backgroundColor: AppColors.primary.withValues(
+                            alpha: 0.08,
+                          ),
                           backgroundImage: _logoImageProvider(tempLogo),
                           child: (tempLogo?.isEmpty ?? true)
                               ? const Icon(
                                   Icons.store,
                                   size: 45,
-                                  color: Colors.blue,
+                                  color: AppColors.primary,
                                 )
                               : null,
                         ),
@@ -124,12 +125,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             child: Container(
                               padding: const EdgeInsets.all(7),
                               decoration: const BoxDecoration(
-                                color: Colors.blue,
+                                color: AppColors.primary,
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(
                                 Icons.edit,
-                                color: Colors.white,
+                                color: AppColors.textWhite,
                                 size: 18,
                               ),
                             ),
@@ -137,23 +138,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 25),
+                    const SizedBox(height: AppSpacing.xl),
                     TextField(
                       controller: nameCtrl,
                       decoration: InputDecoration(
                         labelText: "App Name",
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(
+                            AppSizes.radiusLg,
+                          ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: AppSpacing.lg),
                     TextField(
                       controller: taglineCtrl,
                       decoration: InputDecoration(
                         labelText: "Tagline",
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(
+                            AppSizes.radiusLg,
+                          ),
                         ),
                       ),
                     ),
@@ -196,7 +201,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ScaffoldMessenger.of(this.context).showSnackBar(
                         SnackBar(
                           content: Text("Failed to save: $e"),
-                          backgroundColor: Colors.red,
+                          backgroundColor: AppColors.red,
                         ),
                       );
                     }
@@ -216,6 +221,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppSizes.radiusLg),
+          ),
           title: const Text("Logout"),
           content: const Text("Do you want to logout from this account?"),
           actions: [
@@ -239,69 +247,132 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
   }
 
-  Widget profileCard() {
+  // ── Samsung-style profile header (top card) ──
+  Widget profileHeader() {
     final storeName = ref.watch(storeNameProvider);
     final tagline = ref.watch(taglineProvider);
     final logoPath = ref.watch(logoPathProvider);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        children: [
-          Stack(
+
+    return _groupCard(
+      child: InkWell(
+        onTap: openEditDialog,
+        borderRadius: BorderRadius.circular(AppSizes.cardRadius),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.cardPadding),
+          child: Row(
             children: [
-              CircleAvatar(
-                radius: 50,
-                backgroundColor: Colors.blue.shade50,
-                backgroundImage: _logoImageProvider(logoPath),
-                child: (logoPath == null || logoPath.isEmpty)
-                    ? const Icon(Icons.store, size: 45, color: Colors.blue)
-                    : null,
-              ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: GestureDetector(
-                  onTap: openEditDialog,
-                  child: Container(
-                    padding: const EdgeInsets.all(7),
-                    decoration: const BoxDecoration(
-                      color: Colors.blue,
-                      shape: BoxShape.circle,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      storeName.isEmpty ? "Your Store Name" : storeName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.cardValue.copyWith(
+                        fontSize: 19,
+                        fontFamily: AppTextStyles.fontDisplay,
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.edit,
-                      color: Colors.white,
-                      size: 18,
+                    const SizedBox(height: AppSpacing.xs),
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      decoration: const BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(color: AppColors.border, width: 1),
+                        ),
+                      ),
+                      child: Text(
+                        tagline.isEmpty ? "Tap to edit branding" : tagline,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.small.copyWith(
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundColor: AppColors.primary.withValues(alpha: 0.08),
+                    backgroundImage: _logoImageProvider(logoPath),
+                    child: (logoPath == null || logoPath.isEmpty)
+                        ? const Icon(
+                            Icons.store,
+                            size: 26,
+                            color: AppColors.primary,
+                          )
+                        : null,
+                  ),
+                  Positioned(
+                    bottom: -2,
+                    right: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.card, width: 2),
+                      ),
+                      child: const Icon(
+                        Icons.edit,
+                        color: AppColors.textWhite,
+                        size: 12,
+                      ),
                     ),
                   ),
-                ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 22),
-          Text(
-            storeName.isEmpty ? "Your Store Name" : storeName,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.blue,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            tagline.isEmpty ? "Add your tagline" : tagline,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 15, color: Colors.black54),
-          ),
-        ],
+        ),
       ),
     );
+  }
+
+  // ── Samsung-style grouped card wrapper ──
+  Widget _groupCard({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppSizes.cardRadius),
+        border: Border.all(color: AppColors.border, width: 1),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+  }
+
+  // ── Samsung-style group: tiles + a divider inset evenly on BOTH sides ──
+  // (matches the reference — the line doesn't start after the icon,
+  // it sits centered inside the card's horizontal padding)
+  Widget _group(List<Widget> tiles) {
+    final children = <Widget>[];
+    for (var i = 0; i < tiles.length; i++) {
+      children.add(tiles[i]);
+      if (i != tiles.length - 1) {
+        children.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.cardPadding,
+            ),
+            child: const Divider(
+              height: 1,
+              thickness: 1,
+              color: AppColors.border,
+            ),
+          ),
+        );
+      }
+    }
+    return _groupCard(child: Column(children: children));
   }
 
   @override
@@ -312,205 +383,210 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         : authState.currentRole;
 
     return Scaffold(
-      backgroundColor: AppColors.primary,
-
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.background,
         elevation: 0,
-        title: const Text(
-          "Settings",
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-        ),
+        surfaceTintColor: Colors.transparent,
+        title: Text("Settings", style: AppTextStyles.appBarTitle),
       ),
-      body: Container(
-        color: AppColors.primary,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.screenPadding,
+            vertical: AppSpacing.md,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              profileHeader(),
+              const SizedBox(height: AppSpacing.sm),
 
-        child: ClipRRect(
-          // borderRadius: AppCurve.top(context),
+              _group([
+                _tile(
+                  Icons.store,
+                  "Business Profile",
+                  "Store details, address",
+                  iconBg: AppColors.primary,
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const BusinessProfileScreen(),
+                      ),
+                    );
+                    loadProfile();
+                  },
+                ),
+                _tile(
+                  Icons.receipt_long,
+                  "Invoice & Tax",
+                  "GST, invoice, taxes",
+                  iconBg: AppColors.cyan,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const InvoiceTaxScreen(),
+                      ),
+                    );
+                  },
+                ),
+                _tile(
+                  Icons.tune,
+                  "Customize",
+                  "Category, Units",
+                  iconBg: AppColors.orange,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const CustomizeScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ]),
 
-          child: Container(
-            color: Colors.grey.shade100,
+              _group([
+                _tile(
+                  Icons.print,
+                  "Printers & Hardware",
+                  "Bluetooth, Thermal, Barcode",
+                  iconBg: AppColors.green,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PrintersHardwareScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ]),
 
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(12),
+              _group([
+                _tile(
+                  Icons.people,
+                  "User Roles & Permissions",
+                  "Manage staff and access",
+                  iconBg: AppColors.primaryHover,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const UserRolesScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ]),
 
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  profileCard(),
-                  const SizedBox(height: 20),
-                  const Text(
-                    "ACCOUNT",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 10),
-                  _tile(
-                    Icons.logout,
-                    "Logout",
-                    "${authState.displayName} - $currentRole",
-                    onTap: _confirmLogout,
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    "BUSINESS",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 10),
+              _group([
+                _tile(
+                  Icons.backup,
+                  "Backup & Sync",
+                  "Auto backup and restore",
+                  iconBg: AppColors.cyanDim,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const BackupSyncScreen(),
+                      ),
+                    );
+                  },
+                ),
+                _tile(
+                  Icons.notifications,
+                  "Notifications",
+                  "Alerts and updates",
+                  iconBg: AppColors.orange,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const NotificationsScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ]),
 
-                  // ✅ Updated Tile to handle navigation
-                  _tile(
-                    Icons.store,
-                    "Business Profile",
-                    "Store details, address",
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const BusinessProfileScreen(),
-                        ),
-                      );
-                      loadProfile(); // Reload in case store name was updated
-                    },
-                  ),
+              const SizedBox(height: AppSpacing.xl),
 
-                  _tile(
-                    Icons.receipt_long,
-                    "Invoice & Tax",
-                    "GST, invoice, taxes",
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const InvoiceTaxScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  _tile(
-                    Icons.tune,
-                    "Customize",
-                    "Category, Units",
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const CustomizeScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    "HARDWARE",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 10),
-                  _tile(
-                    Icons.print,
-                    "Printers & Hardware",
-                    "Bluetooth, Thermal, Barcode",
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => PrintersHardwareScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    "STAFF",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 10),
-                  _tile(
-                    Icons.people,
-                    "User Roles & Permissions",
-                    "Manage staff and access",
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const UserRolesScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    "DATA & PREFERENCES",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 10),
-                  _tile(
-                    Icons.backup,
-                    "Backup & Sync",
-                    "Auto backup and restore",
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const BackupSyncScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  _tile(
-                    Icons.notifications,
-                    "Notifications",
-                    "Alerts and updates",
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const NotificationsScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                ],
-              ),
-            ),
+              // ── Logout pinned at the bottom of the list ──
+              _group([
+                _tile(
+                  Icons.logout,
+                  "Logout",
+                  "${authState.displayName} - $currentRole",
+                  iconBg: AppColors.red,
+                  titleColor: AppColors.red,
+                  onTap: _confirmLogout,
+                ),
+              ]),
+
+              const SizedBox(height: AppSpacing.xxl),
+            ],
           ),
         ),
       ),
     );
   }
 
-  // ✅ Added onTap parameter and wrapped in InkWell
-  Widget _tile(IconData icon, String title, String sub, {VoidCallback? onTap}) {
+  // ── Samsung-style tile: solid colored circle + white icon, flat row ──
+  Widget _tile(
+    IconData icon,
+    String title,
+    String sub, {
+    required Color iconBg,
+    VoidCallback? onTap,
+    Color? titleColor,
+  }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.cardPadding,
+          vertical: AppSpacing.md,
         ),
         child: Row(
           children: [
-            CircleAvatar(
-              backgroundColor: Colors.grey.shade200,
-              child: Icon(icon, color: Colors.black54),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
+              child: Icon(
+                icon,
+                color: AppColors.textWhite,
+                size: AppSizes.iconMd,
+              ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: AppTextStyles.cardValue.copyWith(
+                      fontSize: 15,
+                      fontFamily: AppTextStyles.fontBody,
+                      fontWeight: FontWeight.w500,
+                      color: titleColor ?? AppColors.textPrimaryDark,
+                    ),
                   ),
-                  Text(sub, style: const TextStyle(color: Colors.grey)),
+                  const SizedBox(height: 2),
+                  Text(
+                    sub,
+                    style: AppTextStyles.small,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_ios, size: 16),
           ],
         ),
       ),

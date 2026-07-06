@@ -1,17 +1,23 @@
 import 'package:flutter/material.dart';
-import '../../../../../core/storage/db_helper.dart';
-import '../../../../../core/constants/app_colors.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class CustomizeScreen extends StatefulWidget {
+import '../../../../../core/constants/app_colors.dart';
+import '../../../../../core/constants/app_sizes.dart';
+import '../../../../../core/constants/app_spacing.dart';
+import '../../../../../core/constants/app_text_styles.dart';
+import '../../providers/settings_provider.dart';
+
+class CustomizeScreen extends ConsumerStatefulWidget {
   const CustomizeScreen({super.key});
 
   @override
-  State<CustomizeScreen> createState() => _CustomizeScreenState();
+  ConsumerState<CustomizeScreen> createState() => _CustomizeScreenState();
 }
 
-class _CustomizeScreenState extends State<CustomizeScreen> {
+class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
   bool isLoading = true;
 
+  // Default values
   bool barcodeEnabled = true;
   bool lowStockAlert = true;
   String lowStockLimit = "5";
@@ -24,15 +30,17 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
   }
 
   Future<void> _loadSettings() async {
-    String? barcodeStr = await DBHelper.getSetting("barcodeEnabled");
+    final settings = await ref.read(settingsRepositoryProvider).getSettings();
+
+    String? barcodeStr = settings["barcodeEnabled"];
     barcodeEnabled = barcodeStr == null ? true : barcodeStr == "true";
 
-    String? alertStr = await DBHelper.getSetting("lowStockAlert");
+    String? alertStr = settings["lowStockAlert"];
     lowStockAlert = alertStr == null ? true : alertStr == "true";
 
-    lowStockLimit = await DBHelper.getSetting("lowStockLimit") ?? "5";
+    lowStockLimit = settings["lowStockLimit"] ?? "5";
 
-    String? stockStr = await DBHelper.getSetting("stockManagement");
+    String? stockStr = settings["stockManagement"];
     stockManagement = stockStr == null ? true : stockStr == "true";
 
     if (mounted) {
@@ -43,7 +51,9 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
   }
 
   Future<void> _updateToggleSetting(String dbKey, bool newValue) async {
-    await DBHelper.saveSetting(dbKey, newValue.toString());
+    await ref
+        .read(settingsRepositoryProvider)
+        .saveSetting(dbKey, newValue.toString());
     setState(() {
       if (dbKey == "barcodeEnabled") barcodeEnabled = newValue;
       if (dbKey == "lowStockAlert") lowStockAlert = newValue;
@@ -51,47 +61,151 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
     });
   }
 
-  void _openEditDialog() {
+  // ── Simple AlertDialog — Adapted from InvoiceTaxScreen ──
+  void _openEditDialog(String title, String dbKey, String currentValue, {TextInputType? keyboardType}) {
     final TextEditingController ctrl = TextEditingController(
-      text: lowStockLimit,
+      text: currentValue,
     );
+    final messenger = ScaffoldMessenger.of(context);
 
     showDialog(
       context: context,
-      builder: (_) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Text("Edit Low Stock Limit"),
-          content: TextField(
-            controller: ctrl,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: "Limit Quantity",
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel"),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                String newValue = ctrl.text.trim();
-                await DBHelper.saveSetting("lowStockLimit", newValue);
+      builder: (dialogContext) {
+        bool isSaving = false;
+        String? errorText;
 
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  _loadSettings();
-                }
-              },
-              child: const Text("Save"),
-            ),
-          ],
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> handleSave() async {
+              final newValue = ctrl.text.trim();
+
+              setDialogState(() {
+                isSaving = true;
+                errorText = null;
+              });
+
+              try {
+                await ref
+                    .read(settingsRepositoryProvider)
+                    .saveSetting(dbKey, newValue);
+
+                if (!mounted) return;
+                Navigator.pop(dialogContext);
+                await _loadSettings();
+
+                if (!mounted) return;
+                messenger.showSnackBar(
+                  SnackBar(content: Text("$title updated")),
+                );
+              } catch (e) {
+                setDialogState(() {
+                  isSaving = false;
+                  errorText = "Failed to save. Try again.";
+                });
+              }
+            }
+
+            return AlertDialog(
+              backgroundColor: AppColors.card,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppSizes.radiusLg),
+              ),
+              titlePadding: const EdgeInsets.fromLTRB(
+                AppSpacing.xl,
+                AppSpacing.xl,
+                AppSpacing.xl,
+                AppSpacing.sm,
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(
+                AppSpacing.xl,
+                AppSpacing.sm,
+                AppSpacing.xl,
+                AppSpacing.md,
+              ),
+              title: Text(
+                title,
+                style: AppTextStyles.cardValue.copyWith(
+                  fontSize: 17,
+                  fontFamily: AppTextStyles.fontDisplay,
+                ),
+              ),
+              content: TextField(
+                controller: ctrl,
+                autofocus: true,
+                keyboardType: keyboardType,
+                textInputAction: TextInputAction.done,
+                onChanged: (_) {
+                  if (errorText != null) {
+                    setDialogState(() => errorText = null);
+                  }
+                },
+                onSubmitted: (_) => handleSave(),
+                style: AppTextStyles.cardValue.copyWith(
+                  fontFamily: AppTextStyles.fontBody,
+                  fontSize: 15,
+                ),
+                decoration: InputDecoration(
+                  errorText: errorText,
+                  filled: true,
+                  fillColor: AppColors.surface2,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                    vertical: AppSpacing.md,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+                    borderSide: const BorderSide(
+                      color: AppColors.primary,
+                      width: 1.5,
+                    ),
+                  ),
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+                    borderSide: const BorderSide(color: AppColors.red),
+                  ),
+                ),
+              ),
+              actionsPadding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                0,
+                AppSpacing.md,
+                AppSpacing.md,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving
+                      ? null
+                      : () => Navigator.pop(dialogContext),
+                  child: Text(
+                    "Cancel",
+                    style: AppTextStyles.button.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: isSaving ? null : handleSave,
+                  child: isSaving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          "Save",
+                          style: AppTextStyles.button.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -100,101 +214,79 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.primary ?? Colors.blue,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        iconTheme: const IconThemeData(color: AppColors.textPrimaryDark),
+        titleSpacing: 0,
+        title: Text(
           "Customize (Products & Units)",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            fontSize: 18,
+          style: AppTextStyles.cardValue.copyWith(
+            fontSize: 22,
+            fontFamily: AppTextStyles.fontDisplay,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimaryDark,
           ),
         ),
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.screenPadding,
+                vertical: AppSpacing.md,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.only(left: 4, bottom: 12),
-                    child: Text(
-                      "Product Settings",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
+                  _navCard(
+                    icon: Icons.category_outlined,
+                    iconColor: AppColors.red,
+                    title: "Product Categories",
+                    subtitle: "Manage your product categories",
+                    onTap: () {
+                      // Navigate to Categories Screen
+                    },
                   ),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: Column(
-                      children: [
-                        _buildNavActionItem(
-                          icon: Icons.category_outlined,
-                          iconColor: Colors.redAccent,
-                          title: "Product Categories",
-                          subtitle: "Manage your product categories",
-                          onTap: () {
-                            // Navigate to Categories Screen
-                          },
-                        ),
-                        _buildDivider(),
-                        _buildNavActionItem(
-                          icon: Icons.ad_units,
-                          iconColor: Colors.orange,
-                          title: "Units",
-                          subtitle: "Manage product units",
-                          onTap: () {
-                            // Navigate to Units Screen
-                          },
-                        ),
-                        _buildDivider(),
-                        _buildToggleItem(
-                          icon: Icons.qr_code_scanner,
-                          iconColor: Colors.green,
-                          title: "Barcode Settings",
-                          subtitle: "Enable barcode for products",
-                          value: barcodeEnabled,
-                          dbKey: "barcodeEnabled",
-                        ),
-                        _buildDivider(),
-                        _buildToggleItem(
-                          icon: Icons.warning_amber_rounded,
-                          iconColor: Colors.orangeAccent,
-                          title: "Low Stock Alert",
-                          subtitle: "Enable alerts for low stock",
-                          value: lowStockAlert,
-                          dbKey: "lowStockAlert",
-                        ),
-                        _buildDivider(),
-                        _buildNavActionItem(
-                          icon: Icons.sim_card_outlined,
-                          iconColor: Colors.blueAccent,
-                          title: "Low Stock Limit",
-                          subtitle: lowStockLimit,
-                          onTap: _openEditDialog,
-                        ),
-                        _buildDivider(),
-                        _buildToggleItem(
-                          icon: Icons.inventory_2_outlined,
-                          iconColor: Colors.teal,
-                          title: "Stock Management",
-                          subtitle: "Enable stock tracking",
-                          value: stockManagement,
-                          dbKey: "stockManagement",
-                        ),
-                      ],
-                    ),
+                  _navCard(
+                    icon: Icons.ad_units,
+                    iconColor: AppColors.orange,
+                    title: "Units",
+                    subtitle: "Manage product units",
+                    onTap: () {
+                      // Navigate to Units Screen
+                    },
+                  ),
+                  _toggleCard(
+                    icon: Icons.qr_code_scanner,
+                    iconColor: AppColors.green,
+                    title: "Barcode Settings",
+                    value: barcodeEnabled,
+                    dbKey: "barcodeEnabled",
+                  ),
+                  _toggleCard(
+                    icon: Icons.warning_amber_rounded,
+                    iconColor: AppColors.orange,
+                    title: "Low Stock Alert",
+                    value: lowStockAlert,
+                    dbKey: "lowStockAlert",
+                  ),
+                  _fieldCard(
+                    icon: Icons.sim_card_outlined,
+                    iconColor: AppColors.cyan,
+                    title: "Low Stock Limit",
+                    value: lowStockLimit,
+                    dbKey: "lowStockLimit",
+                    keyboardType: TextInputType.number,
+                  ),
+                  _toggleCard(
+                    icon: Icons.inventory_2_outlined,
+                    iconColor: AppColors.primary,
+                    title: "Stock Management",
+                    value: stockManagement,
+                    dbKey: "stockManagement",
                   ),
                 ],
               ),
@@ -202,109 +294,188 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
     );
   }
 
-  Widget _buildDivider() {
-    return Divider(
-      height: 1,
-      thickness: 1,
-      indent: 60,
-      color: Colors.grey.shade100,
+  // ── Field Card: own rounded card per field with text value ──
+  Widget _fieldCard({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String value,
+    required String dbKey,
+    TextInputType? keyboardType,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Material(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppSizes.cardRadius),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppSizes.cardRadius),
+          onTap: () => _openEditDialog(title, dbKey, value, keyboardType: keyboardType),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.cardPadding,
+              vertical: AppSpacing.lg,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: const BoxDecoration(
+                    color: AppColors.surface2,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: iconColor, size: AppSizes.iconMd),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: AppTextStyles.cardValue.copyWith(
+                          fontSize: 16,
+                          fontFamily: AppTextStyles.fontDisplay,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimaryDark,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        value,
+                        style: AppTextStyles.small.copyWith(fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
-  Widget _buildNavActionItem({
+  // ── Nav Card: Similar to field card, but for navigation triggers ──
+  Widget _navCard({
     required IconData icon,
     required Color iconColor,
     required String title,
     required String subtitle,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, color: iconColor, size: 22),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Material(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppSizes.cardRadius),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppSizes.cardRadius),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.cardPadding,
+              vertical: AppSpacing.lg,
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: const BoxDecoration(
+                    color: AppColors.surface2,
+                    shape: BoxShape.circle,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                  child: Icon(icon, color: iconColor, size: AppSizes.iconMd),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: AppTextStyles.cardValue.copyWith(
+                          fontSize: 16,
+                          fontFamily: AppTextStyles.fontDisplay,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimaryDark,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        style: AppTextStyles.small.copyWith(fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+                Icon(Icons.chevron_right, color: AppColors.textSecondary, size: 20),
+              ],
             ),
-            Icon(Icons.chevron_right, color: Colors.grey.shade400),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildToggleItem({
+  // ── Toggle Card: Uses a switch instead of tap ──
+  Widget _toggleCard({
     required IconData icon,
     required Color iconColor,
     required String title,
-    required String subtitle,
     required bool value,
     required String dbKey,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(AppSizes.cardRadius),
+        ),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.cardPadding,
+          vertical: AppSpacing.md,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(
+                color: AppColors.surface2,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: iconColor, size: AppSizes.iconMd),
             ),
-            child: Icon(icon, color: iconColor, size: 22),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Text(
+                title,
+                style: AppTextStyles.cardValue.copyWith(
+                  fontSize: 16,
+                  fontFamily: AppTextStyles.fontDisplay,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimaryDark,
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                ),
-              ],
+              ),
             ),
-          ),
-          Switch(
-            value: value,
-            activeColor: Colors.blue,
-            onChanged: (newValue) => _updateToggleSetting(dbKey, newValue),
-          ),
-        ],
+            Switch(
+              value: value,
+              activeThumbColor: AppColors.textWhite,
+              activeTrackColor: AppColors.primary,
+              inactiveThumbColor: AppColors.textWhite,
+              inactiveTrackColor: AppColors.borderStrong,
+              onChanged: (newValue) => _updateToggleSetting(dbKey, newValue),
+            ),
+          ],
+        ),
       ),
     );
   }

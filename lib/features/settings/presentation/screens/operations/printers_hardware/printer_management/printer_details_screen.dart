@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../../../core/constants/app_colors.dart';
 import '../../../../../../../core/constants/app_sizes.dart';
 import '../../../../../../../core/constants/app_spacing.dart';
+import '../../../../../../../core/constants/app_text_styles.dart';
 import '../../../../../domain/entities/printers_hardware/printer/printer_device.dart';
 import '../../../../providers/printers_hardware/printer_management/printers_hardware_provider.dart';
 import '../../../../../domain/enums/printers_hardware/printer/printer_connection_type.dart';
@@ -31,6 +32,7 @@ class _PrinterDetailsScreenState extends ConsumerState<PrinterDetailsScreen> {
   @override
   void initState() {
     super.initState();
+    // Dynamic string generation to match standard configurations securely
     _paperSize = '${widget.printer.capabilities.paperWidthMm} mm';
   }
 
@@ -40,38 +42,54 @@ class _PrinterDetailsScreenState extends ConsumerState<PrinterDetailsScreen> {
     final isConnected = state.connectedPrinter?.id == widget.printer.id;
     final type = widget.printer.configuration.connectionType;
 
+    // FIX: Safely construct dropdown options so it dynamically accommodates document printers (like 148 mm A5)
+    final List<String> paperOptions = ['58 mm', '80 mm'];
+    if (!paperOptions.contains(_paperSize)) {
+      paperOptions.add(_paperSize);
+    }
+
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text('Printer Details', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        iconTheme: const IconThemeData(color: AppColors.textPrimaryDark),
+        title: Text(
+          'Printer Details',
+          style: AppTextStyles.cardValue.copyWith(
+            fontSize: 22,
+            fontFamily: AppTextStyles.fontDisplay,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimaryDark,
+          ),
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.screenPadding),
         children: [
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.card,
               borderRadius: BorderRadius.circular(AppSizes.cardRadius),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: AppColors.borderStrong),
             ),
             padding: const EdgeInsets.all(AppSpacing.cardPadding),
             child: Row(
               children: [
                 Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(color: const Color(0xFF111827), borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
-                  child: const Icon(Icons.print, color: Colors.white, size: 22),
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(color: AppColors.surface2, borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
+                  child: const Icon(Icons.print_rounded, color: AppColors.primary, size: 28),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(widget.printer.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
-                      const SizedBox(height: 4),
+                      Text(widget.printer.name, style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 16)),
+                      const SizedBox(height: 6),
                       _statusChip(isConnected),
                     ],
                   ),
@@ -82,9 +100,9 @@ class _PrinterDetailsScreenState extends ConsumerState<PrinterDetailsScreen> {
           const SizedBox(height: AppSpacing.lg),
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.card,
               borderRadius: BorderRadius.circular(AppSizes.cardRadius),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: AppColors.borderStrong),
             ),
             child: Column(
               children: [
@@ -106,14 +124,14 @@ class _PrinterDetailsScreenState extends ConsumerState<PrinterDetailsScreen> {
           _sectionLabel('Printer Settings'),
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.card,
               borderRadius: BorderRadius.circular(AppSizes.cardRadius),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: AppColors.borderStrong),
             ),
             padding: const EdgeInsets.all(AppSpacing.cardPadding),
             child: Column(
               children: [
-                _dropdownTile('Paper size', _paperSize, const ['58 mm', '80 mm'], (v) => setState(() => _paperSize = v)),
+                _dropdownTile('Paper size', _paperSize, paperOptions, (v) => setState(() => _paperSize = v)),
                 const SizedBox(height: AppSpacing.sm),
                 _stepperTile('Receipt copies', _copies, (v) => setState(() => _copies = v)),
                 const SizedBox(height: AppSpacing.sm),
@@ -131,19 +149,20 @@ class _PrinterDetailsScreenState extends ConsumerState<PrinterDetailsScreen> {
                 const SizedBox(height: AppSpacing.md),
                 SizedBox(
                   width: double.infinity,
-                  height: AppSizes.buttonHeight,
+                  height: 52,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusLg)),
+                      foregroundColor: AppColors.textWhite,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
                     ),
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Settings saved')),
                       );
                     },
-                    child: const Text('Save Settings', style: TextStyle(fontWeight: FontWeight.w600)),
+                    child: Text('Save Settings', style: AppTextStyles.button.copyWith(fontWeight: FontWeight.w700, fontSize: 15)),
                   ),
                 ),
               ],
@@ -155,14 +174,14 @@ class _PrinterDetailsScreenState extends ConsumerState<PrinterDetailsScreen> {
           const SizedBox(height: AppSpacing.xl),
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.card,
               borderRadius: BorderRadius.circular(AppSizes.cardRadius),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: AppColors.borderStrong),
             ),
             child: Column(
               children: [
                 ListTile(
-                  title: const Text('Disconnect', style: TextStyle(color: AppColors.red, fontWeight: FontWeight.w600, fontSize: 12.5)),
+                  title: Text('Disconnect', style: AppTextStyles.cardValue.copyWith(color: AppColors.red, fontWeight: FontWeight.w700, fontSize: 14)),
                   onTap: isConnected
                       ? () async {
                           await ref.read(printersHardwareProvider.notifier).disconnect();
@@ -172,15 +191,15 @@ class _PrinterDetailsScreenState extends ConsumerState<PrinterDetailsScreen> {
                         }
                       : null,
                 ),
-                const Divider(height: 1, indent: 16, endIndent: 16),
+                const Divider(height: 1, indent: 16, endIndent: 16, color: AppColors.borderStrong),
                 ListTile(
-                  title: const Text('Forget Device', style: TextStyle(color: AppColors.red, fontWeight: FontWeight.w600, fontSize: 12.5)),
+                  title: Text('Forget Device', style: AppTextStyles.cardValue.copyWith(color: AppColors.red, fontWeight: FontWeight.w700, fontSize: 14)),
                   onTap: () => _confirmForget(context),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: AppSpacing.xxl),
         ],
       ),
     );
@@ -190,12 +209,22 @@ class _PrinterDetailsScreenState extends ConsumerState<PrinterDetailsScreen> {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusXl)),
-        title: const Text('Forget this printer?'),
-        content: Text('${widget.printer.name} will be removed from your saved printers.'),
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusLg)),
+        title: Text('Forget this printer?', style: AppTextStyles.cardValue.copyWith(fontSize: 18, fontWeight: FontWeight.w700)),
+        content: Text('${widget.printer.name} will be removed from your saved printers.', style: AppTextStyles.small.copyWith(fontSize: 14)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
           TextButton(
+            onPressed: () => Navigator.pop(dialogContext), 
+            child: Text('Cancel', style: AppTextStyles.button.copyWith(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.red,
+              foregroundColor: AppColors.textWhite,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
+            ),
             onPressed: () async {
               final navigator = Navigator.of(dialogContext);
               await ref.read(printersHardwareProvider.notifier).disconnect();
@@ -203,7 +232,7 @@ class _PrinterDetailsScreenState extends ConsumerState<PrinterDetailsScreen> {
               if (!context.mounted) return;
               Navigator.pop(context);
             },
-            child: const Text('Forget', style: TextStyle(color: AppColors.red)),
+            child: const Text('Forget'),
           ),
         ],
       ),
@@ -228,16 +257,16 @@ class _PrinterDetailsScreenState extends ConsumerState<PrinterDetailsScreen> {
   Widget _statusChip(bool isConnected) {
     final color = isConnected ? AppColors.green : AppColors.red;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(999)),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(999)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(isConnected ? Icons.check_circle : Icons.cancel, size: 11, color: color),
-          const SizedBox(width: 4),
+          Icon(isConnected ? Icons.check_circle_rounded : Icons.cancel_rounded, size: 12, color: color),
+          const SizedBox(width: 6),
           Text(
             isConnected ? 'Connected' : 'Disconnected',
-            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: color),
+            style: AppTextStyles.small.copyWith(fontSize: 10, fontWeight: FontWeight.w800, color: color, letterSpacing: 0.3),
           ),
         ],
       ),
@@ -245,26 +274,26 @@ class _PrinterDetailsScreenState extends ConsumerState<PrinterDetailsScreen> {
   }
 
   Widget _sectionLabel(String text) => Padding(
-        padding: const EdgeInsets.only(left: 4, bottom: 10),
-        child: Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87)),
+        padding: const EdgeInsets.only(left: 4, bottom: AppSpacing.sm),
+        child: Text(text, style: AppTextStyles.cardValue.copyWith(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimaryDark)),
       );
 
-  Widget _divider() => const Divider(height: 1, indent: 14, endIndent: 14);
+  Widget _divider() => const Divider(height: 1, indent: 14, endIndent: 14, color: AppColors.borderStrong);
 
   Widget _specRow(String label, String value, {bool mono = false, Color? valueColor}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          Text(label, style: AppTextStyles.small.copyWith(fontSize: 13, color: AppColors.textSecondary)),
           Text(
             value,
-            style: TextStyle(
-              fontSize: 11,
+            style: AppTextStyles.cardValue.copyWith(
+              fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: valueColor ?? Colors.black87,
-              fontFamily: mono ? 'JetBrains Mono' : null,
+              color: valueColor ?? AppColors.textPrimaryDark,
+              fontFamily: mono ? 'JetBrains Mono' : AppTextStyles.fontBody,
             ),
           ),
         ],
@@ -273,69 +302,85 @@ class _PrinterDetailsScreenState extends ConsumerState<PrinterDetailsScreen> {
   }
 
   Widget _dropdownTile(String label, String value, List<String> options, ValueChanged<String> onChanged) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            border: Border.all(color: AppColors.borderStrong),
-            borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: AppTextStyles.small.copyWith(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimaryDark)),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.borderStrong),
+              borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+              color: AppColors.background,
+            ),
+            child: DropdownButton<String>(
+              value: value,
+              underline: const SizedBox.shrink(),
+              isDense: true,
+              icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: AppColors.textSecondary),
+              style: AppTextStyles.cardValue.copyWith(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimaryDark),
+              items: options.map((o) => DropdownMenuItem(value: o, child: Text(o))).toList(),
+              onChanged: (v) => v != null ? onChanged(v) : null,
+            ),
           ),
-          child: DropdownButton<String>(
-            value: value,
-            underline: const SizedBox.shrink(),
-            isDense: true,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.black87),
-            items: options.map((o) => DropdownMenuItem(value: o, child: Text(o))).toList(),
-            onChanged: (v) => v != null ? onChanged(v) : null,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _switchTile(String label, bool value, ValueChanged<bool> onChanged) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Expanded(child: Text(label, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600))),
-        Switch(
-          value: value,
-          activeColor: Colors.white,
-          activeTrackColor: AppColors.primary,
-          onChanged: onChanged,
-        ),
-      ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(child: Text(label, style: AppTextStyles.small.copyWith(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimaryDark))),
+          Switch.adaptive(
+            value: value,
+            activeThumbColor: AppColors.textWhite,
+            activeTrackColor: AppColors.primary,
+            inactiveThumbColor: AppColors.textWhite,
+            inactiveTrackColor: AppColors.borderStrong,
+            onChanged: onChanged,
+          ),
+        ],
+      ),
     );
   }
 
   Widget _stepperTile(String label, int value, ValueChanged<int> onChanged) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
-        Row(
-          children: [
-            _stepperButton(Icons.remove, () => onChanged(value > 1 ? value - 1 : 1)),
-            SizedBox(width: 24, child: Text('$value', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
-            _stepperButton(Icons.add, () => onChanged(value < 9 ? value + 1 : 9)),
-          ],
-        ),
-      ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: AppTextStyles.small.copyWith(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimaryDark)),
+          Row(
+            children: [
+              _stepperButton(Icons.remove_rounded, () => onChanged(value > 1 ? value - 1 : 1)),
+              SizedBox(
+                width: 32, 
+                child: Text('$value', textAlign: TextAlign.center, style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 14)),
+              ),
+              _stepperButton(Icons.add_rounded, () => onChanged(value < 9 ? value + 1 : 9)),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
   Widget _stepperButton(IconData icon, VoidCallback onTap) {
     return InkWell(
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(AppSizes.radiusSm),
       onTap: onTap,
       child: Container(
-        width: 24,
-        height: 24,
-        decoration: BoxDecoration(color: AppColors.surface2, borderRadius: BorderRadius.circular(8)),
-        child: Icon(icon, size: 14, color: AppColors.primary),
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(color: AppColors.surface2, borderRadius: BorderRadius.circular(AppSizes.radiusSm)),
+        child: Icon(icon, size: 18, color: AppColors.primary),
       ),
     );
   }
@@ -365,11 +410,11 @@ class _TestPrintCardState extends ConsumerState<_TestPrintCard> {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.card,
         borderRadius: BorderRadius.circular(AppSizes.cardRadius),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.borderStrong),
       ),
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       child: switch (_stage) {
         _TestPrintStage.idle => _idle(),
         _TestPrintStage.printing => _printing(),
@@ -383,27 +428,28 @@ class _TestPrintCardState extends ConsumerState<_TestPrintCard> {
     return Column(
       children: [
         Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(color: AppColors.cyan.withValues(alpha: 0.08), shape: BoxShape.circle),
-          child: Icon(Icons.receipt_long, color: AppColors.cyanDim, size: 26),
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(color: AppColors.cyan.withOpacity(0.08), shape: BoxShape.circle),
+          child: const Icon(Icons.receipt_long_rounded, color: AppColors.cyanDim, size: 36),
         ),
-        const SizedBox(height: 10),
-        const Text('Ready to print a sample receipt.', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-        const SizedBox(height: 3),
-        const Text('This helps verify your printer setup.', style: TextStyle(fontSize: 10.5, color: AppColors.textSecondary)),
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpacing.lg),
+        Text('Ready to print a sample receipt.', textAlign: TextAlign.center, style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 16)),
+        const SizedBox(height: 4),
+        Text('This helps verify your printer setup.', style: AppTextStyles.small.copyWith(fontSize: 13, color: AppColors.textSecondary)),
+        const SizedBox(height: AppSpacing.xl),
         SizedBox(
           width: double.infinity,
-          height: AppSizes.buttonHeight,
+          height: 52,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusLg)),
+              foregroundColor: AppColors.textWhite,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
             ),
             onPressed: _printTest,
-            child: const Text('Print Test', style: TextStyle(fontWeight: FontWeight.w600)),
+            child: Text('Print Test', style: AppTextStyles.button.copyWith(fontWeight: FontWeight.w700, fontSize: 15)),
           ),
         ),
       ],
@@ -414,14 +460,14 @@ class _TestPrintCardState extends ConsumerState<_TestPrintCard> {
     return Column(
       children: [
         const SizedBox(
-          width: 60,
-          height: 60,
-          child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.cyan),
+          width: 80,
+          height: 80,
+          child: CircularProgressIndicator(strokeWidth: 4, color: AppColors.cyan),
         ),
-        const SizedBox(height: 12),
-        const Text('Printing…', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        const SizedBox(height: 3),
-        const Text('Sending receipt to the printer…', style: TextStyle(fontSize: 10.5, color: AppColors.textSecondary)),
+        const SizedBox(height: AppSpacing.lg),
+        Text('Printing…', style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 16)),
+        const SizedBox(height: 4),
+        Text('Sending receipt to the printer…', style: AppTextStyles.small.copyWith(fontSize: 13, color: AppColors.textSecondary)),
       ],
     );
   }
@@ -430,40 +476,46 @@ class _TestPrintCardState extends ConsumerState<_TestPrintCard> {
     return Column(
       children: [
         Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(color: AppColors.green.withValues(alpha: 0.1), shape: BoxShape.circle),
-          child: const Icon(Icons.check, color: AppColors.green, size: 28),
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(color: AppColors.green.withOpacity(0.1), shape: BoxShape.circle),
+          child: const Icon(Icons.check_rounded, color: AppColors.green, size: 40),
         ),
-        const SizedBox(height: 10),
-        const Text('Receipt Printed', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        const SizedBox(height: 3),
-        const Text('Your printer is working correctly.', style: TextStyle(fontSize: 10.5, color: AppColors.textSecondary)),
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpacing.lg),
+        Text('Receipt Printed', style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 16)),
+        const SizedBox(height: 4),
+        Text('Your printer is working correctly.', style: AppTextStyles.small.copyWith(fontSize: 13, color: AppColors.textSecondary)),
+        const SizedBox(height: AppSpacing.xl),
         Row(
           children: [
             Expanded(
-              child: OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AppColors.borderStrong),
-                  padding: const EdgeInsets.symmetric(vertical: 11),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusLg)),
+              child: SizedBox(
+                height: 52,
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.borderStrong),
+                    foregroundColor: AppColors.textPrimaryDark,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
+                  ),
+                  onPressed: () => setState(() => _stage = _TestPrintStage.idle),
+                  child: Text('Done', style: AppTextStyles.button.copyWith(fontWeight: FontWeight.w700, fontSize: 14)),
                 ),
-                onPressed: () => setState(() => _stage = _TestPrintStage.idle),
-                child: const Text('Done', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5)),
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: AppSpacing.md),
             Expanded(
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 11),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusLg)),
+              child: SizedBox(
+                height: 52,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: AppColors.textWhite,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
+                  ),
+                  onPressed: _printTest,
+                  child: Text('Print Again', style: AppTextStyles.button.copyWith(fontWeight: FontWeight.w700, fontSize: 14)),
                 ),
-                onPressed: _printTest,
-                child: const Text('Print Again', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5)),
               ),
             ),
           ],
@@ -476,33 +528,34 @@ class _TestPrintCardState extends ConsumerState<_TestPrintCard> {
     return Column(
       children: [
         Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(color: AppColors.red.withValues(alpha: 0.1), shape: BoxShape.circle),
-          child: const Icon(Icons.close, color: AppColors.red, size: 28),
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(color: AppColors.red.withOpacity(0.1), shape: BoxShape.circle),
+          child: const Icon(Icons.close_rounded, color: AppColors.red, size: 40),
         ),
-        const SizedBox(height: 10),
-        const Text('Printing Failed', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        const SizedBox(height: 3),
-        const Text('Printer is disconnected or not responding.', textAlign: TextAlign.center, style: TextStyle(fontSize: 10.5, color: AppColors.textSecondary)),
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpacing.lg),
+        Text('Printing Failed', style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 16)),
+        const SizedBox(height: 4),
+        Text('Printer is disconnected or not responding.', textAlign: TextAlign.center, style: AppTextStyles.small.copyWith(fontSize: 13, color: AppColors.textSecondary)),
+        const SizedBox(height: AppSpacing.xl),
         SizedBox(
           width: double.infinity,
-          height: AppSizes.buttonHeight,
+          height: 52,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusLg)),
+              foregroundColor: AppColors.textWhite,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
             ),
             onPressed: _printTest,
             child: const Text('Retry', style: TextStyle(fontWeight: FontWeight.w600)),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.md),
         TextButton(
           onPressed: () => setState(() => _stage = _TestPrintStage.idle),
-          child: const Text('Cancel', style: TextStyle(color: AppColors.red, fontWeight: FontWeight.w600, fontSize: 12)),
+          child: Text('Cancel', style: AppTextStyles.button.copyWith(color: AppColors.red, fontWeight: FontWeight.w700, fontSize: 14)),
         ),
       ],
     );

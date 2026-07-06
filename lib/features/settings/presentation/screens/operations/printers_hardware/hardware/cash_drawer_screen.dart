@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../../../core/constants/app_colors.dart';
 import '../../../../../../../core/constants/app_sizes.dart';
 import '../../../../../../../core/constants/app_spacing.dart';
+import '../../../../../../../core/constants/app_text_styles.dart';
 import '../../../../providers/printers_hardware/printer_management/printers_hardware_provider.dart';
 
 enum _DrawerStage { idle, opening, success, failed }
@@ -31,20 +32,30 @@ class _CashDrawerScreenState extends ConsumerState<CashDrawerScreen> {
     final supportsKick = printer?.capabilities.supportsCashDrawerKick ?? false;
 
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text('Cash Drawer', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        iconTheme: const IconThemeData(color: AppColors.textPrimaryDark),
+        title: Text(
+          'Cash Drawer',
+          style: AppTextStyles.cardValue.copyWith(
+            fontSize: 22,
+            fontFamily: AppTextStyles.fontDisplay,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimaryDark,
+          ),
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.screenPadding),
         children: [
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.card,
               borderRadius: BorderRadius.circular(AppSizes.cardRadius),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: AppColors.borderStrong),
             ),
             padding: const EdgeInsets.all(AppSpacing.cardPadding),
             child: Row(
@@ -56,7 +67,7 @@ class _CashDrawerScreenState extends ConsumerState<CashDrawerScreen> {
                     color: AppColors.green.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(AppSizes.radiusMd),
                   ),
-                  child: const Icon(Icons.point_of_sale, color: AppColors.green, size: 22),
+                  child: const Icon(Icons.point_of_sale_rounded, color: AppColors.green, size: 22),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
@@ -65,7 +76,7 @@ class _CashDrawerScreenState extends ConsumerState<CashDrawerScreen> {
                     children: [
                       Text(
                         printer == null ? 'No printer connected' : 'Linked via ${printer.name}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 14),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -74,7 +85,7 @@ class _CashDrawerScreenState extends ConsumerState<CashDrawerScreen> {
                             : supportsKick
                                 ? 'Drawer-kick supported'
                                 : 'This printer does not support a drawer kick',
-                        style: const TextStyle(fontSize: 10.5, color: AppColors.textSecondary),
+                        style: AppTextStyles.small.copyWith(fontSize: 12, color: AppColors.textSecondary),
                       ),
                     ],
                   ),
@@ -82,26 +93,32 @@ class _CashDrawerScreenState extends ConsumerState<CashDrawerScreen> {
               ],
             ),
           ),
-          const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: AppSpacing.xxl),
           Center(child: _stageContent(printer != null && supportsKick)),
-          const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: AppSpacing.xxl),
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.card,
               borderRadius: BorderRadius.circular(AppSizes.cardRadius),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: AppColors.borderStrong),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.cardPadding, vertical: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Expanded(
-                  child: Text('Open drawer automatically on cash sale', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                Expanded(
+                  child: Text(
+                    'Open drawer automatically on cash sale', 
+                    style: AppTextStyles.cardValue.copyWith(fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
                 ),
-                Switch(
+                const SizedBox(width: AppSpacing.md),
+                Switch.adaptive(
                   value: _openOnSale,
-                  activeColor: Colors.white,
+                  activeThumbColor: AppColors.textWhite,
                   activeTrackColor: AppColors.primary,
+                  inactiveThumbColor: AppColors.textWhite,
+                  inactiveTrackColor: AppColors.borderStrong,
                   onChanged: (printer != null && supportsKick) ? (v) => setState(() => _openOnSale = v) : null,
                 ),
               ],
@@ -118,58 +135,69 @@ class _CashDrawerScreenState extends ConsumerState<CashDrawerScreen> {
         return Column(
           children: [
             Container(
-              width: 78,
-              height: 78,
-              decoration: BoxDecoration(color: AppColors.surface2, shape: BoxShape.circle),
-              child: Icon(Icons.point_of_sale, size: 32, color: AppColors.textSecondary),
+              width: 80,
+              height: 80,
+              decoration: const BoxDecoration(color: AppColors.surface2, shape: BoxShape.circle),
+              child: const Icon(Icons.point_of_sale_rounded, size: 36, color: AppColors.textSecondary),
             ),
-            const SizedBox(height: 16),
-            const Text('Test the drawer kick', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: AppSpacing.lg),
+            Text('Test the drawer kick', style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 18)),
             const SizedBox(height: 4),
-            const Text(
+            Text(
               'Sends a pulse to open the drawer right now.',
-              style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+              style: AppTextStyles.small.copyWith(fontSize: 13, color: AppColors.textSecondary),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.xl),
             SizedBox(
               width: double.infinity,
-              height: AppSizes.buttonHeightLg,
+              height: 52,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusLg)),
+                  foregroundColor: AppColors.textWhite,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
                 ),
                 onPressed: canOpen ? _openDrawer : null,
-                icon: const Icon(Icons.lock_open, size: 18),
-                label: const Text('Open Drawer', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                icon: const Icon(Icons.lock_open_rounded, size: 18),
+                label: Text('Open Drawer', style: AppTextStyles.button.copyWith(fontWeight: FontWeight.w700, fontSize: 15)),
               ),
             ),
           ],
         );
       case _DrawerStage.opening:
-        return const Column(
+        return Column(
           children: [
-            SizedBox(width: 78, height: 78, child: CircularProgressIndicator(strokeWidth: 4, color: AppColors.cyan)),
-            SizedBox(height: 16),
-            Text('Opening…', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(
+              width: 80,
+              height: 80,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(width: 80, height: 80, child: CircularProgressIndicator(strokeWidth: 4, color: AppColors.cyan)),
+                  Icon(Icons.lock_clock_rounded, color: AppColors.primary, size: 30),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Text('Opening…', style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 18)),
           ],
         );
       case _DrawerStage.success:
         return Column(
           children: [
             Container(
-              width: 78,
-              height: 78,
+              width: 80,
+              height: 80,
               decoration: BoxDecoration(color: AppColors.green.withValues(alpha: 0.1), shape: BoxShape.circle),
-              child: const Icon(Icons.check, color: AppColors.green, size: 34),
+              child: const Icon(Icons.check_rounded, color: AppColors.green, size: 40),
             ),
-            const SizedBox(height: 16),
-            const Text('Drawer Opened', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.lg),
+            Text('Drawer Opened', style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 18)),
+            const SizedBox(height: AppSpacing.lg),
             TextButton(
               onPressed: () => setState(() => _stage = _DrawerStage.idle),
-              child: const Text('Test again', style: TextStyle(fontWeight: FontWeight.w600)),
+              child: Text('Test again', style: AppTextStyles.button.copyWith(fontWeight: FontWeight.w700, color: AppColors.primary)),
             ),
           ],
         );
@@ -177,19 +205,19 @@ class _CashDrawerScreenState extends ConsumerState<CashDrawerScreen> {
         return Column(
           children: [
             Container(
-              width: 78,
-              height: 78,
+              width: 80,
+              height: 80,
               decoration: BoxDecoration(color: AppColors.red.withValues(alpha: 0.1), shape: BoxShape.circle),
-              child: const Icon(Icons.close, color: AppColors.red, size: 34),
+              child: const Icon(Icons.close_rounded, color: AppColors.red, size: 40),
             ),
-            const SizedBox(height: 16),
-            const Text('Could not open drawer', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: AppSpacing.lg),
+            Text('Could not open drawer', style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 18)),
             const SizedBox(height: 4),
-            const Text('Check the printer connection and try again.', style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
-            const SizedBox(height: 12),
+            Text('Check the printer connection and try again.', style: AppTextStyles.small.copyWith(fontSize: 13, color: AppColors.textSecondary)),
+            const SizedBox(height: AppSpacing.lg),
             TextButton(
               onPressed: () => setState(() => _stage = _DrawerStage.idle),
-              child: const Text('Try again', style: TextStyle(fontWeight: FontWeight.w600)),
+              child: Text('Try again', style: AppTextStyles.button.copyWith(fontWeight: FontWeight.w700, color: AppColors.primary)),
             ),
           ],
         );

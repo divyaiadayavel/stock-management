@@ -4,21 +4,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../../../core/constants/app_colors.dart';
 import '../../../../../../../core/constants/app_sizes.dart';
 import '../../../../../../../core/constants/app_spacing.dart';
+import '../../../../../../../core/constants/app_text_styles.dart';
 import '../../../../../domain/entities/printers_hardware/printer/printer_capability.dart';
 import '../../../../../domain/entities/printers_hardware/printer/printer_configuration.dart';
 import '../../../../../domain/entities/printers_hardware/printer/printer_device.dart';
 import '../../../../providers/printers_hardware/printer_management/printers_hardware_provider.dart';
 import '../../../../providers/printers_hardware/connection/wifi_provider.dart';
 import '../../../../../domain/enums/printers_hardware/printer/printer_connection_type.dart';
+
 enum _WifiMode { scan, manual }
 
-/// Screen 14 — Add a Wi-Fi printer.
-///
-/// Two ways in, same as how a person actually finds a network printer:
-/// 1. Scan the local network for anything answering on the ESC/POS raw
-///    port (9100) — mirrors the Bluetooth scan list exactly.
-/// 2. Type the IP/port directly, for printers on a different subnet/VLAN
-///    that a local sweep won't reach.
 class WifiPrinterScreen extends ConsumerStatefulWidget {
   const WifiPrinterScreen({super.key});
 
@@ -47,11 +42,21 @@ class _WifiPrinterScreenState extends ConsumerState<WifiPrinterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text('Add Wi-Fi Printer', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        iconTheme: const IconThemeData(color: AppColors.textPrimaryDark),
+        title: Text(
+          'Add Wi-Fi Printer',
+          style: AppTextStyles.cardValue.copyWith(
+            fontSize: 22,
+            fontFamily: AppTextStyles.fontDisplay,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimaryDark,
+          ),
+        ),
       ),
       body: SafeArea(
         child: Column(
@@ -71,7 +76,7 @@ class _WifiPrinterScreenState extends ConsumerState<WifiPrinterScreen> {
 
   Widget _modeToggle() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      padding: const EdgeInsets.fromLTRB(AppSpacing.screenPadding, AppSpacing.md, AppSpacing.screenPadding, 0),
       child: Container(
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
@@ -96,7 +101,7 @@ class _WifiPrinterScreenState extends ConsumerState<WifiPrinterScreen> {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? Colors.white : Colors.transparent,
+          color: selected ? AppColors.card : Colors.transparent,
           borderRadius: BorderRadius.circular(AppSizes.radiusMd),
           boxShadow: selected
               ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 4, offset: const Offset(0, 1))]
@@ -109,8 +114,8 @@ class _WifiPrinterScreenState extends ConsumerState<WifiPrinterScreen> {
             const SizedBox(width: 6),
             Text(
               label,
-              style: TextStyle(
-                fontSize: 11.5,
+              style: AppTextStyles.small.copyWith(
+                fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: selected ? AppColors.primary : AppColors.textSecondary,
               ),
@@ -137,7 +142,7 @@ class _WifiPrinterScreenState extends ConsumerState<WifiPrinterScreen> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+          padding: const EdgeInsets.fromLTRB(AppSpacing.screenPadding, AppSpacing.md, AppSpacing.screenPadding, 4),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
@@ -153,14 +158,14 @@ class _WifiPrinterScreenState extends ConsumerState<WifiPrinterScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.cyanDim),
                   )
                 else
-                  Icon(Icons.wifi_find, size: 16, color: AppColors.cyanDim),
+                  const Icon(Icons.wifi_find, size: 16, color: AppColors.cyanDim),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     isSearching
                         ? 'Scanning your network for printers…'
                         : (error != null ? 'Scan failed' : 'Scan complete'),
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.cyanDim),
+                    style: AppTextStyles.small.copyWith(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.cyanDim),
                   ),
                 ),
               ],
@@ -169,8 +174,8 @@ class _WifiPrinterScreenState extends ConsumerState<WifiPrinterScreen> {
         ),
         if (error != null)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-            child: Text(error, style: const TextStyle(fontSize: 11, color: AppColors.red)),
+            padding: const EdgeInsets.fromLTRB(AppSpacing.screenPadding, 4, AppSpacing.screenPadding, 0),
+            child: Text(error, style: AppTextStyles.small.copyWith(fontSize: 11, color: AppColors.red)),
           ),
         if (devices.isEmpty && !isSearching)
           Expanded(child: _emptyScanState())
@@ -179,31 +184,32 @@ class _WifiPrinterScreenState extends ConsumerState<WifiPrinterScreen> {
             padding: const EdgeInsets.fromLTRB(20, 14, 16, 8),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: Text('Printers found · ${devices.length}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              child: Text('Printers found · ${devices.length}', style: AppTextStyles.small.copyWith(fontSize: 12, fontWeight: FontWeight.w700)),
             ),
           ),
           Expanded(
             child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
               itemCount: devices.length,
-              separatorBuilder: (_, __) => const Divider(height: 1, indent: 56),
+              separatorBuilder: (_, __) => const Divider(height: 1, indent: 56, color: AppColors.borderStrong),
               itemBuilder: (context, i) => _deviceRow(devices[i]),
             ),
           ),
         ],
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          padding: const EdgeInsets.fromLTRB(AppSpacing.screenPadding, 8, AppSpacing.screenPadding, AppSpacing.lg),
           child: SizedBox(
             width: double.infinity,
+            height: 48,
             child: OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: AppColors.borderStrong),
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusLg)),
+                foregroundColor: AppColors.textPrimaryDark,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
               ),
               onPressed: isSearching ? null : () => ref.read(wifiPrintersProvider.notifier).refresh(),
               icon: const Icon(Icons.refresh, size: 17),
-              label: const Text('Scan again', style: TextStyle(fontWeight: FontWeight.w600)),
+              label: Text('Scan again', style: AppTextStyles.button.copyWith(fontWeight: FontWeight.w700, fontSize: 14)),
             ),
           ),
         ),
@@ -216,58 +222,58 @@ class _WifiPrinterScreenState extends ConsumerState<WifiPrinterScreen> {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(vertical: 6),
       leading: Container(
-        width: 32,
-        height: 32,
+        width: 40,
+        height: 40,
         decoration: BoxDecoration(color: AppColors.cyan.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
-        child: Icon(Icons.print_outlined, size: 16, color: AppColors.cyanDim),
+        child: const Icon(Icons.print_outlined, size: 20, color: AppColors.cyanDim),
       ),
-      title: Text(device.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
+      title: Text(device.name, style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 14)),
       subtitle: Text(
         '$ip · port ${device.configuration.port ?? 9100}',
-        style: const TextStyle(fontSize: 9.5, color: AppColors.textSecondary, fontFamily: 'JetBrains Mono'),
+        style: AppTextStyles.small.copyWith(fontSize: 11, color: AppColors.textSecondary, fontFamily: 'JetBrains Mono'),
       ),
       trailing: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          textStyle: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold),
+          foregroundColor: AppColors.textWhite,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
         ),
         onPressed: () => _connectDevice(device),
-        child: const Text('Connect'),
+        child: Text('Connect', style: AppTextStyles.button.copyWith(fontSize: 12, fontWeight: FontWeight.w700)),
       ),
     );
   }
 
   Widget _emptyScanState() {
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(AppSpacing.xxl),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
             width: 78,
             height: 78,
-            decoration: BoxDecoration(color: AppColors.surface2, shape: BoxShape.circle),
+            decoration: const BoxDecoration(color: AppColors.surface2, shape: BoxShape.circle),
             child: const Icon(Icons.wifi_off, size: 34, color: AppColors.textSecondary),
           ),
-          const SizedBox(height: 16),
-          const Text('No network printers found', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          const SizedBox(height: AppSpacing.lg),
+          Text('No network printers found', style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 18)),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             "We checked your Wi-Fi network's usual printer port (9100) and didn't find one.",
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            style: AppTextStyles.small.copyWith(fontSize: 13, color: AppColors.textSecondary),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: AppSpacing.xl),
           _checkRow('Printer is powered on'),
           _checkRow('Phone and printer are on the same Wi-Fi'),
           _checkRow("Printer's network mode is enabled"),
-          const SizedBox(height: 18),
+          const SizedBox(height: AppSpacing.xl),
           TextButton(
             onPressed: () => setState(() => _mode = _WifiMode.manual),
-            child: const Text('Enter the IP address manually instead', style: TextStyle(fontWeight: FontWeight.w600)),
+            child: Text('Enter the IP address manually instead', style: AppTextStyles.button.copyWith(fontWeight: FontWeight.w700, color: AppColors.primary)),
           ),
         ],
       ),
@@ -281,13 +287,13 @@ class _WifiPrinterScreenState extends ConsumerState<WifiPrinterScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 16,
-            height: 16,
+            width: 18,
+            height: 18,
             decoration: BoxDecoration(color: AppColors.green.withValues(alpha: 0.1), shape: BoxShape.circle),
-            child: const Icon(Icons.check, size: 11, color: AppColors.green),
+            child: const Icon(Icons.check, size: 12, color: AppColors.green),
           ),
           const SizedBox(width: 8),
-          Text(text, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          Text(text, style: AppTextStyles.small.copyWith(fontSize: 12, color: AppColors.textSecondary)),
         ],
       ),
     );
@@ -316,24 +322,24 @@ class _WifiPrinterScreenState extends ConsumerState<WifiPrinterScreen> {
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
               color: AppColors.cyan.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(AppSizes.radiusLg),
             ),
-            child: const Text(
+            child: Text(
               "Find the printer's IP from its network settings page or a printed status ticket.",
-              style: TextStyle(fontSize: 11.5, color: AppColors.cyanDim, fontWeight: FontWeight.w500),
+              style: AppTextStyles.small.copyWith(fontSize: 12, color: AppColors.cyanDim, fontWeight: FontWeight.w600),
             ),
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.xl),
           _fieldLabel('Printer name'),
           _textField(
             controller: _nameController,
             hint: 'e.g. Office Wi-Fi Printer',
             validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter a printer name' : null,
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.lg),
           _fieldLabel('IP address'),
           _textField(
             controller: _ipController,
@@ -342,7 +348,7 @@ class _WifiPrinterScreenState extends ConsumerState<WifiPrinterScreen> {
             keyboardType: TextInputType.number,
             validator: _validateIp,
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.lg),
           _fieldLabel('Port'),
           _textField(
             controller: _portController,
@@ -351,10 +357,10 @@ class _WifiPrinterScreenState extends ConsumerState<WifiPrinterScreen> {
             keyboardType: TextInputType.number,
             validator: _validatePort,
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.lg),
           _fieldLabel('Paper size'),
           _dropdownField(),
-          const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: AppSpacing.xxl),
         ],
       ),
     );
@@ -363,40 +369,42 @@ class _WifiPrinterScreenState extends ConsumerState<WifiPrinterScreen> {
   Widget _manualBottomBar() {
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        padding: const EdgeInsets.fromLTRB(AppSpacing.screenPadding, 8, AppSpacing.screenPadding, AppSpacing.screenPadding),
         child: Row(
           children: [
             Expanded(
               child: SizedBox(
-                height: AppSizes.buttonHeightLg,
+                height: 52,
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: AppColors.borderStrong),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusLg)),
+                    foregroundColor: AppColors.textPrimaryDark,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
                   ),
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w600)),
+                  child: Text('Cancel', style: AppTextStyles.button.copyWith(fontWeight: FontWeight.w700)),
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.md),
             Expanded(
               child: SizedBox(
-                height: AppSizes.buttonHeightLg,
+                height: 52,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusLg)),
+                    foregroundColor: AppColors.textWhite,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
                   ),
                   onPressed: _isConnecting ? null : _connectManual,
                   child: _isConnecting
                       ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.textWhite),
                         )
-                      : const Text('Connect', style: TextStyle(fontWeight: FontWeight.w600)),
+                      : Text('Connect', style: AppTextStyles.button.copyWith(fontWeight: FontWeight.w700)),
                 ),
               ),
             ),
@@ -407,10 +415,10 @@ class _WifiPrinterScreenState extends ConsumerState<WifiPrinterScreen> {
   }
 
   Widget _fieldLabel(String text) => Padding(
-        padding: const EdgeInsets.only(left: 2, bottom: 6),
+        padding: const EdgeInsets.only(left: 4, bottom: 8),
         child: Text(
           text,
-          style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 0.2),
+          style: AppTextStyles.small.copyWith(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
         ),
       );
 
@@ -425,30 +433,31 @@ class _WifiPrinterScreenState extends ConsumerState<WifiPrinterScreen> {
       controller: controller,
       keyboardType: keyboardType,
       validator: validator,
-      style: TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w500,
-        fontFamily: monospace ? 'JetBrains Mono' : null,
+      style: AppTextStyles.cardValue.copyWith(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        fontFamily: monospace ? 'JetBrains Mono' : AppTextStyles.fontBody,
       ),
       decoration: InputDecoration(
         hintText: hint,
+        hintStyle: AppTextStyles.small.copyWith(fontSize: 14),
         filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        fillColor: AppColors.surface2,
+        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSizes.radiusLg),
-          borderSide: const BorderSide(color: AppColors.borderStrong),
+          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+          borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSizes.radiusLg),
-          borderSide: const BorderSide(color: AppColors.borderStrong),
+          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+          borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSizes.radiusLg),
-          borderSide: const BorderSide(color: AppColors.cyan, width: 1.5),
+          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSizes.radiusLg),
+          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
           borderSide: const BorderSide(color: AppColors.red),
         ),
       ),
@@ -459,16 +468,20 @@ class _WifiPrinterScreenState extends ConsumerState<WifiPrinterScreen> {
     return DropdownButtonFormField<String>(
       initialValue: _paperSize,
       items: const ['58 mm', '80 mm']
-          .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 13))))
+          .map((s) => DropdownMenuItem(value: s, child: Text(s, style: AppTextStyles.cardValue.copyWith(fontSize: 14))))
           .toList(),
       onChanged: (v) => setState(() => _paperSize = v ?? _paperSize),
       decoration: InputDecoration(
         filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        fillColor: AppColors.surface2,
+        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSizes.radiusLg),
-          borderSide: const BorderSide(color: AppColors.borderStrong),
+          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+          borderSide: BorderSide.none,
         ),
       ),
     );
