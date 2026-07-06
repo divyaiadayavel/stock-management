@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:io';
+
 import 'scanner_bill_screen.dart';
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/constants/app_curve.dart';
+import '../../../../core/constants/app_sizes.dart';
+import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/storage/db_helper.dart';
 import '../providers/billing_provider.dart';
 import 'current_bill_screen.dart';
@@ -42,6 +46,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
     "Toys",
     "Footwear",
   ];
+
   @override
   void initState() {
     super.initState();
@@ -60,13 +65,12 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
   @override
   Widget build(BuildContext context) {
     final billingState = ref.watch(billingProvider);
-
     final search = ref.watch(searchProductProvider);
+
     final filteredProducts = products.where((product) {
       final searchMatch = product["name"].toString().toLowerCase().contains(
         search.toLowerCase(),
       );
-
       final categoryMatch =
           selectedCategory == "All" ||
           (product["category"] ?? "").toString() == selectedCategory;
@@ -79,599 +83,663 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
         (b["name"] ?? "").toString().toLowerCase(),
       ),
     );
+
     filteredProducts.sort((a, b) {
       final nameA = a["name"].toString();
       final nameB = b["name"].toString();
-
       return isAscending ? nameA.compareTo(nameB) : nameB.compareTo(nameA);
     });
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // ── Clean Custom Header (No AppBar Widget) ──
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: R.sp(context, AppSpacing.screenPadding / 2),
+                vertical: R.sp(context, AppSpacing.sm),
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      Icons.arrow_back,
+                      color: AppColors.textPrimaryDark,
+                      size: R.icon(context, AppSizes.iconLg),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  SizedBox(width: R.sp(context, AppSpacing.xs)),
+                  Text("Add Product Bill", style: AppTextStyles.heading),
+                ],
+              ),
+            ),
 
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text(
-          "Add Product Bill",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
-        ),
-      ),
-
-      body: Container(
-        color: AppColors.primary,
-        child: ClipRRect(
-          borderRadius: AppCurve.top(context),
-          child: Container(
-            color: AppColors.background,
-            child: isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : SingleChildScrollView(
-                    padding: EdgeInsets.all(R.sp(context, 16)),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // SEARCH + FILTER
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                onChanged: (value) {
-                                  ref
-                                          .read(searchProductProvider.notifier)
-                                          .state =
-                                      value;
-                                },
-                                decoration: InputDecoration(
-                                  hintText: "Search product / barcode",
-                                  prefixIcon: const Icon(Icons.search),
-
-                                  filled: true,
-                                  fillColor: Colors.white,
-
-                                  // ✅ Grey Border
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: BorderSide(
-                                      color: Colors.grey.shade300,
-                                      width: 1,
-                                    ),
-                                  ),
-
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: BorderSide(
-                                      color: Colors.grey.shade300,
-                                      width: 1,
-                                    ),
-                                  ),
-
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: const BorderSide(
-                                      color: AppColors.primary,
-                                      width: 1.5,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            SizedBox(width: R.sp(context, 10)),
-                            GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const ScannerBillScreen(),
-                                  ),
-                                );
-                              },
-                              child: Container(
-                                height: R.btnH(context),
-                                width: R.btnH(context),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: Colors.grey.shade300,
-                                    width: 1,
-                                  ),
-                                ),
-                                child: const Icon(
-                                  Icons.qr_code_scanner,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        SizedBox(
-                          height: R.searchH(context) - 8,
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: categories.length + 1,
-                            itemBuilder: (context, index) {
-                              if (index == 0) {
-                                return _categoryChip("All");
-                              }
-
-                              return _categoryChip(categories[index - 1]);
-                            },
-                          ),
-                        ),
-
-                        const SizedBox(height: 16),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              "All Products",
-                              style: TextStyle(
-                                fontSize: R.fs(context, 18),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                setState(() {
-                                  isAscending = !isAscending;
-                                });
-                              },
-                              child: Text(isAscending ? "A-Z" : "Z-A"),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 10),
-
-                        ListView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: filteredProducts.length,
-                          itemBuilder: (context, index) {
-                            final product = filteredProducts[index];
-
-                            return Container(
-                              margin: EdgeInsets.only(bottom: R.sp(context, 8)),
-                              padding: EdgeInsets.symmetric(
-                                horizontal: R.sp(context, 12),
-                                vertical: R.sp(context, 9),
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(
-                                  R.radius(context, 12),
-                                ),
-                                border: Border.all(color: Colors.grey.shade200),
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  // ── LEFT: product info — always same width ──────────────
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        // Product name
-                                        Text(
-                                          product["name"] ?? "",
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w500,
-                                            fontSize: R.fs(context, 13.5),
+            // ── Main Content ──
+            Expanded(
+              child: isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : SingleChildScrollView(
+                      padding: EdgeInsets.all(
+                        R.sp(context, AppSpacing.screenPadding),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // SEARCH + FILTER
+                          Row(
+                            children: [
+                              Expanded(
+                                child: SizedBox(
+                                  height: AppSizes.inputHeight + 8,
+                                  child: TextField(
+                                    onChanged: (value) {
+                                      ref
+                                              .read(
+                                                searchProductProvider.notifier,
+                                              )
+                                              .state =
+                                          value;
+                                    },
+                                    decoration: InputDecoration(
+                                      hintText: "Search product / barcode",
+                                      hintStyle: AppTextStyles.small,
+                                      prefixIcon: const Icon(
+                                        Icons.search,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                      filled: true,
+                                      fillColor: AppColors.card,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            vertical: 0,
                                           ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(
+                                          AppSizes.radiusLg,
                                         ),
-
-                                        const SizedBox(height: 5),
-
-                                        // Price / Disc / Stock
-                                        Row(
-                                          children: [
-                                            _metaChip(
-                                              context: context,
-                                              label: "Price",
-                                              value:
-                                                  "₹${product["selling_price"]}",
-                                              valueColor: Colors.black87,
-                                            ),
-
-                                            SizedBox(width: R.sp(context, 12)),
-
-                                            _metaChip(
-                                              context: context,
-                                              label: "Disc",
-                                              value:
-                                                  "${product["discount"] ?? 0}%",
-                                              valueColor: Colors.green,
-                                            ),
-
-                                            SizedBox(width: R.sp(context, 12)),
-
-                                            _metaChip(
-                                              context: context,
-                                              label: "Stock",
-                                              value: "${product["quantity"]}",
-                                              valueColor: Colors.blue,
-                                            ),
-                                          ],
+                                        borderSide: const BorderSide(
+                                          color: AppColors.border,
+                                          width: 1,
                                         ),
-                                      ],
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(
+                                          AppSizes.radiusLg,
+                                        ),
+                                        borderSide: const BorderSide(
+                                          color: AppColors.border,
+                                          width: 1,
+                                        ),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(
+                                          AppSizes.radiusLg,
+                                        ),
+                                        borderSide: const BorderSide(
+                                          color: AppColors.cyan,
+                                          width: 1.5,
+                                        ),
+                                      ),
                                     ),
                                   ),
+                                ),
+                              ),
+                              SizedBox(width: R.sp(context, AppSpacing.md)),
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const ScannerBillScreen(),
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  height: AppSizes.inputHeight + 8,
+                                  width: AppSizes.inputHeight + 8,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.card,
+                                    borderRadius: BorderRadius.circular(
+                                      AppSizes.radiusLg,
+                                    ),
+                                    border: Border.all(
+                                      color: AppColors.border,
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.qr_code_scanner,
+                                    color: AppColors.cyanDim,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
 
-                                  // ── RIGHT: fixed 130px wide — never shifts left text ────
-                                  SizedBox(
-                                    width: R.isDesktop(context)
-                                        ? 180
-                                        : R.isTablet(context)
-                                        ? 160
-                                        : 130,
-                                    child: Consumer(
-                                      builder: (context, ref, child) {
-                                        final billingState = ref.watch(
-                                          billingProvider,
-                                        );
-                                        final existingIndex = billingState.cart
-                                            .indexWhere(
-                                              (e) =>
-                                                  e.productId == product["id"],
-                                            );
+                          SizedBox(
+                            height: R.sp(context, AppSpacing.sectionGap),
+                          ),
 
-                                        // ── NOT IN CART: + button aligned far right ────────
-                                        if (existingIndex == -1) {
-                                          return Align(
-                                            alignment: Alignment.centerRight,
-                                            child: InkWell(
-                                              borderRadius:
-                                                  BorderRadius.circular(9),
-                                              onTap: () => ref
-                                                  .read(
-                                                    billingProvider.notifier,
-                                                  )
-                                                  .addToCart(product, 1),
-                                              child: Container(
-                                                height: 34,
-                                                width: 34,
-                                                decoration: BoxDecoration(
-                                                  color: AppColors.primary,
-                                                  borderRadius:
-                                                      BorderRadius.circular(9),
+                          // CATEGORY CHIPS
+                          SizedBox(
+                            height: R.searchH(context) - 8,
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: categories.length + 1,
+                              itemBuilder: (context, index) {
+                                if (index == 0) return _categoryChip("All");
+                                return _categoryChip(categories[index - 1]);
+                              },
+                            ),
+                          ),
+
+                          SizedBox(
+                            height: R.sp(context, AppSpacing.sectionGap),
+                          ),
+
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                "All Products",
+                                style: AppTextStyles.sectionTitle.copyWith(
+                                  color: AppColors.textPrimaryDark,
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  setState(() {
+                                    isAscending = !isAscending;
+                                  });
+                                },
+                                child: Text(
+                                  isAscending ? "A-Z" : "Z-A",
+                                  style: AppTextStyles.button.copyWith(
+                                    color: AppColors.cyanDim,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          SizedBox(height: R.sp(context, AppSpacing.md)),
+
+                          ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: filteredProducts.length,
+                            itemBuilder: (context, index) {
+                              final product = filteredProducts[index];
+
+                              return Container(
+                                margin: EdgeInsets.only(
+                                  bottom: R.sp(context, AppSpacing.sm),
+                                ),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: R.sp(context, AppSpacing.md),
+                                  vertical: R.sp(context, AppSpacing.md),
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.card,
+                                  borderRadius: BorderRadius.circular(
+                                    AppSizes.radiusLg,
+                                  ),
+                                  border: Border.all(color: AppColors.border),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    // ── LEFT: product info ──
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            product["name"] ?? "",
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: AppTextStyles.cardValue
+                                                .copyWith(
+                                                  fontSize: R.fs(context, 13.5),
                                                 ),
-                                                child: const Icon(
-                                                  Icons.add,
-                                                  color: Colors.white,
-                                                  size: 19,
+                                          ),
+                                          SizedBox(
+                                            height: R.sp(
+                                              context,
+                                              AppSpacing.xs,
+                                            ),
+                                          ),
+                                          Row(
+                                            children: [
+                                              _metaChip(
+                                                context: context,
+                                                label: "Price",
+                                                value:
+                                                    "₹${product["selling_price"]}",
+                                                valueColor:
+                                                    AppColors.textPrimaryDark,
+                                              ),
+                                              SizedBox(
+                                                width: R.sp(
+                                                  context,
+                                                  AppSpacing.md,
                                                 ),
                                               ),
-                                            ),
-                                          );
-                                        }
-
-                                        // ── IN CART: [ − qty + ]  🗑 fills the 130px ──────
-                                        final item =
-                                            billingState.cart[existingIndex];
-
-                                        return Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.end,
-                                          mainAxisSize: MainAxisSize.max,
-                                          children: [
-                                            // [ − | qty | + ]
-                                            Expanded(
-                                              child: Container(
-                                                height: R.btnH(context) - 16,
-                                                decoration: BoxDecoration(
-                                                  border: Border.all(
-                                                    color: AppColors.primary
-                                                        .withOpacity(0.4),
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(9),
+                                              _metaChip(
+                                                context: context,
+                                                label: "Disc",
+                                                value:
+                                                    "${product["discount"] ?? 0}%",
+                                                valueColor: AppColors.green,
+                                              ),
+                                              SizedBox(
+                                                width: R.sp(
+                                                  context,
+                                                  AppSpacing.md,
                                                 ),
-                                                child: Row(
-                                                  children: [
-                                                    // MINUS
-                                                    Expanded(
-                                                      child: InkWell(
-                                                        borderRadius:
-                                                            const BorderRadius.only(
-                                                              topLeft:
-                                                                  Radius.circular(
-                                                                    8,
-                                                                  ),
-                                                              bottomLeft:
-                                                                  Radius.circular(
-                                                                    8,
-                                                                  ),
-                                                            ),
-                                                        onTap: () {
-                                                          if (item.qty > 1) {
-                                                            ref
-                                                                .read(
-                                                                  billingProvider
-                                                                      .notifier,
-                                                                )
-                                                                .decreaseQty(
-                                                                  existingIndex,
-                                                                );
-                                                          }
-                                                        },
-                                                        child: Container(
-                                                          height: 34,
-                                                          decoration: const BoxDecoration(
-                                                            color: Color(
-                                                              0x121A56E8,
-                                                            ),
-                                                            borderRadius:
-                                                                BorderRadius.only(
-                                                                  topLeft:
-                                                                      Radius.circular(
-                                                                        8,
-                                                                      ),
-                                                                  bottomLeft:
-                                                                      Radius.circular(
-                                                                        8,
-                                                                      ),
+                                              ),
+                                              _metaChip(
+                                                context: context,
+                                                label: "Stock",
+                                                value: "${product["quantity"]}",
+                                                valueColor: AppColors.cyanDim,
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                    // ── RIGHT: Add / Cart Adjuster ──
+                                    SizedBox(
+                                      width: R.isDesktop(context)
+                                          ? 180
+                                          : R.isTablet(context)
+                                          ? 160
+                                          : 130,
+                                      child: Consumer(
+                                        builder: (context, ref, child) {
+                                          final billingState = ref.watch(
+                                            billingProvider,
+                                          );
+                                          final existingIndex = billingState
+                                              .cart
+                                              .indexWhere(
+                                                (e) =>
+                                                    e.productId ==
+                                                    product["id"],
+                                              );
+
+                                          // NOT IN CART
+                                          if (existingIndex == -1) {
+                                            return Align(
+                                              alignment: Alignment.centerRight,
+                                              child: InkWell(
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                      AppSizes.radiusMd,
+                                                    ),
+                                                onTap: () => ref
+                                                    .read(
+                                                      billingProvider.notifier,
+                                                    )
+                                                    .addToCart(product, 1),
+                                                child: Container(
+                                                  height: 34,
+                                                  width: 34,
+                                                  decoration: BoxDecoration(
+                                                    gradient:
+                                                        AppColors.brandGradient,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          AppSizes.radiusMd,
+                                                        ),
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.add,
+                                                    color: Colors.white,
+                                                    size: 19,
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          }
+
+                                          // IN CART
+                                          final item =
+                                              billingState.cart[existingIndex];
+                                          return Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.end,
+                                            mainAxisSize: MainAxisSize.max,
+                                            children: [
+                                              Expanded(
+                                                child: Container(
+                                                  height: R.btnH(context) - 16,
+                                                  decoration: BoxDecoration(
+                                                    border: Border.all(
+                                                      color: AppColors.cyanDim
+                                                          .withOpacity(0.4),
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          AppSizes.radiusMd,
+                                                        ),
+                                                  ),
+                                                  child: Row(
+                                                    children: [
+                                                      // MINUS
+                                                      Expanded(
+                                                        child: InkWell(
+                                                          borderRadius: const BorderRadius.only(
+                                                            topLeft:
+                                                                Radius.circular(
+                                                                  AppSizes
+                                                                      .radiusMd,
+                                                                ),
+                                                            bottomLeft:
+                                                                Radius.circular(
+                                                                  AppSizes
+                                                                      .radiusMd,
                                                                 ),
                                                           ),
-                                                          child: Icon(
-                                                            Icons.remove,
-                                                            color: AppColors
-                                                                .primary,
-                                                            size: 15,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-
-                                                    // Divider
-                                                    Container(
-                                                      width: 1,
-                                                      height: 34,
-                                                      color: AppColors.primary
-                                                          .withOpacity(0.25),
-                                                    ),
-
-                                                    // QTY INPUT — white bg, black text
-                                                    Expanded(
-                                                      child: SizedBox(
-                                                        height: 34,
-                                                        child: TextFormField(
-                                                          key: ValueKey(
-                                                            item.qty,
-                                                          ),
-                                                          initialValue: item.qty
-                                                              .toString(),
-                                                          keyboardType:
-                                                              TextInputType
-                                                                  .number,
-                                                          textAlign:
-                                                              TextAlign.center,
-
-                                                          style:
-                                                              const TextStyle(
-                                                                color: Colors
-                                                                    .black,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w500,
-                                                                fontSize: 13,
-                                                                height: 1.2,
-                                                              ),
-                                                          decoration:
-                                                              const InputDecoration(
-                                                                filled: true,
-                                                                fillColor:
-                                                                    Colors
-                                                                        .white,
-                                                                border:
-                                                                    InputBorder
-                                                                        .none,
-                                                                isDense: true,
-                                                                contentPadding:
-                                                                    EdgeInsets.symmetric(
-                                                                      vertical:
-                                                                          8,
-                                                                    ),
-                                                              ),
-                                                          onFieldSubmitted: (value) {
-                                                            final newQty =
-                                                                int.tryParse(
-                                                                  value,
-                                                                );
-                                                            if (newQty !=
-                                                                    null &&
-                                                                newQty > 0) {
-                                                              while (item.qty <
-                                                                  newQty) {
-                                                                ref
-                                                                    .read(
-                                                                      billingProvider
-                                                                          .notifier,
-                                                                    )
-                                                                    .increaseQty(
-                                                                      existingIndex,
-                                                                    );
-                                                              }
-                                                              while (item.qty >
-                                                                  newQty) {
-                                                                ref
-                                                                    .read(
-                                                                      billingProvider
-                                                                          .notifier,
-                                                                    )
-                                                                    .decreaseQty(
-                                                                      existingIndex,
-                                                                    );
-                                                              }
+                                                          onTap: () {
+                                                            if (item.qty > 1) {
+                                                              ref
+                                                                  .read(
+                                                                    billingProvider
+                                                                        .notifier,
+                                                                  )
+                                                                  .decreaseQty(
+                                                                    existingIndex,
+                                                                  );
                                                             }
                                                           },
+                                                          child: Container(
+                                                            height: 34,
+                                                            decoration: const BoxDecoration(
+                                                              color: AppColors
+                                                                  .surface2,
+                                                              borderRadius: BorderRadius.only(
+                                                                topLeft:
+                                                                    Radius.circular(
+                                                                      AppSizes
+                                                                          .radiusMd,
+                                                                    ),
+                                                                bottomLeft:
+                                                                    Radius.circular(
+                                                                      AppSizes
+                                                                          .radiusMd,
+                                                                    ),
+                                                              ),
+                                                            ),
+                                                            child: const Icon(
+                                                              Icons.remove,
+                                                              color: AppColors
+                                                                  .cyanDim,
+                                                              size: 15,
+                                                            ),
+                                                          ),
                                                         ),
                                                       ),
-                                                    ),
-
-                                                    // Divider
-                                                    Container(
-                                                      width: 1,
-                                                      height: 34,
-                                                      color: AppColors.primary
-                                                          .withOpacity(0.25),
-                                                    ),
-
-                                                    // PLUS
-                                                    Expanded(
-                                                      child: InkWell(
-                                                        borderRadius:
-                                                            const BorderRadius.only(
-                                                              topRight:
-                                                                  Radius.circular(
-                                                                    8,
-                                                                  ),
-                                                              bottomRight:
-                                                                  Radius.circular(
-                                                                    8,
-                                                                  ),
-                                                            ),
-                                                        onTap: () => ref
-                                                            .read(
-                                                              billingProvider
-                                                                  .notifier,
-                                                            )
-                                                            .increaseQty(
-                                                              existingIndex,
-                                                            ),
-                                                        child: Container(
+                                                      // Divider
+                                                      Container(
+                                                        width: 1,
+                                                        height: 34,
+                                                        color: AppColors.cyanDim
+                                                            .withOpacity(0.25),
+                                                      ),
+                                                      // QTY INPUT
+                                                      Expanded(
+                                                        child: SizedBox(
                                                           height: 34,
-                                                          decoration: const BoxDecoration(
-                                                            color: Color(
-                                                              0x121A56E8,
+                                                          child: TextFormField(
+                                                            key: ValueKey(
+                                                              item.qty,
                                                             ),
-                                                            borderRadius:
-                                                                BorderRadius.only(
-                                                                  topRight:
-                                                                      Radius.circular(
-                                                                        8,
-                                                                      ),
-                                                                  bottomRight:
-                                                                      Radius.circular(
-                                                                        8,
-                                                                      ),
+                                                            initialValue: item
+                                                                .qty
+                                                                .toString(),
+                                                            keyboardType:
+                                                                TextInputType
+                                                                    .number,
+                                                            textAlign: TextAlign
+                                                                .center,
+                                                            style: AppTextStyles
+                                                                .cardValue
+                                                                .copyWith(
+                                                                  fontSize: 13,
+                                                                  height: 1.2,
+                                                                ),
+                                                            decoration: const InputDecoration(
+                                                              filled: true,
+                                                              fillColor:
+                                                                  Colors.white,
+                                                              border:
+                                                                  InputBorder
+                                                                      .none,
+                                                              isDense: true,
+                                                              contentPadding:
+                                                                  EdgeInsets.symmetric(
+                                                                    vertical: 8,
+                                                                  ),
+                                                            ),
+                                                            onFieldSubmitted: (value) {
+                                                              final newQty =
+                                                                  int.tryParse(
+                                                                    value,
+                                                                  );
+                                                              if (newQty !=
+                                                                      null &&
+                                                                  newQty > 0) {
+                                                                while (item
+                                                                        .qty <
+                                                                    newQty) {
+                                                                  ref
+                                                                      .read(
+                                                                        billingProvider
+                                                                            .notifier,
+                                                                      )
+                                                                      .increaseQty(
+                                                                        existingIndex,
+                                                                      );
+                                                                }
+                                                                while (item
+                                                                        .qty >
+                                                                    newQty) {
+                                                                  ref
+                                                                      .read(
+                                                                        billingProvider
+                                                                            .notifier,
+                                                                      )
+                                                                      .decreaseQty(
+                                                                        existingIndex,
+                                                                      );
+                                                                }
+                                                              }
+                                                            },
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      // Divider
+                                                      Container(
+                                                        width: 1,
+                                                        height: 34,
+                                                        color: AppColors.cyanDim
+                                                            .withOpacity(0.25),
+                                                      ),
+                                                      // PLUS
+                                                      Expanded(
+                                                        child: InkWell(
+                                                          borderRadius: const BorderRadius.only(
+                                                            topRight:
+                                                                Radius.circular(
+                                                                  AppSizes
+                                                                      .radiusMd,
+                                                                ),
+                                                            bottomRight:
+                                                                Radius.circular(
+                                                                  AppSizes
+                                                                      .radiusMd,
                                                                 ),
                                                           ),
-                                                          child: Icon(
-                                                            Icons.add,
-                                                            color: AppColors
-                                                                .primary,
-                                                            size: 15,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-
-                                            const SizedBox(width: 6),
-
-                                            // DELETE icon
-                                            InkWell(
-                                              borderRadius:
-                                                  BorderRadius.circular(6),
-                                              onTap: () async {
-                                                final confirm = await showDialog<bool>(
-                                                  context: context,
-                                                  builder: (context) => AlertDialog(
-                                                    shape: RoundedRectangleBorder(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            16,
-                                                          ),
-                                                    ),
-                                                    title: const Text(
-                                                      "Delete Product",
-                                                    ),
-                                                    content: const Text(
-                                                      "Are you sure you want to delete this product?",
-                                                    ),
-                                                    actions: [
-                                                      TextButton(
-                                                        onPressed: () =>
-                                                            Navigator.pop(
-                                                              context,
-                                                              false,
+                                                          onTap: () => ref
+                                                              .read(
+                                                                billingProvider
+                                                                    .notifier,
+                                                              )
+                                                              .increaseQty(
+                                                                existingIndex,
+                                                              ),
+                                                          child: Container(
+                                                            height: 34,
+                                                            decoration: const BoxDecoration(
+                                                              color: AppColors
+                                                                  .surface2,
+                                                              borderRadius: BorderRadius.only(
+                                                                topRight:
+                                                                    Radius.circular(
+                                                                      AppSizes
+                                                                          .radiusMd,
+                                                                    ),
+                                                                bottomRight:
+                                                                    Radius.circular(
+                                                                      AppSizes
+                                                                          .radiusMd,
+                                                                    ),
+                                                              ),
                                                             ),
-                                                        child: const Text(
-                                                          "Cancel",
-                                                        ),
-                                                      ),
-                                                      ElevatedButton(
-                                                        style:
-                                                            ElevatedButton.styleFrom(
-                                                              backgroundColor:
-                                                                  Colors.red,
+                                                            child: const Icon(
+                                                              Icons.add,
+                                                              color: AppColors
+                                                                  .cyanDim,
+                                                              size: 15,
                                                             ),
-                                                        onPressed: () =>
-                                                            Navigator.pop(
-                                                              context,
-                                                              true,
-                                                            ),
-                                                        child: const Text(
-                                                          "Delete",
-                                                          style: TextStyle(
-                                                            color: Colors.white,
                                                           ),
                                                         ),
                                                       ),
                                                     ],
                                                   ),
-                                                );
-                                                if (confirm == true) {
-                                                  ref
-                                                      .read(
-                                                        billingProvider
-                                                            .notifier,
-                                                      )
-                                                      .removeItem(
-                                                        existingIndex,
-                                                      );
-                                                }
-                                              },
-                                              child: const Icon(
-                                                Icons.delete_outline,
-                                                color: Colors.red,
-                                                size: 20,
+                                                ),
                                               ),
-                                            ),
-                                          ],
-                                        );
-                                      },
+                                              SizedBox(
+                                                width: R.sp(
+                                                  context,
+                                                  AppSpacing.sm,
+                                                ),
+                                              ),
+                                              // DELETE icon
+                                              InkWell(
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                      AppSizes.radiusSm,
+                                                    ),
+                                                onTap: () async {
+                                                  final confirm = await showDialog<bool>(
+                                                    context: context,
+                                                    builder: (context) => AlertDialog(
+                                                      shape: RoundedRectangleBorder(
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              AppSizes.radiusLg,
+                                                            ),
+                                                      ),
+                                                      title: Text(
+                                                        "Delete Product",
+                                                        style: AppTextStyles
+                                                            .sectionTitle
+                                                            .copyWith(
+                                                              color: AppColors
+                                                                  .textPrimaryDark,
+                                                            ),
+                                                      ),
+                                                      content: Text(
+                                                        "Are you sure you want to delete this product?",
+                                                        style:
+                                                            AppTextStyles.small,
+                                                      ),
+                                                      actions: [
+                                                        TextButton(
+                                                          onPressed: () =>
+                                                              Navigator.pop(
+                                                                context,
+                                                                false,
+                                                              ),
+                                                          child: const Text(
+                                                            "Cancel",
+                                                          ),
+                                                        ),
+                                                        ElevatedButton(
+                                                          style:
+                                                              ElevatedButton.styleFrom(
+                                                                backgroundColor:
+                                                                    AppColors
+                                                                        .red,
+                                                              ),
+                                                          onPressed: () =>
+                                                              Navigator.pop(
+                                                                context,
+                                                                true,
+                                                              ),
+                                                          child: Text(
+                                                            "Delete",
+                                                            style: AppTextStyles
+                                                                .button
+                                                                .copyWith(
+                                                                  color: Colors
+                                                                      .white,
+                                                                ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  );
+                                                  if (confirm == true) {
+                                                    ref
+                                                        .read(
+                                                          billingProvider
+                                                              .notifier,
+                                                        )
+                                                        .removeItem(
+                                                          existingIndex,
+                                                        );
+                                                  }
+                                                },
+                                                child: const Icon(
+                                                  Icons.delete_outline,
+                                                  color: AppColors.red,
+                                                  size: 20,
+                                                ),
+                                              ),
+                                            ],
+                                          );
+                                        },
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      ],
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-          ),
+            ),
+          ],
         ),
       ),
       bottomNavigationBar: SafeArea(
         child: Container(
-          margin: EdgeInsets.all(R.sp(context, 12)),
+          margin: EdgeInsets.all(R.sp(context, AppSpacing.md)),
           height: R.btnH(context) + 10,
           decoration: BoxDecoration(
-            color: AppColors.primary,
-            borderRadius: BorderRadius.circular(14),
+            gradient: AppColors.brandGradient,
+            borderRadius: BorderRadius.circular(AppSizes.radiusLg),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(.1),
@@ -682,8 +750,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
           ),
           child: Row(
             children: [
-              const SizedBox(width: 14),
-
+              SizedBox(width: R.sp(context, AppSpacing.lg)),
               Stack(
                 children: [
                   const Icon(
@@ -691,14 +758,13 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                     color: Colors.white,
                     size: 30,
                   ),
-
                   Positioned(
                     right: 0,
                     top: 0,
                     child: Container(
                       padding: const EdgeInsets.all(4),
                       decoration: const BoxDecoration(
-                        color: Colors.red,
+                        color: AppColors.red,
                         shape: BoxShape.circle,
                       ),
                       child: Text(
@@ -712,9 +778,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                   ),
                 ],
               ),
-
-              const SizedBox(width: 12),
-
+              SizedBox(width: R.sp(context, AppSpacing.md)),
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -722,45 +786,45 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                   children: [
                     Text(
                       "${billingState.cart.length} Items",
-                      style: const TextStyle(
+                      style: AppTextStyles.small.copyWith(
                         color: Colors.white70,
-                        fontSize: 12,
                       ),
                     ),
-
                     Text(
                       "₹ ${billingState.total.toStringAsFixed(2)}",
-                      style: TextStyle(
+                      style: AppTextStyles.cardValue.copyWith(
                         color: Colors.white,
                         fontSize: R.fs(context, 20),
-                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
                 ),
               ),
-
               Padding(
-                padding: const EdgeInsets.only(right: 12),
+                padding: EdgeInsets.only(right: R.sp(context, AppSpacing.md)),
                 child: SizedBox(
                   height: R.btnH(context) - 12,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
-                      foregroundColor: AppColors.primary,
+                      foregroundColor: AppColors.cyanDim,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
                       ),
                     ),
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => CurrentBillScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const CurrentBillScreen(),
+                        ),
                       );
                     },
-                    child: const Text(
+                    child: Text(
                       "View Bill",
-                      style: TextStyle(fontWeight: FontWeight.w500),
+                      style: AppTextStyles.button.copyWith(
+                        color: AppColors.cyanDim,
+                      ),
                     ),
                   ),
                 ),
@@ -782,31 +846,30 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
         });
       },
       child: Container(
-        margin: const EdgeInsets.only(right: 8),
+        margin: EdgeInsets.only(right: R.sp(context, AppSpacing.sm)),
         padding: EdgeInsets.symmetric(
           horizontal: R.sp(context, 14),
           vertical: R.sp(context, 10),
         ),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : Colors.white,
-          borderRadius: BorderRadius.circular(10),
+          gradient: isSelected ? AppColors.brandGradient : null,
+          color: isSelected ? null : AppColors.card,
+          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
           border: Border.all(
-            color: isSelected ? AppColors.primary : Colors.grey.shade300,
+            color: isSelected ? Colors.transparent : AppColors.border,
           ),
         ),
         child: Text(
           title,
-          style: TextStyle(
-            color: isSelected ? Colors.white : Colors.black,
+          style: AppTextStyles.button.copyWith(
+            color: isSelected ? Colors.white : AppColors.textPrimaryDark,
             fontSize: R.fs(context, 12),
-            fontWeight: FontWeight.w500,
           ),
         ),
       ),
     );
   }
 
-  // ── _metaChip helper (inside State class, outside build) ───────
   Widget _metaChip({
     required BuildContext context,
     required String label,
@@ -819,13 +882,12 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
       children: [
         Text(
           label,
-          style: TextStyle(color: Colors.grey, fontSize: R.fs(context, 10)),
+          style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 10)),
         ),
         Text(
           value,
-          style: TextStyle(
+          style: AppTextStyles.cardValue.copyWith(
             color: valueColor,
-            fontWeight: FontWeight.w500,
             fontSize: R.fs(context, 12),
           ),
         ),

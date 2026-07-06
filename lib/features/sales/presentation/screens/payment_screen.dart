@@ -1,386 +1,504 @@
 import 'package:flutter/material.dart';
-import '../../../../core/constants/app_colors.dart';
-import '../../../../core/utils/responsive_helper.dart'; // Make sure this path is correct
-import 'invoice_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/payment_provider.dart';
-import '../../../../core/constants/app_curve.dart';
+
+import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/constants/app_sizes.dart';
+import '../../../../core/constants/app_text_styles.dart';
+import '../../../../core/utils/responsive_helper.dart';
+import '../../../../core/storage/db_helper.dart';
+import 'invoice_screen.dart';
 import '../providers/billing_provider.dart';
 
-class PaymentScreen extends ConsumerWidget {
+class PaymentScreen extends ConsumerStatefulWidget {
   final double totalAmount;
   final String invoiceNumber;
   final int invoiceId;
+  final double? gstAmount;
 
-  PaymentScreen({
+  const PaymentScreen({
     super.key,
     required this.totalAmount,
     required this.invoiceNumber,
     required this.invoiceId,
+    this.gstAmount,
   });
 
-  final TextEditingController _upiController = TextEditingController();
+  @override
+  ConsumerState<PaymentScreen> createState() => _PaymentScreenState();
+}
+
+class _PaymentScreenState extends ConsumerState<PaymentScreen> {
+  late TextEditingController _cashCtrl;
+  late TextEditingController _upiCtrl;
+  Map<String, dynamic>? _selectedCustomer;
+  bool _saving = false;
+
+  double get _gst =>
+      widget.gstAmount ?? (widget.totalAmount - widget.totalAmount / 1.18);
+
+  double get _cash => double.tryParse(_cashCtrl.text) ?? 0;
+  double get _upi => double.tryParse(_upiCtrl.text) ?? 0;
+  double get _tendered => _cash + _upi;
+  double get _change =>
+      _tendered > widget.totalAmount ? _tendered - widget.totalAmount : 0;
+  double get _balanceDue =>
+      _tendered < widget.totalAmount ? widget.totalAmount - _tendered : 0;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final selectedMethod = ref.watch(paymentProvider);
-    final paymentNotifier = ref.read(paymentProvider.notifier);
+  void initState() {
+    super.initState();
+    _cashCtrl = TextEditingController(
+      text: widget.totalAmount.toStringAsFixed(0),
+    );
+    _upiCtrl = TextEditingController(text: '0');
+  }
 
+  @override
+  void dispose() {
+    _cashCtrl.dispose();
+    _upiCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickCustomer() async {
+    final customers = await DBHelper.getCustomers();
+    if (!mounted) return;
+    final picked = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(
+            top: R.sp(ctx, AppSpacing.lg),
+            bottom:
+                MediaQuery.of(ctx).viewInsets.bottom + R.sp(ctx, AppSpacing.lg),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: R.sp(ctx, AppSpacing.screenPadding),
+                ),
+                child: Text(
+                  'Select customer',
+                  style: AppTextStyles.sectionTitle,
+                ),
+              ),
+              SizedBox(height: R.sp(ctx, AppSpacing.sm)),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: customers.length,
+                  itemBuilder: (_, i) {
+                    final c = customers[i];
+                    return ListTile(
+                      title: Text(
+                        c['name']?.toString() ?? '',
+                        style: AppTextStyles.cardValue,
+                      ),
+                      onTap: () => Navigator.pop(ctx, c),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked != null) setState(() => _selectedCustomer = picked);
+  }
+
+  Future<void> _confirmAndPrint() async {
+    setState(() => _saving = true);
+
+    try {
+      await DBHelper.recordSplitPayment(
+        invoiceId: widget.invoiceId,
+        cashAmount: _cash,
+        upiAmount: _upi,
+        balanceDue: _balanceDue,
+        customerId: _selectedCustomer?['id'],
+        customerName: _selectedCustomer?['name'],
+      );
+
+      if (!mounted) return;
+
+      ref.read(billingProvider.notifier).clearCart();
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => InvoiceScreen(
+            invoiceId: widget.invoiceId,
+            customerName: _selectedCustomer?['name'] ?? 'Walk-in Customer',
+            balanceDue: _balanceDue,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not confirm payment: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        backgroundColor: AppColors.background,
+        elevation: 0,
         leading: IconButton(
           icon: Icon(
             Icons.arrow_back,
-            color: Colors.white,
-            size: R.icon(context, 24),
+            color: AppColors.textPrimaryDark,
+            size: R.icon(context, AppSizes.iconLg),
           ),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
-          "Payment",
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w500,
-            fontSize: R.fs(context, 20),
-          ),
-        ),
-        centerTitle: false,
-        backgroundColor: AppColors.primary,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: Icon(
-              Icons.receipt_long,
-              color: Colors.white,
-              size: R.icon(context, 24),
-            ),
-            onPressed: () {},
-          ),
-        ],
+        title: Text('Payment', style: AppTextStyles.heading),
       ),
-      body: Container(
-        color: AppColors.primary,
-        child: ClipRRect(
-          borderRadius: AppCurve.top(context),
-          child: Container(
-            color: Colors.white,
-            child: SingleChildScrollView(
-              // Dynamically switches paddings based on screen breakpoint (Centers and caps at 960px on desktop)
-              padding: R.hPad(context, base: 20.0),
+      body: SingleChildScrollView(
+        padding: R
+            .hPad(context, base: AppSpacing.screenPadding)
+            .copyWith(
+              top: R.sp(context, AppSpacing.md),
+              bottom: R.sp(context, AppSpacing.xl),
+            ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Total payable card ──
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(R.sp(context, AppSpacing.lg)),
+              decoration: BoxDecoration(
+                color: AppColors.textPrimaryDark,
+                borderRadius: BorderRadius.circular(
+                  R.radius(context, AppSizes.cardRadius),
+                ),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(height: R.sp(context, 20)),
-
-                  // ================= AMOUNT CARD =================
-                  Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(R.sp(context, 24)),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(
-                        R.radius(context, 16),
-                      ),
-                      border: Border.all(color: Colors.grey.shade300, width: 1),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          "TOTAL PAYABLE AMOUNT",
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: R.fs(context, 12),
-                            letterSpacing: 1,
-                          ),
-                        ),
-                        SizedBox(height: R.sp(context, 8)),
-                        Text(
-                          "₹${totalAmount.toStringAsFixed(2)}",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: R.fs(context, 32),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        SizedBox(height: R.sp(context, 12)),
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: R.sp(context, 12),
-                            vertical: R.sp(context, 6),
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(
-                              R.radius(context, 20),
-                            ),
-                            border: Border.all(color: Colors.white38, width: 1),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.receipt_long,
-                                color: Colors.white,
-                                size: R.icon(context, 16),
-                              ),
-                              SizedBox(width: R.sp(context, 6)),
-                              Text(
-                                invoiceNumber,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: R.fs(context, 14),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  SizedBox(height: R.sp(context, 30)),
-
                   Text(
-                    "Select Payment Method",
-                    style: TextStyle(
-                      fontSize: R.fs(context, 18),
-                      fontWeight: FontWeight.w500,
-                      color: Colors.black87,
+                    'TOTAL PAYABLE',
+                    style: AppTextStyles.small.copyWith(
+                      color: Colors.white70,
+                      letterSpacing: 1,
                     ),
                   ),
-
-                  SizedBox(height: R.sp(context, 16)),
-
-                  // ================= CASH =================
-                  _buildPaymentOption(
-                    context: context,
-                    selectedMethod: selectedMethod,
-                    paymentNotifier: paymentNotifier,
-                    title: "Cash",
-                    subtitle: "Instant settlement at counter",
-                    icon: Icons.money,
-                    value: "Cash",
-                  ),
-
-                  SizedBox(height: R.sp(context, 12)),
-
-                  // ================= UPI =================
-                  _buildPaymentOption(
-                    context: context,
-                    selectedMethod: selectedMethod,
-                    paymentNotifier: paymentNotifier,
-                    title: "UPI / Digital Payment",
-                    subtitle: "Secure Google Pay, PhonePe, etc.",
-                    icon: Icons.account_balance_wallet_outlined,
-                    value: "UPI",
-                    isExpanded: selectedMethod == "UPI",
-                  ),
-
-                  SizedBox(height: R.sp(context, 60)),
-
-                  // ================= SECURITY =================
-                  Center(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.verified_user_outlined,
-                          size: R.icon(context, 16),
-                          color: Colors.grey,
-                        ),
-                        SizedBox(width: R.sp(context, 4)),
-                        Text(
-                          "Secure 256-bit encrypted transaction",
-                          style: TextStyle(
-                            color: Colors.grey,
-                            fontSize: R.fs(context, 12),
-                          ),
-                        ),
-                      ],
+                  SizedBox(height: R.sp(context, AppSpacing.xs)),
+                  Text(
+                    '₹${widget.totalAmount.toStringAsFixed(0)}',
+                    style: AppTextStyles.heading.copyWith(
+                      color: Colors.white,
+                      fontSize: R.fs(context, 30),
                     ),
                   ),
-
-                  SizedBox(height: R.sp(context, 16)),
-
-                  // ================= INVOICE BUTTON =================
-                  SizedBox(
-                    width: double.infinity,
-                    height: R.btnH(
-                      context,
-                    ), // Responsive button height scaling from 50 to 64
-                    child: OutlinedButton.icon(
-                      icon: Icon(
-                        Icons.receipt_long,
-                        color: Colors.white,
-                        size: R.icon(context, 20),
-                      ),
-                      label: Text(
-                        "Open Invoice",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w500,
-                          fontSize: R.fs(context, 16),
-                        ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(
-                            R.radius(context, 12),
-                          ),
-                        ),
-                      ),
-                      onPressed: () {
-                        // ✅ Check payment method selected or not
-                        if (selectedMethod == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Please select a payment method"),
-                            ),
-                          );
-                          return;
-                        }
-                        // Clear current bill
-                        ref.read(billingProvider.notifier).clearCart();
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => InvoiceScreen(invoiceId: invoiceId),
-                          ),
-                        );
-                      },
-                    ),
+                  SizedBox(height: R.sp(context, AppSpacing.xs)),
+                  Text(
+                    'incl ₹${_gst.toStringAsFixed(0)} GST · ${widget.invoiceNumber}',
+                    style: AppTextStyles.small.copyWith(color: Colors.white70),
                   ),
-
-                  SizedBox(height: R.sp(context, 20)),
                 ],
               ),
             ),
+
+            SizedBox(height: R.sp(context, AppSpacing.lg)),
+
+            // ── Customer ──
+            Text(
+              'Customer',
+              style: AppTextStyles.small.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+            SizedBox(height: R.sp(context, AppSpacing.xs)),
+            GestureDetector(
+              onTap: _pickCustomer,
+              child: Container(
+                width: double.infinity,
+                padding: EdgeInsets.symmetric(
+                  horizontal: R.sp(context, AppSpacing.md),
+                  vertical: R.sp(context, AppSpacing.md),
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(
+                    R.radius(context, AppSizes.radiusMd),
+                  ),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _selectedCustomer?['name']?.toString() ??
+                          'Walk-in Customer',
+                      style: AppTextStyles.cardValue.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Icon(
+                      Icons.keyboard_arrow_down,
+                      color: AppColors.textSecondary,
+                      size: R.icon(context, AppSizes.iconMd),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            SizedBox(height: R.sp(context, AppSpacing.lg)),
+
+            // ── Split tender ──
+            Text('Split tender', style: AppTextStyles.sectionTitle),
+            SizedBox(height: R.sp(context, AppSpacing.sm)),
+
+            _TenderField(
+              label: 'Cash',
+              controller: _cashCtrl,
+              onChanged: () => setState(() {}),
+            ),
+            SizedBox(height: R.sp(context, AppSpacing.sm)),
+            _TenderField(
+              label: 'UPI',
+              controller: _upiCtrl,
+              onChanged: () => setState(() {}),
+            ),
+
+            SizedBox(height: R.sp(context, AppSpacing.sm)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Cash tendered ₹${_cash.toStringAsFixed(0)}',
+                  style: AppTextStyles.small.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                Text(
+                  'Change ₹${_change.toStringAsFixed(0)}',
+                  style: AppTextStyles.small.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+
+            if (_balanceDue > 0) ...[
+              SizedBox(height: R.sp(context, AppSpacing.sm)),
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.symmetric(
+                  horizontal: R.sp(context, AppSpacing.md),
+                  vertical: R.sp(context, AppSpacing.sm + 2),
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.orange.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(
+                    R.radius(context, AppSizes.radiusMd),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Balance due (credit)',
+                      style: AppTextStyles.small.copyWith(
+                        color: AppColors.orange,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      '₹${_balanceDue.toStringAsFixed(0)}',
+                      style: AppTextStyles.cardValue.copyWith(
+                        color: AppColors.orange,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            SizedBox(height: R.sp(context, AppSpacing.xxl)),
+
+            Center(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.verified_user_outlined,
+                    size: R.icon(context, AppSizes.iconSm),
+                    color: AppColors.textSecondary,
+                  ),
+                  SizedBox(width: R.sp(context, AppSpacing.xs)),
+                  Text(
+                    'Secure 256-bit encrypted transaction',
+                    style: AppTextStyles.small.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            SizedBox(height: R.sp(context, AppSpacing.lg)),
+          ],
+        ),
+      ),
+
+      // ── Bottom buttons ──
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: R
+              .hPad(context, base: AppSpacing.screenPadding)
+              .copyWith(
+                top: R.sp(context, AppSpacing.sm),
+                bottom: R.sp(context, AppSpacing.sm),
+              ),
+          child: Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: R.btnH(context),
+                  child: OutlinedButton(
+                    onPressed: _saving ? null : () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      side: const BorderSide(color: AppColors.border),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                          R.radius(context, AppSizes.radiusMd),
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: AppTextStyles.button.copyWith(
+                        color: AppColors.textPrimaryDark,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(width: R.sp(context, AppSpacing.sm)),
+              Expanded(
+                flex: 2,
+                child: SizedBox(
+                  height: R.btnH(context),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: AppColors.brandGradient,
+                      borderRadius: BorderRadius.circular(
+                        R.radius(context, AppSizes.radiusMd),
+                      ),
+                    ),
+                    child: ElevatedButton(
+                      onPressed: _saving ? null : _confirmAndPrint,
+                      style: ElevatedButton.styleFrom(
+                        elevation: 0,
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            R.radius(context, AppSizes.radiusMd),
+                          ),
+                        ),
+                      ),
+                      child: _saving
+                          ? SizedBox(
+                              width: R.sp(context, 18),
+                              height: R.sp(context, 18),
+                              child: const CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              'Confirm & print invoice',
+                              style: AppTextStyles.button.copyWith(
+                                color: Colors.white,
+                              ),
+                            ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
+}
 
-  // ================= PAYMENT OPTION =================
-  Widget _buildPaymentOption({
-    required BuildContext context,
-    required String? selectedMethod,
-    required StateController<String?> paymentNotifier,
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required String value,
-    bool isExpanded = false,
-  }) {
-    bool isSelected = selectedMethod == value;
+class _TenderField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final VoidCallback onChanged;
 
-    return GestureDetector(
-      onTap: () {
-        paymentNotifier.state = value;
-      },
-      child: Container(
-        padding: EdgeInsets.all(R.sp(context, 16)),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(R.radius(context, 12)),
-          border: Border.all(
-            color: isSelected ? AppColors.primary : Colors.grey.shade300,
-            width: isSelected ? 2 : 1,
-          ),
+  const _TenderField({
+    required this.label,
+    required this.controller,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: R.sp(context, AppSpacing.md),
+        vertical: R.sp(context, AppSpacing.sm),
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(
+          R.radius(context, AppSizes.radiusMd),
         ),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(R.sp(context, 8)),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(R.radius(context, 8)),
-                  ),
-                  child: Icon(
-                    icon,
-                    color: AppColors.primary,
-                    size: R.icon(context, 24),
-                  ),
-                ),
-                SizedBox(width: R.sp(context, 16)),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w500,
-                          fontSize: R.fs(context, 16),
-                        ),
-                      ),
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: R.fs(context, 12),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Radio<String>(
-                  value: value,
-                  groupValue: selectedMethod,
-                  activeColor: AppColors.primary,
-                  onChanged: (val) {
-                    paymentNotifier.state = val!;
-                  },
-                ),
-              ],
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: AppTextStyles.cardValue.copyWith(
+              color: AppColors.textSecondary,
             ),
-
-            // ================= UPI FIELD =================
-            if (isExpanded) ...[
-              SizedBox(height: R.sp(context, 16)),
-              TextField(
-                controller: _upiController,
-                style: TextStyle(fontSize: R.fs(context, 14)),
-                decoration: InputDecoration(
-                  labelText: "UPI ID",
-                  labelStyle: TextStyle(fontSize: R.fs(context, 14)),
-                  hintText: "username@bank",
-                  hintStyle: TextStyle(fontSize: R.fs(context, 14)),
-                  border: const OutlineInputBorder(),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                ),
+          ),
+          const Spacer(),
+          Text('₹', style: AppTextStyles.cardValue),
+          SizedBox(
+            width: R.sp(context, 100),
+            child: TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.right,
+              style: AppTextStyles.cardValue.copyWith(
+                fontWeight: FontWeight.w600,
               ),
-              Padding(
-                padding: EdgeInsets.symmetric(vertical: R.sp(context, 8.0)),
-                child: Text(
-                  "OR",
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: R.fs(context, 12),
-                  ),
-                ),
+              decoration: const InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
               ),
-              OutlinedButton.icon(
-                onPressed: () {},
-                icon: Icon(Icons.qr_code_scanner, size: R.icon(context, 20)),
-                label: Text(
-                  "Scan QR Code",
-                  style: TextStyle(fontSize: R.fs(context, 14)),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  minimumSize: Size(double.infinity, R.fluid(context, 45, 55)),
-                  side: const BorderSide(color: AppColors.primary),
-                ),
-              ),
-            ],
-          ],
-        ),
+              onChanged: (_) => onChanged(),
+            ),
+          ),
+        ],
       ),
     );
   }

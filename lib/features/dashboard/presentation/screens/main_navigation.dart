@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// 👇 Added Design System Imports
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
 
@@ -11,7 +10,7 @@ import '../../../auth/presentation/widgets/access_guard.dart';
 import '../../../products/presentation/screens/product_screen.dart';
 import '../../../sales/presentation/screens/current_bill_screen.dart';
 import '../../../settings/presentation/screens/settings_screen.dart';
-import '../../../suppliers/presentation/screens/suppliers_screen.dart';
+import '../../../inventory/presentation/screens/inventory_screen.dart';
 import 'dashboard_screen.dart';
 
 class MainNavigationScreen extends ConsumerStatefulWidget {
@@ -25,8 +24,8 @@ class MainNavigationScreen extends ConsumerStatefulWidget {
 class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
   int _currentIndex = 0;
 
-  // Fixed page list — AccessGuard handles showing restricted view
-  // when the role cannot access that feature
+  // Pages: Dashboard · Products · (Sale = FAB) · Inventory · More
+  // Index:    0           1                          2           3
   static const List<(AppFeature, Widget)> _pages = [
     (
       AppFeature.dashboard,
@@ -36,27 +35,28 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
       AppFeature.products,
       AccessGuard(feature: AppFeature.products, child: ProductScreen()),
     ),
+    // index 2 → Inventory
     (
-      AppFeature.suppliers,
-      AccessGuard(feature: AppFeature.suppliers, child: SuppliersScreen()),
+      AppFeature.inventory,
+      AccessGuard(feature: AppFeature.inventory, child: InventoryScreen()),
     ),
+    // index 3 → More / Settings
     (
       AppFeature.settings,
       AccessGuard(feature: AppFeature.settings, child: SettingsScreen()),
     ),
   ];
 
-  // Nav bar items — order matches _pages above (billing is FAB, not a tab)
+  // Nav items (4 tabs — Sale is the center FAB, not a tab)
   static const List<(IconData, String, AppFeature)> _navItems = [
     (Icons.home_outlined, 'Home', AppFeature.dashboard),
     (Icons.inventory_2_outlined, 'Products', AppFeature.products),
-    (Icons.local_shipping_outlined, 'Suppliers', AppFeature.suppliers),
-    (Icons.settings_outlined, 'Settings', AppFeature.settings),
+   (Icons.widgets_outlined, 'Inventory', AppFeature.inventory),
+    (Icons.more_horiz, 'More', AppFeature.settings),
   ];
 
-  bool _canAccess(AppFeature feature) {
-    return ref.read(canAccessFeatureProvider(feature));
-  }
+  bool _canAccess(AppFeature feature) =>
+      ref.read(canAccessFeatureProvider(feature));
 
   void _showAccessDenied(String label) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -65,7 +65,7 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
           '$label access is restricted for your role',
           style: const TextStyle(color: Colors.white),
         ),
-        backgroundColor: AppColors.red, // 👈 Updated to Semantic Danger
+        backgroundColor: AppColors.red,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -82,7 +82,11 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
     setState(() => _currentIndex = index);
   }
 
-  void _openBilling() {
+  void _openSale() {
+    if (!_canAccess(AppFeature.billing)) {
+      _showAccessDenied('Sale');
+      return;
+    }
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => CurrentBillScreen()),
@@ -95,7 +99,6 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
 
     return Scaffold(
       body: _pages[_currentIndex].$2,
-      // ── NO floatingActionButton, NO floatingActionButtonLocation ──
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: AppColors.card,
@@ -114,19 +117,17 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
               children: [
                 // Home
                 Expanded(child: _navItem(0)),
-                // Inventory
+                // Products
                 Expanded(child: _navItem(1)),
 
-                // ── CENTER BILLING BUTTON ──────────────────
+                // ── CENTER  Sale  BUTTON ──────────────────────
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
                     vertical: 6,
                   ),
                   child: GestureDetector(
-                    onTap: _canAccess(AppFeature.billing)
-                        ? _openBilling
-                        : () => _showAccessDenied('Billing'),
+                    onTap: _openSale,
                     child: Container(
                       width: 56,
                       height: 52,
@@ -148,20 +149,34 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
                               ]
                             : null,
                       ),
-                      child: Icon(
-                        _canAccess(AppFeature.billing)
-                            ? Icons.shopping_cart_outlined
-                            : Icons.lock_outline,
-                        color: Colors.white,
-                        size: 24,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            _canAccess(AppFeature.billing)
+                                ? Icons.currency_rupee
+                                : Icons.lock_outline,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            "Sale",
+                            style: AppTextStyles.small.copyWith(
+                              color: Colors.white,
+                              fontSize: 10,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
 
-                // Suppliers
+                // Inventory
                 Expanded(child: _navItem(2)),
-                // Settings
+                // More
                 Expanded(child: _navItem(3)),
               ],
             ),
@@ -176,21 +191,17 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
     final isActive = _currentIndex == index;
     final canAccess = _canAccess(feature);
 
-    // Locked icon when role cannot access this tab
     final displayIcon = canAccess ? icon : Icons.lock_outline;
 
-    // 👇 Updated to use Catalystack Colors
     final color = isActive
-        ? AppColors
-              .primary // Active uses Brand Blue
+        ? AppColors.primary
         : canAccess
-        ? AppColors
-              .textSecondary // Inactive uses Muted Gray
-        : AppColors.borderStrong; // Disabled uses strong border color
+        ? AppColors.textSecondary
+        : AppColors.borderStrong;
 
     return GestureDetector(
       onTap: () => _onNavTap(index),
-      behavior: HitTestBehavior.opaque, // Ensures the whole column is clickable
+      behavior: HitTestBehavior.opaque,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -201,7 +212,7 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
             style: AppTextStyles.small.copyWith(
               color: color,
               fontSize: 11,
-              letterSpacing: 0, // Reset tracking for nav bar
+              letterSpacing: 0,
             ),
           ),
         ],
@@ -209,46 +220,3 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
     );
   }
 }
-
-// // ─── Billing FAB ──────────────────────────────────────────────────────────────
-// class _BillingFab extends StatelessWidget {
-//   const _BillingFab({required this.canAccess, required this.onTap});
-
-//   final bool canAccess;
-//   final VoidCallback onTap;
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return SizedBox(
-//       height: 52,
-//       width: 52,
-//       child: FloatingActionButton(
-//         onPressed: canAccess ? onTap : null,
-//         elevation: 4,
-//         backgroundColor: Colors.transparent,
-//         tooltip: canAccess ? 'Billing' : 'Billing restricted',
-//         child: Ink(
-//           decoration: BoxDecoration(
-//             gradient: canAccess ? AppColors.brandGradient : null,
-//             color: canAccess ? null : AppColors.borderStrong,
-//             shape: BoxShape.circle,
-//             boxShadow: canAccess
-//                 ? [
-//                     BoxShadow(
-//                       color: AppColors.cyan.withOpacity(0.35),
-//                       blurRadius: 10,
-//                       offset: const Offset(0, 3),
-//                     ),
-//                   ]
-//                 : null,
-//           ),
-//           child: Icon(
-//             canAccess ? Icons.shopping_cart_outlined : Icons.lock_outline,
-//             color: Colors.white,
-//             size: 24,
-//           ),
-//         ),
-//       ),
-//     );
-//   }
-// }

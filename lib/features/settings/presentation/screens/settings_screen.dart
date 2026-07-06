@@ -5,7 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/constants/app_curve.dart';
+// import '../../../../core/constants/app_curve.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../domain/entities/business_profile.dart';
 
@@ -326,7 +326,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         color: AppColors.primary,
 
         child: ClipRRect(
-          borderRadius: AppCurve.top(context),
+          // borderRadius: AppCurve.top(context),
 
           child: Container(
             color: Colors.grey.shade100,

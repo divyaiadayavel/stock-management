@@ -6,9 +6,10 @@ import '../../../../core/storage/db_helper.dart';
 import 'add_supplier_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/supplier_provider.dart';
-import '../../../../core/constants/app_curve.dart';
+// import '../../../../core/constants/app_curve.dart';
 import 'supplier_details_screen.dart';
-import '../../../../core/utils/responsive_helper.dart'; // ← add this import
+import '../../../../core/utils/responsive_helper.dart';
+import 'package:url_launcher/url_launcher.dart'; // ← add url_launcher to pubspec.yaml
 
 class SuppliersScreen extends ConsumerStatefulWidget {
   const SuppliersScreen({super.key});
@@ -18,8 +19,6 @@ class SuppliersScreen extends ConsumerStatefulWidget {
 }
 
 class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
-  List<Map<String, dynamic>> filteredSuppliers = [];
-  String searchText = '';
   String selectedCategoryFilter = "All";
 
   final List<String> categoryFilters = [
@@ -48,9 +47,6 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
     loadSuppliers();
   }
 
-  // =========================
-  // 🔹 LOAD SUPPLIERS
-  // =========================
   Future<void> loadSuppliers() async {
     final data = await DBHelper.getSuppliers();
     final supplierCount = await DBHelper.getSupplierCount();
@@ -69,106 +65,89 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
 
   void applyCategoryFilter() async {
     final data = await DBHelper.getSuppliers();
-
     if (selectedCategoryFilter == "All") {
       ref.read(suppliersProvider.notifier).state = data;
     } else {
-      ref.read(suppliersProvider.notifier).state = data.where((supplier) {
-        return supplier["category"] == selectedCategoryFilter;
+      ref.read(suppliersProvider.notifier).state = data.where((s) {
+        final cats = (s["category"] as String?)?.split(",") ?? [];
+        return cats.any((c) => c.trim() == selectedCategoryFilter);
       }).toList();
     }
   }
 
-  // =========================
-  // 🔹 TOP CARD (FIXED HORIZONTAL LAYOUT)
-  // =========================
-  Widget _topCard(String title, String value, IconData icon, Color color) {
-    return Container(
-      // Fluid padding shrinks gracefully on smaller devices to prevent squeezing layout elements
-      padding: EdgeInsets.all(R.fluid(context, 10, 16)),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(
-          R.radius(context, AppSizes.cardRadius),
+  // ── Launch phone dialer ──────────────────────────────────────
+  Future<void> _makeCall(String contactNumber) async {
+    final cleaned = contactNumber.replaceAll(RegExp(r'\s+'), '');
+    final uri = Uri(scheme: 'tel', path: cleaned);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Could not launch dialer for $contactNumber"),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  // ── Stat card (top row) ──────────────────────────────────────
+  Widget _statCard(String label, String value, {Color? valueColor}) {
+    return Expanded(
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: R.sp(context, 14),
+          vertical: R.sp(context, 12),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: R.fluid(
-              context,
-              18,
-              26,
-            ), // Scaled down slightly to guarantee room for text
-            backgroundColor: color.withOpacity(0.20),
-            child: Icon(
-              icon,
-              color: color,
-              size: R.icon(context, AppSizes.iconMd),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(R.radius(context, 12)),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: R.fs(context, 11),
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
-
-          SizedBox(width: R.fluid(context, 6, 12)), // Scaled down gap
-
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    value,
-                    style: TextStyle(
-                      fontSize: R.fs(
-                        context,
-                        16,
-                      ), // Sized down base from 18 to 16 for better data fitment
-                      fontWeight: FontWeight.w500,
-                      color: Colors.black,
-                    ),
-                  ),
-                ),
-
-                SizedBox(height: R.sp(context, 2)),
-
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    title,
-                    maxLines:
-                        1, // Set to 1 line inside a scale-down box to absolutely prevent text spill
-                    style: TextStyle(
-                      fontSize: R.fs(
-                        context,
-                        11,
-                      ), // Baseline at 11 fits beautifully
-                      color: Colors.black.withOpacity(0.7),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
+            SizedBox(height: R.sp(context, 4)),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: R.fs(context, 20),
+                fontWeight: FontWeight.w500,
+                color: valueColor ?? AppColors.textPrimaryDark,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  // =========================
-  // 🔹 SUPPLIER CARD
-  // =========================
-  Widget supplierCard(Map<String, dynamic> supplier) {
+  // ── Supplier row card ────────────────────────────────────────
+  Widget _supplierCard(Map<String, dynamic> supplier) {
+    final name = supplier["supplierName"] ?? "";
+    final category = supplier["category"] ?? "";
+    final contact = (supplier["contactNumber"] as String?) ?? "";
+    final double dueAmount = (supplier["dueAmount"] as num?)?.toDouble() ?? 0.0;
+    final int leadDays = (supplier["leadDays"] as num?)?.toInt() ?? 0;
+    final bool hasDue = dueAmount > 0;
+
+    final parts = name.trim().split(" ");
+    final initials = parts.length >= 2
+        ? "${parts[0][0]}${parts[1][0]}".toUpperCase()
+        : name.isNotEmpty
+        ? name[0].toUpperCase()
+        : "?";
+
     return GestureDetector(
       onTap: () async {
         final result = await Navigator.push(
@@ -177,89 +156,119 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
             builder: (_) => SupplierDetailsScreen(supplier: supplier),
           ),
         );
-        if (result == true) {
-          loadSuppliers();
-        }
+        if (result == true) loadSuppliers();
       },
       child: Container(
-        margin: EdgeInsets.only(bottom: R.sp(context, 14)),
-        padding: EdgeInsets.all(R.sp(context, 14)),
+        margin: EdgeInsets.only(bottom: R.sp(context, 10)),
+        padding: EdgeInsets.symmetric(
+          horizontal: R.sp(context, 14),
+          vertical: R.sp(context, 12),
+        ),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(
-            R.radius(context, AppSizes.cardRadius),
-          ),
-
-          // ✅ Grey Border
-          border: Border.all(color: Colors.grey.shade300, width: 1),
-
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          borderRadius: BorderRadius.circular(R.radius(context, 12)),
+          border: Border.all(color: AppColors.border),
         ),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: R.fluid(context, 28, 38),
-              backgroundColor: AppColors.primary.withOpacity(0.1),
-              child: Text(
-                supplier["supplierName"][0].toUpperCase(),
-                style: TextStyle(
-                  fontSize: R.fs(context, 22),
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.primary,
+            // Avatar
+            Container(
+              width: R.fluid(context, 44, 56),
+              height: R.fluid(context, 44, 56),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: AppColors.brandGradient,
+              ),
+              child: Center(
+                child: Text(
+                  initials,
+                  style: TextStyle(
+                    fontSize: R.fs(context, 13),
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
 
-            SizedBox(width: R.sp(context, 14)),
+            SizedBox(width: R.sp(context, 12)),
 
+            // Name + subtitle
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    supplier["supplierName"],
+                    name,
                     style: TextStyle(
-                      fontSize: R.fs(context, 17),
+                      fontSize: R.fs(context, 14),
                       fontWeight: FontWeight.w500,
+                      color: AppColors.textPrimaryDark,
                     ),
                   ),
-                  SizedBox(height: R.sp(context, 4)),
+                  SizedBox(height: R.sp(context, 2)),
                   Text(
-                    supplier["category"],
+                    leadDays > 0
+                        ? "$category · lead $leadDays day${leadDays == 1 ? '' : 's'}"
+                        : category,
                     style: TextStyle(
-                      color: Colors.grey,
-                      fontSize: R.fs(context, 13),
+                      fontSize: R.fs(context, 11),
+                      color: AppColors.textSecondary,
                     ),
-                  ),
-                  SizedBox(height: R.sp(context, 8)),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.phone,
-                        size: R.icon(context, AppSizes.iconSm),
-                        color: AppColors.primary,
-                      ),
-                      SizedBox(width: R.sp(context, 5)),
-                      Text(
-                        supplier["contactNumber"],
-                        style: TextStyle(fontSize: R.fs(context, 13)),
-                      ),
-                    ],
                   ),
                 ],
               ),
             ),
 
-            Icon(
-              Icons.arrow_forward_ios,
-              size: R.icon(context, AppSizes.iconSm),
-              color: Colors.grey,
+            // Right: due / settled + Call button
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  hasDue ? "due ₹${_formatAmount(dueAmount)}" : "settled",
+                  style: TextStyle(
+                    fontSize: R.fs(context, 12),
+                    fontWeight: FontWeight.w600,
+                    color: hasDue ? AppColors.orange : AppColors.green,
+                  ),
+                ),
+                SizedBox(height: R.sp(context, 6)),
+
+                // ── Call button with phone icon ──────────────
+                GestureDetector(
+                  onTap: () => _makeCall(contact),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: R.sp(context, 10),
+                      vertical: R.sp(context, 5),
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.phone,
+                          size: R.icon(context, 12),
+                          color: AppColors.textPrimaryDark,
+                        ),
+                        SizedBox(width: R.sp(context, 4)),
+                        Text(
+                          "Call",
+                          style: TextStyle(
+                            fontSize: R.fs(context, 11),
+                            color: AppColors.textPrimaryDark,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -267,331 +276,345 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
     );
   }
 
-  // =========================
-  // 🔹 BUILD
-  // =========================
+  String _formatAmount(double amount) {
+    if (amount >= 100000) return "${(amount / 100000).toStringAsFixed(1)}L";
+    if (amount >= 1000) return "${(amount / 1000).toStringAsFixed(0)}k";
+    return amount.toStringAsFixed(0);
+  }
+
   @override
   Widget build(BuildContext context) {
     final suppliers = ref.watch(filteredSuppliersProvider);
     final totalSuppliers = ref.watch(totalSuppliersProvider);
-    final totalCategories = ref.watch(totalCategoriesProvider);
-    final totalProducts = ref.watch(totalProductsProvider);
     final totalPurchases = ref.watch(totalPurchasesProvider);
-
-    // ── responsive values ──────────────────────────────────────
     final hPad = R.hPad(context, base: 16);
-    final gridCols = R.gridCols(context, phone: 2, tablet: 4, desktop: 4);
-    final gridRatio = R.gridRatio(
-      context,
-      phone: 1.8,
-      tablet: 2.0,
-      desktop: 2.2,
-    );
 
     return Scaffold(
       backgroundColor: AppColors.background,
 
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        elevation: 0,
-        title: Text(
-          "Suppliers",
-          style: TextStyle(
-            fontWeight: FontWeight.w500,
-            color: Colors.white,
-            fontSize: R.fs(context, 18),
-          ),
+      body: SingleChildScrollView(
+        padding: hPad.copyWith(
+          top: R.sp(context, 30),
+          bottom: R.sp(context, 24),
         ),
-        actions: [
-          IconButton(
-            onPressed: () async {
-              final result = await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AddSupplierScreen()),
-              );
-              if (result == true) {
-                loadSuppliers();
-              }
-            },
-            icon: Icon(
-              Icons.add,
-              color: Colors.white,
-              size: R.icon(context, 24),
-            ),
-          ),
-        ],
-      ),
-
-      body: Container(
-        color: AppColors.primary,
-        child: ClipRRect(
-          borderRadius: AppCurve.top(context),
-          child: Container(
-            color: Colors.white,
-            child: SingleChildScrollView(
-              padding: hPad.copyWith(
-                top: R.sp(context, 16),
-                bottom: R.sp(context, 16),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ==================== SEARCH BAR ====================
-                  Container(
-                    height: R.searchH(context),
-                    margin: EdgeInsets.only(bottom: R.sp(context, 16)),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(
-                        R.radius(context, 14),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: TextField(
-                      onChanged: (value) {
-                        ref.read(searchSupplierProvider.notifier).state = value;
-                      },
-                      style: TextStyle(fontSize: R.fs(context, 14)),
-                      decoration: InputDecoration(
-                        hintText: "Search suppliers...",
-                        hintStyle: TextStyle(
-                          color: Colors.grey.shade500,
-                          fontSize: R.fs(context, 14),
-                        ),
-
-                        prefixIcon: Icon(
-                          Icons.search,
-                          color: Colors.grey,
-                          size: R.icon(context, 22),
-                        ),
-
-                        contentPadding: EdgeInsets.symmetric(
-                          vertical: R.sp(context, 14),
-                        ),
-
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(
-                            R.radius(context, 14),
-                          ),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
-                        ),
-
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(
-                            R.radius(context, 14),
-                          ),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
-                        ),
-
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(
-                            R.radius(context, 14),
-                          ),
-                          borderSide: const BorderSide(
-                            color: AppColors.primary,
-                            width: 1.5,
-                          ),
-                        ),
-                      ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    "Suppliers",
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textPrimaryDark,
+                      fontSize: R.fs(context, 18),
                     ),
                   ),
+                ),
 
-                  // =========================
-                  // 🔹 TOP CARDS (OVERFLOW-PROOF)
-                  // =========================
-                  GridView.count(
+                IconButton(
+                  onPressed: () {
+                    showSearch(
+                      context: context,
+                      delegate: _SupplierSearchDelegate(suppliers),
+                    );
+                  },
+                  icon: Icon(
+                    Icons.search,
+                    color: AppColors.textSecondary,
+                    size: R.icon(context, 22),
+                  ),
+                ),
+
+                IconButton(
+                  onPressed: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AddSupplierScreen(),
+                      ),
+                    );
+                    if (result == true) loadSuppliers();
+                  },
+                  icon: Container(
+                    width: R.fluid(context, 28, 32),
+                    height: R.fluid(context, 28, 32),
+                    decoration: BoxDecoration(
+                      gradient: AppColors.brandGradient,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.add,
+                      color: Colors.white,
+                      size: R.icon(context, 18),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            SizedBox(height: R.sp(context, 20)),
+
+            // ── Stat cards ───────────────────────────────────
+            Row(
+              children: [
+                _statCard("Suppliers", "$totalSuppliers"),
+                SizedBox(width: R.sp(context, 12)),
+                _statCard(
+                  "Payable",
+                  "₹${_formatAmount(totalPurchases)}",
+                  valueColor: AppColors.primary,
+                ),
+              ],
+            ),
+
+            SizedBox(height: R.sp(context, 20)),
+
+            // ── Category filter chips ─────────────────────────
+            SizedBox(
+              height: R.fluid(context, 34, 40),
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: categoryFilters.length,
+                separatorBuilder: (_, __) => SizedBox(width: R.sp(context, 8)),
+                itemBuilder: (context, index) {
+                  final cat = categoryFilters[index];
+                  final selected = cat == selectedCategoryFilter;
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() => selectedCategoryFilter = cat);
+                      applyCategoryFilter();
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: R.sp(context, 14),
+                        vertical: R.sp(context, 6),
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: selected ? AppColors.brandGradient : null,
+                        color: selected ? null : Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: selected
+                              ? Colors.transparent
+                              : AppColors.border,
+                        ),
+                      ),
+                      child: Text(
+                        cat,
+                        style: TextStyle(
+                          fontSize: R.fs(context, 12),
+                          fontWeight: FontWeight.normal,
+                          color: selected
+                              ? Colors.white
+                              : AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            SizedBox(height: R.sp(context, 10)),
+
+            // ── Supplier list ─────────────────────────────────
+            suppliers.isEmpty
+                ? SizedBox(
+                    height: R.fluid(context, 200, 300),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.people_outline,
+                            size: R.icon(context, 48),
+                            color: AppColors.textSecondary.withOpacity(0.4),
+                          ),
+                          SizedBox(height: R.sp(context, 12)),
+                          Text(
+                            "No suppliers added yet",
+                            style: TextStyle(
+                              fontSize: R.fs(context, 14),
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : ListView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    crossAxisCount: R.gridCols(
-                      context,
-                      phone: 2,
-                      tablet: 2,
-                      desktop: 4,
-                    ),
-                    crossAxisSpacing: R.sp(context, 12),
-                    mainAxisSpacing: R.sp(context, 12),
-                    // Updated aspect ratio properties: a slightly larger phone ratio gives cards more horizontal room to breathe
-                    childAspectRatio: R.gridRatio(
-                      context,
-                      phone: 1.5,
-                      tablet: 1.6,
-                      desktop: 1.8,
-                    ),
-                    children: [
-                      _topCard(
-                        "Total Suppliers",
-                        "$totalSuppliers",
-                        Icons.people,
-                        Colors.blue,
-                      ),
-                      _topCard(
-                        "Categories",
-                        "$totalCategories",
-                        Icons.category,
-                        Colors.orange,
-                      ),
-                      _topCard(
-                        "Total Products",
-                        "$totalProducts",
-                        Icons.inventory,
-                        Colors.green,
-                      ),
-                      _topCard(
-                        "Purchases",
-                        "₹${totalPurchases.toStringAsFixed(0)}",
-                        Icons.shopping_cart,
-                        Colors.purple,
-                      ),
-                    ],
+                    itemCount: suppliers.length,
+                    itemBuilder: (context, index) =>
+                        _supplierCard(suppliers[index]),
                   ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
-                  SizedBox(height: R.sp(context, 24)),
+// ── Simple search delegate ────────────────────────────────────────
+class _SupplierSearchDelegate extends SearchDelegate<Map<String, dynamic>?> {
+  final List<Map<String, dynamic>> suppliers;
+  _SupplierSearchDelegate(this.suppliers);
+  @override
+  ThemeData appBarTheme(BuildContext context) {
+    return Theme.of(context).copyWith(
+      scaffoldBackgroundColor: AppColors.background,
 
-                  // =========================
-                  // 🔹 HEADER
-                  // =========================
-                  Row(
-                    children: [
-                      Text(
-                        "Supplier List",
-                        style: TextStyle(
-                          fontSize: R.fs(context, 20),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+      ),
 
-                      const Spacer(),
+      dividerColor: AppColors.border,
 
-                      SizedBox(
-                        width: R.fluid(context, 140, 180),
-                        child: DropdownButtonFormField<String>(
-                          value: selectedCategoryFilter,
-                          isExpanded: true,
-                          menuMaxHeight: 250,
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 10,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Colors.grey, width: 1.5),
+        ),
+      ),
 
-                          dropdownColor: Colors.white,
-                          elevation: 2,
-                          borderRadius: BorderRadius.circular(16),
+      iconTheme: const IconThemeData(color: AppColors.textPrimaryDark),
 
-                          decoration: InputDecoration(
-                            hintText: "Filter",
+      textTheme: Theme.of(context).textTheme.copyWith(
+        titleLarge: const TextStyle(
+          color: AppColors.textPrimaryDark,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
 
-                            prefixIcon: Icon(
-                              Icons.filter_list,
-                              color: Colors.grey.shade500,
-                              size: R.icon(context, 18),
-                            ),
+  @override
+  List<Widget> buildActions(BuildContext context) => [
+    IconButton(icon: const Icon(Icons.clear), onPressed: () => query = ""),
+  ];
 
-                            filled: true,
-                            fillColor: Colors.white,
+  @override
+  Widget buildLeading(BuildContext context) => IconButton(
+    icon: const Icon(Icons.arrow_back),
+    onPressed: () => close(context, null),
+  );
 
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: R.sp(context, 12),
-                              vertical: R.sp(context, 12),
-                            ),
+  @override
+  Widget buildResults(BuildContext context) => _buildList();
 
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(
-                                R.radius(context, 10),
-                              ),
-                              borderSide: BorderSide(
-                                color: Colors.grey.shade300,
-                              ),
-                            ),
+  @override
+  Widget buildSuggestions(BuildContext context) => _buildList();
 
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(
-                                R.radius(context, 10),
-                              ),
-                              borderSide: BorderSide(
-                                color: Colors.grey.shade300,
-                              ),
-                            ),
-
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(
-                                R.radius(context, 10),
-                              ),
-                              borderSide: const BorderSide(
-                                color: AppColors.primary,
-                                width: 1.5,
-                              ),
-                            ),
-                          ),
-
-                          items: categoryFilters.map((category) {
-                            return DropdownMenuItem<String>(
-                              value: category,
-                              child: Text(
-                                category,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: R.fs(context, 13)),
-                              ),
-                            );
-                          }).toList(),
-
-                          onChanged: (value) {
-                            if (value == null) return;
-
-                            setState(() {
-                              selectedCategoryFilter = value;
-                            });
-
-                            applyCategoryFilter();
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  SizedBox(height: R.sp(context, 12)),
-
-                  // =========================
-                  // 🔹 SUPPLIER LIST
-                  // =========================
-                  suppliers.isEmpty
-                      ? Container(
-                          height: R.fluid(context, 200, 300),
-                          alignment: Alignment.center,
-                          child: Text(
-                            "No Suppliers Added",
-                            style: TextStyle(fontSize: R.fs(context, 14)),
-                          ),
-                        )
-                      : ListView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: suppliers.length,
-                          itemBuilder: (context, index) {
-                            return GestureDetector(
-                              onTap: () async {
-                                final result = await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => SupplierDetailsScreen(
-                                      supplier: suppliers[index],
-                                    ),
-                                  ),
-                                );
-                                if (result == true) {
-                                  loadSuppliers();
-                                }
-                              },
-                              child: supplierCard(suppliers[index]),
-                            );
-                          },
-                        ),
-                ],
+  Widget _buildList() {
+    final results = suppliers
+        .where(
+          (s) =>
+              (s["supplierName"] ?? "").toString().toLowerCase().contains(
+                query.toLowerCase(),
+              ) ||
+              (s["category"] ?? "").toString().toLowerCase().contains(
+                query.toLowerCase(),
               ),
-            ),
+        )
+        .toList();
+
+    if (results.isEmpty) {
+      return Container(
+        color: AppColors.background,
+        child: const Center(
+          child: Text(
+            "No suppliers found",
+            style: TextStyle(color: AppColors.textSecondary),
           ),
         ),
+      );
+    }
+
+    return Container(
+      color: AppColors.background,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: results.length,
+        itemBuilder: (context, index) {
+          final s = results[index];
+          return Card(
+            color: Colors.white,
+            elevation: 0,
+            margin: const EdgeInsets.only(bottom: 10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: const BorderSide(color: AppColors.border),
+            ),
+            child: ListTile(
+              leading: Container(
+                width: 44,
+                height: 44,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: AppColors.brandGradient,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  (s["supplierName"] ?? "?")[0].toUpperCase(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              title: Text(
+                s["supplierName"] ?? "",
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimaryDark,
+                ),
+              ),
+              subtitle: Text(
+                s["category"] ?? "",
+                style: const TextStyle(color: AppColors.textSecondary),
+              ),
+              trailing: const Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: AppColors.textSecondary,
+              ),
+              onTap: () async {
+                close(context, null);
+
+                await Future.delayed(const Duration(milliseconds: 150));
+
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SupplierDetailsScreen(supplier: s),
+                  ),
+                );
+              },
+            ),
+          );
+        },
       ),
     );
   }
