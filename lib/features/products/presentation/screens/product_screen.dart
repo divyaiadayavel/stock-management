@@ -6,7 +6,6 @@ import 'product_details_screen.dart';
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/product_provider.dart';
-import '../../../../core/constants/app_curve.dart';
 import '../../../../core/utils/responsive_helper.dart';
 
 class ProductScreen extends ConsumerStatefulWidget {
@@ -25,6 +24,10 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
   int inStockCount = 0;
   int lowStockCount = 0;
   int outOfStockCount = 0;
+
+  // 🆕 summary stats (items / units / value) for the top card
+  int totalUnits = 0;
+  double totalValue = 0;
 
   @override
   void initState() {
@@ -83,6 +86,16 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
       return qty <= 0;
     }).length;
 
+    // 🆕 total units on hand + total inventory value (qty * selling price)
+    int calculatedUnits = 0;
+    double calculatedValue = 0;
+    for (final p in products) {
+      final qty = (p["quantity"] ?? 0) as int;
+      final price = (p["selling_price"] as num?)?.toDouble() ?? 0.0;
+      calculatedUnits += qty;
+      calculatedValue += qty * price;
+    }
+
     // ========================================================
     // ⚙️ APPLY SELECTED STATUS FILTER TO RENDER LIST
     // ========================================================
@@ -122,7 +135,15 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
       inStockCount = calculatedInStock;
       lowStockCount = calculatedLowStock;
       outOfStockCount = calculatedOutOfStock;
+      totalUnits = calculatedUnits;
+      totalValue = calculatedValue;
     });
+  }
+
+  String _formatValue(double value) {
+    if (value >= 100000) return "₹${(value / 100000).toStringAsFixed(1)}L";
+    if (value >= 1000) return "₹${(value / 1000).toStringAsFixed(1)}K";
+    return "₹${value.toStringAsFixed(0)}";
   }
 
   @override
@@ -150,329 +171,388 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
     final vGap = R.sp(context, 6);
 
     return Scaffold(
+      // 🆕 No AppBar — header content lives directly in the body now
       backgroundColor: Colors.white,
-
-      // ================= APP BAR =================
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: Text(
-          "Products",
-          style: TextStyle(
-            fontWeight: FontWeight.w500,
-            color: Colors.white,
-            fontSize: R.fs(context, 18),
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(
-              Icons.add,
-              color: Colors.white,
-              size: R.icon(context, 24),
-            ),
-            onPressed: openAddScreen,
-          ),
-        ],
-      ),
-
-      // ================= BODY =================
-      body: Container(
-        color: AppColors.primary,
-        child: ClipRRect(
-          borderRadius: AppCurve.top(context),
-          child: Container(
-            color: Colors.white,
-            child: Column(
-              children: [
-                SizedBox(height: R.sp(context, 14)),
-
-                // ── Search bar ──────────────────────────────────
-                Padding(
-                  padding: hPad,
-                  child: Container(
-                    height: searchHeight,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(
-                        R.radius(context, 12),
-                      ),
-                      border: Border.all(color: Colors.grey.shade300, width: 1),
-
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
-                    child: TextField(
-                      onChanged: (val) {
-                        ref.read(searchQueryProvider.notifier).state = val;
-                        applyFilters();
-                      },
-                      style: TextStyle(fontSize: R.fs(context, 14)),
-                      decoration: InputDecoration(
-                        hintText: "Search products...",
-                        hintStyle: TextStyle(
-                          color: Colors.grey.shade500,
-                          fontSize: R.fs(context, 14),
-                        ),
-                        prefixIcon: Icon(
-                          Icons.search,
-                          size: R.icon(context, 22),
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(
-                          vertical: R.sp(context, 14),
-                        ),
-                      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // ── Title row + search/sort icon ──────────────────
+            Padding(
+              padding: hPad,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Products",
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
+                      color: Colors.black,
+                      fontSize: R.fs(context, 22),
                     ),
                   ),
-                ),
-
-                SizedBox(height: R.sp(context, 14)),
-
-                // =========================
-                // 🔹 EQUAL-WIDTH FILTER ROW (NO SCROLL)
-                // =========================
-                Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: R.fluid(context, 14, 18),
-                  ),
-                  child: Row(
+                  Row(
                     children: [
-                      Expanded(child: _filterTab("All", totalCount)),
-                      SizedBox(width: R.sp(context, 4)),
-                      Expanded(child: _filterTab("In Stock", inStockCount)),
-                      SizedBox(width: R.sp(context, 4)),
-                      Expanded(child: _filterTab("Low Stock", lowStockCount)),
-                      SizedBox(width: R.sp(context, 4)),
-                      Expanded(
-                        child: _filterTab("Out Of Stock", outOfStockCount),
+                      _circleIconButton(icon: Icons.search, onTap: () {}),
+                      SizedBox(width: R.sp(context, 8)),
+                      _circleIconButton(
+                        icon: Icons.swap_vert,
+                        label: "Sort",
+                        onTap: () {},
+                      ),
+                      SizedBox(width: R.sp(context, 8)),
+                      GestureDetector(
+                        onTap: openAddScreen,
+                        child: Container(
+                          padding: EdgeInsets.all(R.sp(context, 8)),
+                          decoration: BoxDecoration(
+                            gradient: AppColors.brandGradient,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.add,
+                            color: Colors.white,
+                            size: R.icon(context, 20),
+                          ),
+                        ),
                       ),
                     ],
                   ),
+                ],
+              ),
+            ),
+
+            SizedBox(height: R.sp(context, 12)),
+
+            // ── 🆕 Summary stats card (items / units / value) ──
+            Padding(
+              padding: hPad,
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: R.sp(context, 16),
+                  vertical: R.sp(context, 14),
                 ),
+                decoration: BoxDecoration(
+                  color: AppColors.surface2,
+                  borderRadius: BorderRadius.circular(R.radius(context, 14)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _statItem(title: "${totalCount} items", value: ""),
+                    ),
+                    _statDivider(),
+                    Expanded(
+                      child: _statItem(title: "$totalUnits units", value: ""),
+                    ),
+                    _statDivider(),
+                    Expanded(
+                      child: _statItem(
+                        title: "value ${_formatValue(totalValue)}",
+                        value: "",
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
 
-                SizedBox(height: R.sp(context, 12)),
+            SizedBox(height: R.sp(context, 14)),
 
-                // ================= PRODUCT LIST =================
-                Expanded(
-                  child: filteredProducts.isEmpty
-                      ? Center(
-                          child: Text(
-                            "No Products Found",
-                            style: TextStyle(
-                              fontSize: R.fs(context, 16),
-                              color: Colors.grey,
-                            ),
-                          ),
-                        )
-                      : ListView.builder(
-                          padding: EdgeInsets.only(bottom: R.sp(context, 16)),
-                          itemCount: filteredProducts.length,
-                          itemBuilder: (_, index) {
-                            final p = filteredProducts[index];
-                            final qty = p["quantity"] ?? 0;
-                            final bool isLowStock = qty > 0 && qty <= 15;
-                            final bool isOutStock = qty == 0;
+            // =========================
+            // 🔹 FILTER ROW — gradient pill for selected (matches image)
+            // =========================
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: R.fluid(context, 14, 18),
+              ),
+              child: Row(
+                children: [
+                  Expanded(child: _filterTab("All", totalCount)),
+                  SizedBox(width: R.sp(context, 4)),
+                  Expanded(child: _filterTab("In Stock", inStockCount)),
+                  SizedBox(width: R.sp(context, 4)),
+                  Expanded(child: _filterTab("Low Stock", lowStockCount)),
+                  SizedBox(width: R.sp(context, 4)),
+                  Expanded(child: _filterTab("Out Of Stock", outOfStockCount)),
+                ],
+              ),
+            ),
 
-                            return GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        ProductDetailsScreen(product: p),
-                                  ),
-                                );
-                              },
-                              child: Container(
-                                margin: EdgeInsets.symmetric(
-                                  horizontal: hPad.left,
-                                  vertical: R.sp(context, 8),
-                                ),
-                                padding: EdgeInsets.all(cardPad),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(
-                                    cardRadius,
-                                  ),
-                                  border: Border.all(
-                                    color: Colors.grey.shade300,
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // ================= IMAGE =================
-                                    Container(
-                                      width: imgSz,
-                                      height: imgSz,
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(
-                                          R.radius(context, 8),
-                                        ),
-                                        color: Colors.grey.shade100,
-                                      ),
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(
-                                          R.radius(context, 14),
-                                        ),
-                                        child:
-                                            p["image_path"] != null &&
-                                                p["image_path"] != ""
-                                            ? Image.file(
-                                                File(p["image_path"]),
-                                                fit: BoxFit.cover,
-                                              )
-                                            : Icon(
-                                                Icons.inventory_2,
-                                                size: R.icon(context, 40),
-                                                color: Colors.grey,
-                                              ),
-                                      ),
-                                    ),
+            SizedBox(height: R.sp(context, 12)),
 
-                                    SizedBox(width: R.sp(context, 14)),
+            // ================= PRODUCT LIST =================
+            // 🔹 NOTHING below this changed — same product card / image logic
+            Expanded(
+              child: filteredProducts.isEmpty
+                  ? Center(
+                      child: Text(
+                        "No Products Found",
+                        style: TextStyle(
+                          fontSize: R.fs(context, 16),
+                          color: Colors.grey,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: EdgeInsets.only(bottom: R.sp(context, 16)),
+                      itemCount: filteredProducts.length,
+                      itemBuilder: (_, index) {
+                        final p = filteredProducts[index];
+                        final qty = p["quantity"] ?? 0;
+                        final bool isLowStock = qty > 0 && qty <= 15;
+                        final bool isOutStock = qty == 0;
 
-                                    // ================= DETAILS =================
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          // NAME + PRICE
-                                          Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  p["name"] ?? "",
-                                                  maxLines: 2,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    fontSize: nameFs,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                              ),
-                                              SizedBox(width: R.sp(context, 8)),
-                                              Text(
-                                                "₹ ${(p["selling_price"] as num?)?.toDouble().toStringAsFixed(0) ?? "0"}",
-                                                style: TextStyle(
-                                                  fontSize: priceFs,
-                                                  fontWeight: FontWeight.w500,
-                                                  color: Colors.black,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-
-                                          SizedBox(height: vGap),
-
-                                          // CATEGORY
-                                          Text(
-                                            p["category"] ?? "",
-                                            style: TextStyle(
-                                              fontSize: catFs,
-                                              color: Colors.grey.shade600,
-                                            ),
-                                          ),
-
-                                          SizedBox(height: R.sp(context, 10)),
-
-                                          // STOCK ROW
-                                          Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Text(
-                                                "Stock: $qty pcs",
-                                                style: TextStyle(
-                                                  fontSize: stockFs,
-                                                  fontWeight: FontWeight.w500,
-                                                  color: isOutStock
-                                                      ? Colors.red
-                                                      : isLowStock
-                                                      ? Colors.orange
-                                                      : Colors.green,
-                                                ),
-                                              ),
-
-                                              // BADGE
-                                              Container(
-                                                padding: EdgeInsets.symmetric(
-                                                  horizontal: R.sp(context, 5),
-                                                  vertical: R.sp(context, 2),
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: isOutStock
-                                                      ? Colors.red.withOpacity(
-                                                          0.12,
-                                                        )
-                                                      : isLowStock
-                                                      ? Colors.orange
-                                                            .withOpacity(0.12)
-                                                      : Colors.green
-                                                            .withOpacity(0.12),
-                                                  borderRadius:
-                                                      BorderRadius.circular(30),
-                                                  border: Border.all(
-                                                    color: isOutStock
-                                                        ? Colors.red
-                                                        : isLowStock
-                                                        ? Colors.orange
-                                                        : Colors.green,
-                                                  ),
-                                                ),
-                                                child: Text(
-                                                  isOutStock
-                                                      ? "Out of Stock"
-                                                      : isLowStock
-                                                      ? "Low Stock"
-                                                      : "In Stock",
-                                                  style: TextStyle(
-                                                    fontSize: badgeFs,
-                                                    fontWeight:
-                                                        FontWeight.normal,
-                                                    color: isOutStock
-                                                        ? Colors.red
-                                                        : isLowStock
-                                                        ? Colors.orange
-                                                        : Colors.green,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                        return GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    ProductDetailsScreen(product: p),
                               ),
                             );
                           },
-                        ),
-                ),
-              ],
+                          child: Container(
+                            margin: EdgeInsets.symmetric(
+                              horizontal: hPad.left,
+                              vertical: R.sp(context, 8),
+                            ),
+                            padding: EdgeInsets.all(cardPad),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(cardRadius),
+                              border: Border.all(
+                                color: Colors.grey.shade300,
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // ================= IMAGE =================
+                                Container(
+                                  width: imgSz,
+                                  height: imgSz,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(
+                                      R.radius(context, 8),
+                                    ),
+                                    color: Colors.grey.shade100,
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(
+                                      R.radius(context, 14),
+                                    ),
+                                    child:
+                                        p["image_path"] != null &&
+                                            p["image_path"] != ""
+                                        ? Image.file(
+                                            File(p["image_path"]),
+                                            fit: BoxFit.cover,
+                                          )
+                                        : Icon(
+                                            Icons.inventory_2,
+                                            size: R.icon(context, 40),
+                                            color: Colors.grey,
+                                          ),
+                                  ),
+                                ),
+
+                                SizedBox(width: R.sp(context, 14)),
+
+                                // ================= DETAILS =================
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      // NAME + PRICE
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              p["name"] ?? "",
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: nameFs,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ),
+                                          SizedBox(width: R.sp(context, 8)),
+                                          Text(
+                                            "₹ ${(p["selling_price"] as num?)?.toDouble().toStringAsFixed(0) ?? "0"}",
+                                            style: TextStyle(
+                                              fontSize: priceFs,
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.black,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+
+                                      SizedBox(height: vGap),
+
+                                      // CATEGORY
+                                      Text(
+                                        p["category"] ?? "",
+                                        style: TextStyle(
+                                          fontSize: catFs,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+
+                                      SizedBox(height: R.sp(context, 10)),
+
+                                      // STOCK ROW
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            "Stock: $qty pcs",
+                                            style: TextStyle(
+                                              fontSize: stockFs,
+                                              fontWeight: FontWeight.w500,
+                                              color: isOutStock
+                                                  ? Colors.red
+                                                  : isLowStock
+                                                  ? Colors.orange
+                                                  : Colors.green,
+                                            ),
+                                          ),
+
+                                          // BADGE
+                                          Container(
+                                            padding: EdgeInsets.symmetric(
+                                              horizontal: R.sp(context, 5),
+                                              vertical: R.sp(context, 2),
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: isOutStock
+                                                  ? Colors.red.withOpacity(0.12)
+                                                  : isLowStock
+                                                  ? Colors.orange.withOpacity(
+                                                      0.12,
+                                                    )
+                                                  : Colors.green.withOpacity(
+                                                      0.12,
+                                                    ),
+                                              borderRadius:
+                                                  BorderRadius.circular(30),
+                                              border: Border.all(
+                                                color: isOutStock
+                                                    ? Colors.red
+                                                    : isLowStock
+                                                    ? Colors.orange
+                                                    : Colors.green,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              isOutStock
+                                                  ? "Out of Stock"
+                                                  : isLowStock
+                                                  ? "Low Stock"
+                                                  : "In Stock",
+                                              style: TextStyle(
+                                                fontSize: badgeFs,
+                                                fontWeight: FontWeight.normal,
+                                                color: isOutStock
+                                                    ? Colors.red
+                                                    : isLowStock
+                                                    ? Colors.orange
+                                                    : Colors.green,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 
+  // 🆕 small circular icon button used in the header row (search / sort)
+  Widget _circleIconButton({
+    required IconData icon,
+    String? label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: R.sp(context, 10),
+          vertical: R.sp(context, 8),
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(R.radius(context, 30)),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: R.icon(context, 16), color: Colors.black87),
+            if (label != null) ...[
+              SizedBox(width: R.sp(context, 4)),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: R.fs(context, 12),
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 🆕 single stat in the summary card
+  Widget _statItem({required String title, required String value}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: R.fs(context, 13),
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _statDivider() {
+    return Container(
+      height: R.sp(context, 24),
+      width: 1,
+      color: Colors.grey.shade300,
+      margin: EdgeInsets.symmetric(horizontal: R.sp(context, 8)),
+    );
+  }
+
+  // 🆕 filter pill — selected uses AppColors.brandGradient, unselected stays plain
   Widget _filterTab(String title, int count) {
     final isSelected = ref.watch(selectedFilterProvider) == title;
 
-    // Shorten the string structure to guarantee space for the count bracket
     String displayTitle = title;
     if (title == "Low Stock") displayTitle = "Low";
     if (title == "Out Of Stock") displayTitle = "Out";
@@ -489,20 +569,21 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
         ),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary.withOpacity(0.1) : Colors.white,
+          gradient: isSelected ? AppColors.brandGradient : null,
+          color: isSelected ? null : Colors.white,
           borderRadius: BorderRadius.circular(R.radius(context, 25)),
           border: Border.all(
-            color: isSelected ? AppColors.primary : Colors.grey.shade300,
+            color: isSelected ? Colors.transparent : Colors.grey.shade300,
           ),
         ),
         child: Text(
-          "$displayTitle ($count)",
+          displayTitle == "In Stock" ? "In stock" : displayTitle,
           maxLines: 1,
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: R.fs(context, 11),
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            color: isSelected ? AppColors.primary : Colors.grey.shade600,
+            color: isSelected ? Colors.white : Colors.black,
           ),
         ),
       ),

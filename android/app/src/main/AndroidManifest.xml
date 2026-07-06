@@ -12,7 +12,23 @@
 
     <!-- ✅ Internet permission for API calls -->
     <uses-permission android:name="android.permission.INTERNET"/>
-
+    <queries>
+    <!-- WhatsApp (wa.me links + direct app) -->
+    <package android:name="com.whatsapp" />
+    <package android:name="com.whatsapp.w4b" />          <!-- WhatsApp Business -->
+ 
+    <!-- Phone dialer (tel: scheme) -->
+    <intent>
+        <action android:name="android.intent.action.DIAL" />
+        <data android:scheme="tel" />
+    </intent>
+ 
+    <!-- Generic https so canLaunchUrl works for wa.me fallback -->
+    <intent>
+        <action android:name="android.intent.action.VIEW" />
+        <data android:scheme="https" />
+    </intent>
+    </queries>
     <application
         android:label="stock_management"
         android:name="${applicationName}"

@@ -1,4 +1,4 @@
-enum AppFeature { dashboard, products, billing, suppliers, settings }
+enum AppFeature { dashboard, products, billing, inventory, settings }
 
 class RoleAccessPolicy {
   const RoleAccessPolicy._();
@@ -11,25 +11,19 @@ class RoleAccessPolicy {
     AppFeature.dashboard,
     AppFeature.products,
     AppFeature.billing,
-    AppFeature.suppliers,
+    AppFeature.inventory,
     AppFeature.settings,
   };
 
   static const Map<String, Set<AppFeature>> _roleFeatureMap = {
     'admin': allFeatures,
     'manager': allFeatures,
-    'cashier': {
-      AppFeature.dashboard,
-      AppFeature.billing,
-    },
-    'salesperson': {
-      AppFeature.dashboard,
-      AppFeature.billing,
-    },
+    'cashier': {AppFeature.dashboard, AppFeature.billing},
+    'salesperson': {AppFeature.dashboard, AppFeature.billing},
     'inventory staff': {
       AppFeature.dashboard,
       AppFeature.products,
-      AppFeature.suppliers,
+      AppFeature.inventory,
     },
   };
 
@@ -54,8 +48,8 @@ class RoleAccessPolicy {
         return 'Products';
       case AppFeature.billing:
         return 'Billing';
-      case AppFeature.suppliers:
-        return 'Suppliers';
+      case AppFeature.inventory:
+        return ' Inventory';
       case AppFeature.settings:
         return 'Settings';
     }

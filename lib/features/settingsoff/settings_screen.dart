@@ -14,7 +14,7 @@ import 'backup_sync_screen.dart';
 import 'notifications_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'settings_provider.dart';
-import '../../core/constants/app_curve.dart';
+// import '../../core/constants/app_curve.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -292,7 +292,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         color: AppColors.primary,
 
         child: ClipRRect(
-          borderRadius: AppCurve.top(context),
+          // borderRadius: AppCurve.top(context),
 
           child: Container(
             color: Colors.grey.shade100,

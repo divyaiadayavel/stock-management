@@ -9,6 +9,8 @@ import '../../../../core/storage/db_helper.dart';
 import '../../../sales/presentation/screens/current_bill_screen.dart';
 import '../../../products/presentation/screens/add_product_screen.dart';
 import '../../../products/presentation/screens/product_screen.dart';
+import '../../../suppliers/presentation/screens/suppliers_screen.dart';
+import '../../../settings/presentation/screens/settings_screen.dart';
 import '../providers/dashboard_provider.dart';
 import '../../../../core/utils/responsive_helper.dart';
 
@@ -55,8 +57,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     pastSuppliers = await DBHelper.getPastSupplierCount();
     pastLowStock = await DBHelper.getPastLowStockCount();
 
-    todaySalesAmount = 290000;
-    receivablesAmount = 48000;
+    todaySalesAmount = await DBHelper.getTodaySales();
+    receivablesAmount = await DBHelper.getReceivablesAmount();
 
     setState(() {});
   }
@@ -74,17 +76,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final hPad = R.hPad(context, base: AppSpacing.lg);
-    final gridCols = R.gridCols(context, phone: 2, tablet: 4, desktop: 4);
-    final gridRatio = R.gridRatio(
-      context,
-      phone: 1.8,
-      tablet: 2.0,
-      desktop: 2.2,
-    );
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      // ── NO APPBAR ────────────────────────────────────────
       body: SafeArea(
         child: SingleChildScrollView(
           padding: hPad.copyWith(
@@ -95,18 +89,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // =====================================================
-              // 🔹 INLINE HEADER  (replaces AppBar)
+              // 🔹 INLINE HEADER
               // =====================================================
               Row(
                 children: [
+                  // Welcome text
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          "Good morning, Admin 👋",
-                          style: AppTextStyles.heading,
-                        ),
+                        Text("Welcome, Admin 👋", style: AppTextStyles.heading),
                         SizedBox(height: R.sp(context, AppSpacing.xs)),
                         Text(
                           "Here's what's happening today.",
@@ -116,15 +108,44 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
                   ),
 
-                  // Avatar / initials
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundColor: AppColors.primary,
-                    child: Text(
-                      "A",
-                      style: AppTextStyles.button.copyWith(
+                  // ── Settings icon ──────────────────────────────
+                  GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                    ),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: const BoxDecoration(
+                        color: Colors.grey,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.settings_outlined,
                         color: Colors.white,
-                        fontSize: 14,
+                        size: R.icon(context, 20),
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(width: R.sp(context, AppSpacing.sm)),
+
+                  // ── Avatar circle ──────────────────────────────
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: AppColors.brandGradient,
+                    ),
+                    child: Center(
+                      child: Text(
+                        "A",
+                        style: AppTextStyles.button.copyWith(
+                          color: Colors.white,
+                          fontSize: 14,
+                        ),
                       ),
                     ),
                   ),
@@ -134,7 +155,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               SizedBox(height: R.sp(context, AppSpacing.lg)),
 
               // =====================================================
-              // 🔹 HERO INVENTORY CARD  (dark blue gradient)
+              // 🔹 HERO INVENTORY CARD
               // =====================================================
               Container(
                 width: double.infinity,
@@ -157,7 +178,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Top row: label + badge
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -183,13 +203,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           child: Row(
                             children: [
                               Icon(
-                                Icons.trending_up,
-                                color: AppColors.green,
+                                MetricHelper.checkIsPositive(
+                                      totalSales,
+                                      pastSales,
+                                    )
+                                    ? Icons.trending_up
+                                    : Icons.trending_down,
+                                color:
+                                    MetricHelper.checkIsPositive(
+                                      totalSales,
+                                      pastSales,
+                                    )
+                                    ? AppColors.green
+                                    : AppColors.red,
                                 size: R.icon(context, 12),
                               ),
                               SizedBox(width: R.sp(context, 4)),
                               Text(
-                                "${MetricHelper.calculatePercentage(totalProducts, pastProducts).abs().toStringAsFixed(1)}%",
+                                "${MetricHelper.calculatePercentage(totalSales, pastSales).abs().toStringAsFixed(1)}%",
                                 style: AppTextStyles.small.copyWith(
                                   color: AppColors.green,
                                   fontWeight: FontWeight.bold,
@@ -204,9 +235,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
                     SizedBox(height: R.sp(context, AppSpacing.sm)),
 
-                    // Big value
                     Text(
-                      _formatIndianCurrency(todaySalesAmount),
+                      _formatIndianCurrency(totalSales.toDouble()),
                       style: AppTextStyles.heading.copyWith(
                         color: Colors.white,
                         fontSize: R.fs(context, 36),
@@ -216,7 +246,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
                     SizedBox(height: R.sp(context, AppSpacing.sm)),
 
-                    // Sub stats row
                     Row(
                       children: [
                         Text(
@@ -227,7 +256,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           ),
                         ),
                         const Spacer(),
-                        // Mini bar chart visual
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: List.generate(5, (i) {
@@ -256,7 +284,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               SizedBox(height: R.sp(context, AppSpacing.sectionGap)),
 
               // =====================================================
-              // 🔹 NEEDS ATTENTION  (colored mini-cards)
+              // 🔹 NEEDS ATTENTION
               // =====================================================
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -328,7 +356,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       count: "$totalSuppliers",
                       countColor: AppColors.primary,
                       label: "Suppliers",
-                      subLabel: "Active suppliers",
+                      subLabel: "Active suppliers counts",
                       percentage: MetricHelper.calculatePercentage(
                         totalSuppliers,
                         pastSuppliers,
@@ -374,7 +402,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               SizedBox(height: R.sp(context, AppSpacing.sectionGap)),
 
               // =====================================================
-              // 🔹 QUICK ACTIONS  (icon circles like reference image)
+              // 🔹 QUICK ACTIONS
               // =====================================================
               Text("Quick Actions", style: AppTextStyles.sectionTitle),
               SizedBox(height: R.sp(context, AppSpacing.lg)),
@@ -386,7 +414,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     context: context,
                     icon: Icons.currency_rupee,
                     label: "New Sale",
-                    filled: true,
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(builder: (_) => CurrentBillScreen()),
@@ -394,25 +421,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ),
                   _quickActionCircle(
                     context: context,
-                    icon: Icons.inventory_2_outlined,
-                    label: "Stock In",
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const ProductScreen()),
-                    ),
-                  ),
-                  _quickActionCircle(
-                    context: context,
-                    icon: Icons.outbox_outlined,
-                    label: "Stock Out",
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const ProductScreen()),
-                    ),
-                  ),
-                  _quickActionCircle(
-                    context: context,
-                    icon: Icons.add,
+                    icon: Icons.add_box_outlined,
                     label: "Add Product",
                     onTap: () => Navigator.push(
                       context,
@@ -420,6 +429,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         builder: (_) => const AddProductScreen(),
                       ),
                     ),
+                  ),
+                  _quickActionCircle(
+                    context: context,
+                    icon: Icons.local_shipping_outlined,
+                    label: "Suppliers",
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SuppliersScreen(),
+                      ),
+                    ),
+                  ),
+                  _quickActionCircle(
+                    context: context,
+                    icon: Icons.bar_chart_outlined,
+                    label: "Reports",
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Reports coming soon"),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -434,7 +467,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 }
 
 // =====================================================
-// 🔹 ATTENTION CARD  (colored pastel bg)
+// 🔹 ATTENTION CARD
 // =====================================================
 Widget _attentionCard(
   BuildContext context, {
@@ -509,13 +542,12 @@ Widget _attentionCard(
 }
 
 // =====================================================
-// 🔹 QUICK ACTION  (icon circle like reference image)
+// 🔹 QUICK ACTION CIRCLE
 // =====================================================
 Widget _quickActionCircle({
   required BuildContext context,
   required IconData icon,
   required String label,
-  bool filled = false,
   VoidCallback? onTap,
 }) {
   return GestureDetector(
@@ -526,24 +558,19 @@ Widget _quickActionCircle({
           width: 56,
           height: 56,
           decoration: BoxDecoration(
-            color: filled ? AppColors.primary : AppColors.card,
+            color: Colors.white,
             shape: BoxShape.circle,
-            border: Border.all(
-              color: filled ? AppColors.primary : AppColors.border,
-            ),
+            border: Border.all(color: AppColors.border, width: 1),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withOpacity(filled ? 0.25 : 0.08),
+                color: Colors.black.withOpacity(0.06),
                 blurRadius: 10,
                 offset: const Offset(0, 3),
               ),
             ],
           ),
-          child: Icon(
-            icon,
-            color: filled ? Colors.white : AppColors.primary,
-            size: AppSizes.iconMd,
-          ),
+
+          child: Icon(icon, color: AppColors.primary, size: AppSizes.iconMd),
         ),
         SizedBox(height: R.sp(context, AppSpacing.xs)),
         Text(
@@ -560,7 +587,7 @@ Widget _quickActionCircle({
 }
 
 // =====================================================
-// 🔹 SUMMARY CARD  (unchanged logic, added icon)
+// 🔹 SUMMARY CARD
 // =====================================================
 Widget _summaryCard(
   BuildContext context,
@@ -622,7 +649,7 @@ Widget _summaryCard(
 }
 
 // =====================================================
-// 🔹 METRIC HELPER  (unchanged)
+// 🔹 METRIC HELPER
 // =====================================================
 class MetricHelper {
   static double calculatePercentage(num current, num previous) {
