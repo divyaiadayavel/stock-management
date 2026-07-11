@@ -19,9 +19,8 @@ class AddProductScreen extends ConsumerStatefulWidget {
 
 class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   // =====================================================
-  // 🔹 CONTROLLERS  (unchanged)
+  // 🔹 CONTROLLERS
   // =====================================================
-
   final nameController = TextEditingController();
   final TextEditingController lslController = TextEditingController();
   final TextEditingController sgstController = TextEditingController();
@@ -40,7 +39,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   final supplierController = TextEditingController();
   final expiryController = TextEditingController();
 
-  // 🆕 wizard state — which step (0,1,2) is currently shown
   int _currentStep = 0;
   final List<String> _stepLabels = [
     "Basic info",
@@ -66,19 +64,18 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     "Toys",
     "Footwear",
   ];
-
+  double? _originalPurchasePrice;
+  double? _originalSellingPrice;
+  int _originalQuantity = 0;
   @override
   void initState() {
     super.initState();
     loadSuppliers();
 
-    // 🆕 live profit margin — recalculates automatically as the user types,
-    // no button needed (matches reference image's "Live margin")
     purchaseController.addListener(calculateProfit);
     sellingController.addListener(calculateProfit);
 
     if (widget.product != null) {
-      // --- Load existing data into controllers ---
       nameController.text = widget.product!['name'] ?? "";
       productcodeController.text = widget.product!['barcode'] ?? "";
       expiryController.text = widget.product!['expiry_date'] ?? "";
@@ -91,10 +88,13 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       hsnController.text = widget.product!['hsn_code'] ?? "";
       unitController.text = widget.product!['unit'] ?? "";
       lslController.text = widget.product!['lsl']?.toString() ?? "10";
-
+      _originalPurchasePrice = double.tryParse(purchaseController.text) ?? 0;
+      _originalSellingPrice = double.tryParse(sellingController.text) ?? 0;
+      _originalQuantity = int.tryParse(quantityController.text) ?? 0;
       sgstController.text = widget.product!['sgst']?.toString() ?? "";
       cgstController.text = widget.product!['cgst']?.toString() ?? "";
       discountController.text = widget.product!['discount']?.toString() ?? "";
+
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(selectedCategoryProvider.notifier).state =
             widget.product!['category'] ?? "Electronics";
@@ -104,6 +104,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
         ref.read(showGstProvider.notifier).state =
             hsnController.text.isNotEmpty;
+
         calculateProfit();
         if (widget.product!['image_path'] != null &&
             widget.product!['image_path'].toString().isNotEmpty) {
@@ -112,6 +113,16 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           );
         }
       });
+    } else {
+      // 🆕 Fresh "Add Product" entry — force-clear any leftover image state
+      // in case the provider survived from a previous session.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(imageProvider.notifier).state = null;
+        ref.read(selectedCategoryProvider.notifier).state = "Electronics";
+        ref.read(selectedSupplierProvider.notifier).state = null;
+        ref.read(showGstProvider.notifier).state = false;
+        ref.read(profitMarginProvider.notifier).state = 0;
+      });
     }
   }
 
@@ -119,6 +130,14 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   void dispose() {
     purchaseController.removeListener(calculateProfit);
     sellingController.removeListener(calculateProfit);
+
+    // 🆕 Explicitly invalidate and reset all providers immediately upon exiting the screen scope
+    ref.invalidate(imageProvider);
+    ref.invalidate(selectedCategoryProvider);
+    ref.invalidate(selectedSupplierProvider);
+    ref.invalidate(showGstProvider);
+    ref.invalidate(profitMarginProvider);
+
     super.dispose();
   }
 
@@ -131,6 +150,20 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       String finalImagePath =
           image?.path ?? widget.product!['image_path'] ?? "";
 
+      final newPurchase = double.tryParse(purchaseController.text) ?? 0;
+      final newSelling = double.tryParse(sellingController.text) ?? 0;
+      final newQtyTotal = int.tryParse(quantityController.text) ?? 0;
+
+      if (_isPriceChangedFromOriginal()) {
+        final addedQty = newQtyTotal - _originalQuantity;
+        await DBHelper.addProductBatch(
+          productId: widget.product!['id'],
+          purchasePrice: newPurchase,
+          sellingPrice: newSelling,
+          quantity: addedQty > 0 ? addedQty : 0,
+        );
+      }
+
       await DBHelper.updateProduct(
         id: widget.product!['id'],
         name: nameController.text.trim(),
@@ -140,9 +173,9 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         hsnCode: hsnController.text.trim(),
         supplier: selectedSupplier ?? "",
         expiryDate: expiryController.text.trim(),
-        purchasePrice: double.tryParse(purchaseController.text) ?? 0,
-        sellingPrice: double.tryParse(sellingController.text) ?? 0,
-        quantity: int.tryParse(quantityController.text) ?? 0,
+        purchasePrice: newPurchase,
+        sellingPrice: newSelling,
+        quantity: newQtyTotal,
         lsl: int.tryParse(lslController.text) ?? 10,
         unit: unitController.text.trim(),
         description: descriptionController.text.trim(),
@@ -156,10 +189,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       debugPrint("UPDATE ERROR: $e");
     }
   }
-
-  // =====================================================
-  // 🔹 IMAGE PICKER
-  // =====================================================
 
   Future<void> pickImage(ImageSource source) async {
     final picked = await ImagePicker().pickImage(source: source);
@@ -177,10 +206,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         .toList();
   }
 
-  // =====================================================
-  // 🔹 PROFIT MARGIN  (now called live via controller listeners)
-  // =====================================================
-
   void calculateProfit() {
     double purchase = double.tryParse(purchaseController.text) ?? 0;
     double selling = double.tryParse(sellingController.text) ?? 0;
@@ -192,10 +217,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       ref.read(profitMarginProvider.notifier).state = 0;
     }
   }
-
-  // =====================================================
-  // 🔹 SAVE PRODUCT
-  // =====================================================
 
   void saveProduct() async {
     final image = ref.read(imageProvider);
@@ -221,7 +242,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         return;
       }
 
-      await DBHelper.addProduct(
+      final newProductId = await DBHelper.addProduct(
         name: nameController.text.trim(),
         category: selectedCategory,
         sgst: showGstFields ? double.tryParse(sgstController.text) ?? 0 : 0,
@@ -236,8 +257,15 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         unit: unitController.text.trim(),
         description: descriptionController.text.trim(),
         barcode: productcodeController.text.trim(),
-        imagePath: image?.path ?? "",
+        imagePath: image.path,
         discount: double.tryParse(discountController.text) ?? 0,
+      );
+
+      await DBHelper.addProductBatch(
+        productId: newProductId,
+        purchasePrice: double.tryParse(purchaseController.text) ?? 0,
+        sellingPrice: double.tryParse(sellingController.text) ?? 0,
+        quantity: int.tryParse(quantityController.text) ?? 0,
       );
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -253,10 +281,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       ).showSnackBar(SnackBar(content: Text("Error: $e")));
     }
   }
-
-  // =====================================================
-  // 🔹 INPUT FIELD  (unchanged)
-  // =====================================================
 
   Widget inputField({
     required String label,
@@ -333,10 +357,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     );
   }
 
-  // =====================================================
-  // 🔹 SECTION TITLE  (unchanged)
-  // =====================================================
-
   Widget sectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 18),
@@ -349,10 +369,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       ),
     );
   }
-
-  // =====================================================
-  // 🔹 DATE PICKER  (unchanged)
-  // =====================================================
 
   Future<void> pickDate() async {
     DateTime? pickedDate = await showDatePicker(
@@ -368,13 +384,8 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     }
   }
 
-  // =====================================================
-  // 🆕 STEP VALIDATION — required (★) fields must be filled
-  //    before the user can move to the next step
-  // =====================================================
   bool _validateCurrentStep() {
     final image = ref.read(imageProvider);
-    final selectedCategory = ref.read(selectedCategoryProvider);
 
     if (_currentStep == 0) {
       if (image == null) {
@@ -385,10 +396,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         _showMissingFieldSnack("Product Name is required");
         return false;
       }
-      // if (selectedCategory == null) {
-      //   _showMissingFieldSnack("Please select a category");
-      //   return false;
-      // }
       return true;
     }
 
@@ -408,7 +415,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       return true;
     }
 
-    // step 2 (Pricing) — checked at save time, no "next" step after it
     return true;
   }
 
@@ -418,7 +424,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  // 🆕 step navigation helpers
   void _goNext() {
     if (!_validateCurrentStep()) return;
     if (_currentStep < 2) {
@@ -434,10 +439,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     }
   }
 
-  // =====================================================
-  // 🔹 BUILD
-  // =====================================================
-
   @override
   Widget build(BuildContext context) {
     final image = ref.watch(imageProvider);
@@ -449,17 +450,13 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      // AppBar is completely removed!
-
-      // Wrapped in SafeArea so your new header doesn't hit the phone notch
       body: SafeArea(
         child: Container(
           color: Colors.grey.shade50,
           child: Column(
             children: [
-              // ── Custom Header (Replaces the AppBar) ──
               Container(
-                color: Colors.white, // Matches your old AppBar color
+                color: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                 child: Row(
                   children: [
@@ -473,14 +470,13 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                       style: const TextStyle(
                         fontWeight: FontWeight.w500,
                         color: Colors.black87,
-                        fontSize: 20, // Standard AppBar title size
+                        fontSize: 20,
                       ),
                     ),
                   ],
                 ),
               ),
 
-              // ── Step progress header (matches reference image) ──
               Padding(
                 padding: EdgeInsets.fromLTRB(
                   R.fluid(context, 16, 20),
@@ -535,7 +531,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
               SizedBox(height: R.sp(context, 12)),
 
-              // ── Step body ──
               Expanded(
                 child: SingleChildScrollView(
                   padding: R.hPad(context, base: 18),
@@ -570,10 +565,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 ),
               ),
 
-              // ── Bottom nav buttons: Back / Next / Save (gradient) ──
               SafeArea(
-                top:
-                    false, // Don't apply top safe area here since it's on the main body
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(
                     R.fluid(context, 16, 20),
@@ -663,10 +655,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     );
   }
 
-  // =====================================================
-  // 🔹 STEP 1 — Product Media + core identity fields
-  //    (Name*, Code, Category*)
-  // =====================================================
   Widget _buildStep1BasicInfo({
     required File? image,
     required String? selectedCategory,
@@ -827,10 +815,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     );
   }
 
-  // =====================================================
-  // 🔹 STEP 2 — Stock Details + GST/Discount + Supplier + Expiry
-  //    (Quantity*, Low Stock Limit*, Unit*)
-  // =====================================================
   Widget _buildStep2StockSupplier({
     required bool showGstFields,
     required String? selectedSupplier,
@@ -1092,11 +1076,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     );
   }
 
-  // =====================================================
-  // 🔹 STEP 3 — Pricing
-  //    (Purchase*, Selling* + auto-calculated LIVE margin card,
-  //    no button — updates as you type, matches reference image)
-  // =====================================================
   Widget _buildStep3Pricing({required double profitMargin}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1129,8 +1108,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
         const SizedBox(height: 22),
 
-        // 🆕 LIVE MARGIN card — no button, recalculates automatically
-        // every time purchase/selling controllers change
         Container(
           width: double.infinity,
           padding: EdgeInsets.all(R.sp(context, 20)),
@@ -1186,13 +1163,47 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             color: Colors.grey.shade500,
           ),
         ),
+
+        if (_isPriceChangedFromOriginal())
+          Container(
+            margin: EdgeInsets.only(top: R.sp(context, 14)),
+            padding: EdgeInsets.all(R.sp(context, 14)),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade50,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.amber.shade200),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.inventory_2_outlined,
+                  color: Colors.amber.shade800,
+                  size: 20,
+                ),
+                SizedBox(width: R.sp(context, 10)),
+                Expanded(
+                  child: Text(
+                    "Price changed. This will start a new stock batch at "
+                    "the updated price. Your existing ${_originalQuantity} "
+                    "unit${_originalQuantity == 1 ? '' : 's'} at the old "
+                    "price of ₹${(_originalPurchasePrice ?? 0).toStringAsFixed(0)} "
+                    "stay untouched and sell first — new stock you add now "
+                    "joins the next batch.",
+                    style: TextStyle(
+                      fontSize: R.fs(context, 12),
+                      color: Colors.amber.shade900,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }
 
-  // =====================================================
-  // 🔹 MEDIA BUTTON  (unchanged)
-  // =====================================================
   Widget _mediaButton({
     required IconData icon,
     required String title,
@@ -1223,5 +1234,13 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         ),
       ),
     );
+  }
+
+  bool _isPriceChangedFromOriginal() {
+    if (widget.product == null) return false;
+    final p = double.tryParse(purchaseController.text) ?? 0;
+    final s = double.tryParse(sellingController.text) ?? 0;
+    return p != (_originalPurchasePrice ?? 0) ||
+        s != (_originalSellingPrice ?? 0);
   }
 }

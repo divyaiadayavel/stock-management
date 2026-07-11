@@ -339,14 +339,39 @@ class _SupplierDetailsScreenState extends ConsumerState<SupplierDetailsScreen> {
   }
 
   Future<void> _update() async {
-    // 🆕  uses updateSupplierFull instead of updateSupplier
-    //      so paymentTerms is persisted to the DB
+    final phoneText = phoneCtrl.text.trim();
+    final contactText = contactCtrl.text.trim();
+
+    // 1. Separate message for missing Contact Name
+    if (contactText.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Contact name is required")));
+      return;
+    }
+
+    // 2. Separate message for missing Phone Number
+    if (phoneText.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Phone number is required")));
+      return;
+    }
+
+    // 3. Separate message for invalid 10-digit Phone Format
+    if (!RegExp(r'^\d{10}$').hasMatch(phoneText)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Enter a valid 10-digit phone number")),
+      );
+      return;
+    }
+
+    // 🆕 uses updateSupplierFull instead of updateSupplier
+    // so paymentTerms is persisted to the DB
     await DBHelper.updateSupplierFull(
       id: widget.supplier["id"],
-      supplierName: contactCtrl.text.trim().isNotEmpty
-          ? contactCtrl.text.trim()
-          : companyCtrl.text.trim(),
-      contactNumber: phoneCtrl.text.trim(),
+      supplierName: contactText,
+      contactNumber: phoneText,
       category: _selectedCategories.join(", "),
       paymentTerms: _selectedPaymentTerm ?? '',
     );
@@ -505,7 +530,6 @@ class _SupplierDetailsScreenState extends ConsumerState<SupplierDetailsScreen> {
             ),
 
             SizedBox(height: R.sp(context, 24)),
-
             // Company name
             _textField(
               controller: companyCtrl,

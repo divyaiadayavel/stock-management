@@ -33,7 +33,7 @@ void main() {
     final snapshot = container.read(roleAccessProvider);
 
     expect(snapshot.isTemporaryAllAccess, isTrue);
-    expect(snapshot.canAccess(AppFeature.settings), isTrue);
+    expect(snapshot.canAccess(AppFeature.more), isTrue);
     expect(snapshot.allowedFeatures, RoleAccessPolicy.allFeatures);
   });
 }

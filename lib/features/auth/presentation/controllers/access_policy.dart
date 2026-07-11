@@ -1,4 +1,4 @@
-enum AppFeature { dashboard, products, billing, inventory, settings }
+enum AppFeature { dashboard, products, billing, inventory, more }
 
 class RoleAccessPolicy {
   const RoleAccessPolicy._();
@@ -12,7 +12,7 @@ class RoleAccessPolicy {
     AppFeature.products,
     AppFeature.billing,
     AppFeature.inventory,
-    AppFeature.settings,
+    AppFeature.more,
   };
 
   static const Map<String, Set<AppFeature>> _roleFeatureMap = {
@@ -50,8 +50,8 @@ class RoleAccessPolicy {
         return 'Billing';
       case AppFeature.inventory:
         return ' Inventory';
-      case AppFeature.settings:
-        return 'Settings';
+      case AppFeature.more:
+        return 'More';
     }
   }
 

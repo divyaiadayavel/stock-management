@@ -22,148 +22,130 @@ class DBHelper {
     return await openDatabase(
       path,
       version: 16,
-
       onCreate: (db, version) async {
         await _createTables(db);
       },
-
       onOpen: (db) async {
         // =====================================================
         // 🔧 ADD NEW COLUMNS IF NOT EXISTS (existing installs)
         // =====================================================
-
         try {
           await db.execute("ALTER TABLE products ADD COLUMN sgst REAL");
-        } catch (e) {}
-
+        } catch (_) {}
         try {
           await db.execute("ALTER TABLE products ADD COLUMN cgst REAL");
-        } catch (e) {}
-
+        } catch (_) {}
         try {
           await db.execute("ALTER TABLE products ADD COLUMN hsn_code TEXT");
-        } catch (e) {}
-
+        } catch (_) {}
         try {
           await db.execute("ALTER TABLE products ADD COLUMN expiry_date TEXT");
-        } catch (e) {}
-
+        } catch (_) {}
         try {
           await db.execute(
             "ALTER TABLE products ADD COLUMN purchase_price REAL",
           );
-        } catch (e) {}
-
+        } catch (_) {}
         try {
           await db.execute("ALTER TABLE products ADD COLUMN image_path TEXT");
-        } catch (e) {}
-
+        } catch (_) {}
         try {
           await db.execute(
             "ALTER TABLE profile ADD COLUMN businessAddress TEXT",
           );
-        } catch (e) {}
+        } catch (_) {}
         try {
           await db.execute("ALTER TABLE profile ADD COLUMN phoneNumber TEXT");
-        } catch (e) {}
+        } catch (_) {}
         try {
           await db.execute("ALTER TABLE profile ADD COLUMN emailAddress TEXT");
-        } catch (e) {}
+        } catch (_) {}
         try {
           await db.execute("ALTER TABLE profile ADD COLUMN gstNumber TEXT");
-        } catch (e) {}
+        } catch (_) {}
         try {
           await db.execute(
             "ALTER TABLE profile ADD COLUMN taxRegistrationType TEXT",
           );
-        } catch (e) {}
+        } catch (_) {}
         try {
           await db.execute("ALTER TABLE users ADD COLUMN phone TEXT");
-        } catch (e) {}
+        } catch (_) {}
         try {
           await db.execute(
             "ALTER TABLE products ADD COLUMN discount REAL DEFAULT 0",
           );
-        } catch (e) {}
+        } catch (_) {}
         try {
           await db.execute(
             "ALTER TABLE products ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP",
           );
-        } catch (e) {}
+        } catch (_) {}
         try {
           await db.execute(
             "ALTER TABLE suppliers ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP",
           );
-        } catch (e) {}
+        } catch (_) {}
         try {
           await db.execute(
             "ALTER TABLE products ADD COLUMN warehouse TEXT DEFAULT 'Main store'",
           );
-        } catch (e) {}
+        } catch (_) {}
         try {
           await db.execute(
             "ALTER TABLE products ADD COLUMN updated_at TEXT DEFAULT CURRENT_TIMESTAMP",
           );
-        } catch (e) {}
+        } catch (_) {}
         try {
           await db.execute(
             "ALTER TABLE suppliers ADD COLUMN paymentTerms TEXT",
           );
-        } catch (e) {}
+        } catch (_) {}
         try {
           await db.execute(
             "ALTER TABLE suppliers ADD COLUMN leadDays INTEGER DEFAULT 0",
           );
-        } catch (e) {}
+        } catch (_) {}
         try {
           await db.execute(
             "ALTER TABLE suppliers ADD COLUMN dueAmount REAL DEFAULT 0",
           );
-        } catch (e) {}
+        } catch (_) {}
         try {
           await db.execute(
             "ALTER TABLE invoices ADD COLUMN balanceDue REAL DEFAULT 0",
           );
-        } catch (e) {}
+        } catch (_) {}
         try {
           await db.execute(
             "ALTER TABLE invoices ADD COLUMN customerId INTEGER",
           );
-        } catch (e) {}
+        } catch (_) {}
         try {
           await db.execute("ALTER TABLE invoices ADD COLUMN customerName TEXT");
-        } catch (e) {}
+        } catch (_) {}
         try {
           await db.execute(
             "ALTER TABLE invoices ADD COLUMN status TEXT DEFAULT 'paid'",
           );
-        } catch (e) {}
+        } catch (_) {}
         try {
           await db.execute(
             "ALTER TABLE invoices ADD COLUMN paymentMethod TEXT",
           );
-        } catch (e) {}
+        } catch (_) {}
         try {
           await db.execute("ALTER TABLE invoices ADD COLUMN createdAt TEXT");
-        } catch (e) {}
-
-        // =====================================================
-        // 🔧 THE FIX: CREATE ANY MISSING TABLES ON EXISTING DBs
-        // -----------------------------------------------------
-        // onCreate() ONLY runs the very first time the database
-        // file is created. On an already-installed app, onCreate
-        // never runs again — so any table added later (customers,
-        // invoice_payments, stock_transactions, purchase_orders,
-        // purchase_order_items, purchase_order_issues,
-        // login_branding) was NEVER created on your existing DB.
-        // That's exactly why you got:
-        //   "no such table: invoice_payments"
-        //
-        // Adding CREATE TABLE IF NOT EXISTS here makes onOpen()
-        // self-healing: every time the app opens the DB, it
-        // guarantees these tables exist, regardless of when the
-        // install originally happened.
-        // =====================================================
+        } catch (_) {}
+        try {
+          await db.execute("ALTER TABLE profile ADD COLUMN ownerName TEXT");
+        } catch (_) {}
+        try {
+          await db.execute("ALTER TABLE profile ADD COLUMN planLabel TEXT");
+        } catch (_) {}
+        try {
+          await db.execute("ALTER TABLE customers ADD COLUMN gender TEXT");
+        } catch (_) {}
 
         try {
           await db.execute('''
@@ -173,10 +155,11 @@ class DBHelper {
               phone TEXT,
               email TEXT,
               address TEXT,
+              gender TEXT,
               created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
           ''');
-        } catch (e) {}
+        } catch (_) {}
 
         try {
           await db.execute('''
@@ -191,7 +174,22 @@ class DBHelper {
               paidAt TEXT
             )
           ''');
-        } catch (e) {}
+        } catch (_) {}
+
+        try {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS product_batches (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              product_id INTEGER NOT NULL,
+              purchase_price REAL NOT NULL,
+              selling_price REAL NOT NULL,
+              quantity INTEGER NOT NULL,
+              remaining_quantity INTEGER NOT NULL,
+              created_at TEXT NOT NULL,
+              FOREIGN KEY(product_id) REFERENCES products(id)
+            );
+          ''');
+        } catch (_) {}
 
         try {
           await db.execute('''
@@ -208,46 +206,46 @@ class DBHelper {
               date TEXT DEFAULT CURRENT_TIMESTAMP
             )
           ''');
-        } catch (e) {}
+        } catch (_) {}
 
         try {
           await db.execute('''
             CREATE TABLE IF NOT EXISTS purchase_orders(
-              id               INTEGER PRIMARY KEY AUTOINCREMENT,
-              supplierId       INTEGER,
-              status           TEXT,
-              orderedAt        TEXT,
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              supplierId INTEGER,
+              status TEXT,
+              orderedAt TEXT,
               expectedDelivery TEXT,
-              receivedAt       TEXT
+              receivedAt TEXT
             )
           ''');
-        } catch (e) {}
+        } catch (_) {}
 
         try {
           await db.execute('''
             CREATE TABLE IF NOT EXISTS purchase_order_items(
-              id          INTEGER PRIMARY KEY AUTOINCREMENT,
-              poId        INTEGER,
-              productId   INTEGER,
-              name        TEXT,
-              unit        TEXT,
-              orderedQty  INTEGER,
-              unitPrice   REAL,
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              poId INTEGER,
+              productId INTEGER,
+              name TEXT,
+              unit TEXT,
+              orderedQty INTEGER,
+              unitPrice REAL,
               receivedQty INTEGER DEFAULT 0
             )
           ''');
-        } catch (e) {}
+        } catch (_) {}
 
         try {
           await db.execute('''
             CREATE TABLE IF NOT EXISTS purchase_order_issues(
-              id        INTEGER PRIMARY KEY AUTOINCREMENT,
-              poId      INTEGER,
-              note      TEXT,
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              poId INTEGER,
+              note TEXT,
               createdAt TEXT
             )
           ''');
-        } catch (e) {}
+        } catch (_) {}
 
         try {
           await db.execute('''
@@ -259,13 +257,6 @@ class DBHelper {
             )
           ''');
         } catch (e) {}
-        try {
-await _seedTestProducts(db);
-} catch (_) {}
-try {
-await _seedTestSuppliers(db);
-} catch (_) {}
-
       },
     );
   }
@@ -274,22 +265,17 @@ await _seedTestSuppliers(db);
   // 🔹 CREATE TABLES (fresh installs only)
   // =========================
   static Future<void> _createTables(Database db) async {
-    // =========================
-    // 👤 USERS
-    // =========================
     await db.execute('''
       CREATE TABLE users(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT,
         email TEXT UNIQUE,
         password TEXT,
-        role TEXT
+        role TEXT,
+        phone TEXT
       )
     ''');
 
-    // =========================
-    // 📦 PRODUCTS
-    // =========================
     await db.execute('''
       CREATE TABLE products(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -308,13 +294,13 @@ await _seedTestSuppliers(db);
         description TEXT,
         barcode TEXT,
         image_path TEXT,
-        discount REAL DEFAULT 0
+        discount REAL DEFAULT 0,
+        warehouse TEXT DEFAULT 'Main store',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     ''');
 
-    // =========================
-    // 💰 SALES
-    // =========================
     await db.execute('''
       CREATE TABLE sales(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -324,9 +310,6 @@ await _seedTestSuppliers(db);
       )
     ''');
 
-    // =========================
-    // 🚚 SUPPLIERS
-    // =========================
     await db.execute('''
       CREATE TABLE suppliers(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -336,13 +319,16 @@ await _seedTestSuppliers(db);
         email TEXT,
         category TEXT,
         gst TEXT,
-        address TEXT
+        address TEXT,
+        paymentTerms TEXT,
+        leadDays INTEGER DEFAULT 0,
+        dueAmount REAL DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     ''');
 
-    // Stock transactions table (stock in / stock out / adjust history)
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS stock_transactions(
+      CREATE TABLE stock_transactions(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         productId INTEGER,
         type TEXT,
@@ -356,41 +342,39 @@ await _seedTestSuppliers(db);
       )
     ''');
 
-    // Purchase orders
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS purchase_orders(
-        id               INTEGER PRIMARY KEY AUTOINCREMENT,
-        supplierId       INTEGER,
-        status           TEXT,
-        orderedAt        TEXT,
+      CREATE TABLE purchase_orders(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        supplierId INTEGER,
+        status TEXT,
+        orderedAt TEXT,
         expectedDelivery TEXT,
-        receivedAt       TEXT
+        receivedAt TEXT
       )
     ''');
+
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS purchase_order_items(
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        poId        INTEGER,
-        productId   INTEGER,
-        name        TEXT,
-        unit        TEXT,
-        orderedQty  INTEGER,
-        unitPrice   REAL,
+      CREATE TABLE purchase_order_items(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        poId INTEGER,
+        productId INTEGER,
+        name TEXT,
+        unit TEXT,
+        orderedQty INTEGER,
+        unitPrice REAL,
         receivedQty INTEGER DEFAULT 0
       )
     ''');
+
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS purchase_order_issues(
-        id        INTEGER PRIMARY KEY AUTOINCREMENT,
-        poId      INTEGER,
-        note      TEXT,
+      CREATE TABLE purchase_order_issues(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        poId INTEGER,
+        note TEXT,
         createdAt TEXT
       )
     ''');
 
-    // =========================
-    // 🧾 INVOICES
-    // =========================
     await db.execute('''
       CREATE TABLE invoices(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -398,13 +382,16 @@ await _seedTestSuppliers(db);
         subtotal REAL,
         discount REAL,
         tax REAL,
-        total REAL
+        total REAL,
+        balanceDue REAL DEFAULT 0,
+        customerId INTEGER,
+        customerName TEXT,
+        status TEXT DEFAULT 'paid',
+        paymentMethod TEXT,
+        createdAt TEXT
       )
     ''');
 
-    // =========================
-    // 🧾 INVOICE ITEMS
-    // =========================
     await db.execute('''
       CREATE TABLE invoice_items(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -417,25 +404,20 @@ await _seedTestSuppliers(db);
       )
     ''');
 
-    // =========================
-    // 👥 CUSTOMERS
-    // =========================
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS customers(
+      CREATE TABLE customers(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT,
         phone TEXT,
         email TEXT,
         address TEXT,
+        gender TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     ''');
 
-    // =========================
-    // 💳 INVOICE PAYMENTS (split tender ledger)
-    // =========================
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS invoice_payments(
+      CREATE TABLE invoice_payments(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         invoiceId INTEGER,
         cashAmount REAL DEFAULT 0,
@@ -447,9 +429,6 @@ await _seedTestSuppliers(db);
       )
     ''');
 
-    // =========================
-    // ⚙️ SETTINGS
-    // =========================
     await db.execute('''
       CREATE TABLE settings(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -458,7 +437,6 @@ await _seedTestSuppliers(db);
       )
     ''');
 
-    // Default Invoice & Tax Settings
     await db.insert('settings', {'key': 'invoicePrefix', 'value': 'INV'});
     await db.insert('settings', {'key': 'invoiceFormat', 'value': 'INV-0001'});
     await db.insert('settings', {
@@ -476,19 +454,13 @@ await _seedTestSuppliers(db);
       'key': 'termsConditions',
       'value': 'No return without permission.',
     });
-    // Default Customize Settings
     await db.insert('settings', {'key': 'barcodeEnabled', 'value': 'true'});
     await db.insert('settings', {'key': 'lowStockAlert', 'value': 'true'});
     await db.insert('settings', {'key': 'lowStockLimit', 'value': '5'});
     await db.insert('settings', {'key': 'stockManagement', 'value': 'true'});
-
-    // Default Hardware Settings
     await db.insert('settings', {'key': 'defaultPrinter', 'value': 'Not Set'});
-    // Default Backup & Sync Settings
     await db.insert('settings', {'key': 'googleDriveBackup', 'value': 'true'});
     await db.insert('settings', {'key': 'autoBackup', 'value': 'true'});
-
-    // Default Notification Settings
     await db.insert('settings', {'key': 'notifLowStock', 'value': 'true'});
     await db.insert('settings', {'key': 'notifPayment', 'value': 'true'});
     await db.insert('settings', {'key': 'notifDailySales', 'value': 'true'});
@@ -496,9 +468,6 @@ await _seedTestSuppliers(db);
     await db.insert('settings', {'key': 'notifEmail', 'value': 'false'});
     await db.insert('settings', {'key': 'notifSound', 'value': 'true'});
 
-    // =========================
-    // 👤 PROFILE
-    // =========================
     await db.execute('''
       CREATE TABLE profile(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -509,15 +478,14 @@ await _seedTestSuppliers(db);
         phoneNumber TEXT,
         emailAddress TEXT,
         gstNumber TEXT,
-        taxRegistrationType TEXT
+        taxRegistrationType TEXT,
+        ownerName TEXT,
+        planLabel TEXT
       )
     ''');
 
-    // =========================
-    // 🔐 LOGIN BRANDING
-    // =========================
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS login_branding(
+      CREATE TABLE login_branding(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         appName TEXT,
         tagline TEXT,
@@ -525,9 +493,6 @@ await _seedTestSuppliers(db);
       )
     ''');
 
-    // =========================
-    // 👉 DEFAULT ADMIN
-    // =========================
     await db.insert('users', {
       'name': 'Admin',
       'email': 'divyabharathi@catalystack.com',
@@ -544,13 +509,11 @@ await _seedTestSuppliers(db);
     String password,
   ) async {
     final dbClient = await db;
-
     final res = await dbClient.query(
       'users',
       where: 'email = ? AND password = ?',
       whereArgs: [email, password],
     );
-
     return res.isNotEmpty ? res.first : null;
   }
 
@@ -563,13 +526,11 @@ await _seedTestSuppliers(db);
     String password,
   ) async {
     final dbClient = await db;
-
     final existing = await dbClient.query(
       'users',
       where: 'email = ?',
       whereArgs: [email],
     );
-
     if (existing.isNotEmpty) return false;
 
     await dbClient.insert('users', {
@@ -578,7 +539,6 @@ await _seedTestSuppliers(db);
       'password': password,
       'role': 'admin',
     });
-
     return true;
   }
 
@@ -587,21 +547,19 @@ await _seedTestSuppliers(db);
   // =========================
   static Future<bool> updatePassword(String email, String newPassword) async {
     final dbClient = await db;
-
     final res = await dbClient.update(
       'users',
       {'password': newPassword},
       where: 'email = ?',
       whereArgs: [email],
     );
-
     return res > 0;
   }
 
   // =========================
-  // 📦 ADD PRODUCT
+  // 📦 ADD PRODUCT (FIXED: Returns generated ID as int)
   // =========================
-  static Future<void> addProduct({
+  static Future<int> addProduct({
     required String name,
     required String category,
     required double sgst,
@@ -620,8 +578,7 @@ await _seedTestSuppliers(db);
     required double discount,
   }) async {
     final dbClient = await db;
-
-    await dbClient.insert("products", {
+    return await dbClient.insert("products", {
       "name": name,
       "category": category,
       "sgst": sgst,
@@ -661,7 +618,6 @@ await _seedTestSuppliers(db);
     required double discount,
   }) async {
     final dbClient = await db;
-
     final data = {
       "name": name,
       "category": category,
@@ -680,7 +636,6 @@ await _seedTestSuppliers(db);
       "image_path": imagePath,
       "discount": discount,
     };
-
     return await dbClient.update(
       "products",
       data,
@@ -696,18 +651,12 @@ await _seedTestSuppliers(db);
     String barcode,
   ) async {
     final dbClient = await db;
-
     final result = await dbClient.query(
       "products",
       where: "barcode = ?",
       whereArgs: [barcode],
     );
-
-    if (result.isNotEmpty) {
-      return result.first;
-    }
-
-    return null;
+    return result.isNotEmpty ? result.first : null;
   }
 
   // =========================
@@ -723,7 +672,6 @@ await _seedTestSuppliers(db);
   // =========================
   static Future<void> stockIn(int productId, int qty) async {
     final dbClient = await db;
-
     await dbClient.rawUpdate(
       "UPDATE products SET quantity = quantity + ? WHERE id = ?",
       [qty, productId],
@@ -733,7 +681,6 @@ await _seedTestSuppliers(db);
   // 🔹 UPDATE STOCK QUANTITY (Plus/Minus)
   static Future<int> updateStockQuantity(int id, int changeAmount) async {
     final dbClient = await db;
-
     return await dbClient.rawUpdate(
       'UPDATE products SET quantity = quantity + ? WHERE id = ?',
       [changeAmount, id],
@@ -745,12 +692,46 @@ await _seedTestSuppliers(db);
   // =========================
   static Future<int> getLowStockCount() async {
     final dbClient = await db;
-
     final res = await dbClient.rawQuery(
       "SELECT COUNT(*) as count FROM products WHERE quantity <= 5",
     );
+    return (res.first["count"] as num? ?? 0).toInt();
+  }
 
-    return (res.first["count"] as num).toInt();
+  // =========================
+  // 📦 STOCK IN (BATCH VERSION)
+  // =========================
+  static Future<void> addProductBatch({
+    required int productId,
+    required double purchasePrice,
+    required double sellingPrice,
+    required int quantity,
+  }) async {
+    final dbClient = await db;
+    await dbClient.rawInsert(
+      '''
+      INSERT INTO product_batches 
+      (product_id, purchase_price, selling_price, quantity, remaining_quantity, created_at) 
+      VALUES (?, ?, ?, ?, ?, ?)
+      ''',
+      [
+        productId,
+        purchasePrice,
+        sellingPrice,
+        quantity,
+        quantity,
+        DateTime.now().toIso8601String(),
+      ],
+    );
+  }
+
+  // 🔹 UPDATE BATCH REMAINING QUANTITY (Plus/Minus)
+  static Future<int> updateBatchQuantity(int batchId, int changeAmount) async {
+    final dbClient = await db;
+    return await dbClient.rawUpdate(
+      'UPDATE product_batches SET remaining_quantity = remaining_quantity + ? WHERE id = ?',
+      [changeAmount, batchId],
+    );
   }
 
   // =========================
@@ -758,18 +739,16 @@ await _seedTestSuppliers(db);
   // =========================
   static Future<int> getSupplierCount() async {
     final dbClient = await db;
-
     final res = await dbClient.rawQuery(
       "SELECT COUNT(*) as count FROM suppliers",
     );
-
-    return (res.first["count"] as num).toInt();
+    return (res.first["count"] as num? ?? 0).toInt();
   }
 
   // =========================
   // 🚚 ADD SUPPLIER
   // =========================
-  static Future<void> addSupplier({
+  static Future<int> addSupplier({
     required String supplierName,
     required String companyName,
     required String contactNumber,
@@ -779,8 +758,7 @@ await _seedTestSuppliers(db);
     required String address,
   }) async {
     final dbClient = await db;
-
-    await dbClient.insert("suppliers", {
+    return await dbClient.insert("suppliers", {
       "supplierName": supplierName,
       "companyName": companyName,
       "contactNumber": contactNumber,
@@ -796,7 +774,6 @@ await _seedTestSuppliers(db);
   // =========================
   static Future<List<Map<String, dynamic>>> getSuppliers() async {
     final dbClient = await db;
-
     return await dbClient.query("suppliers", orderBy: "id DESC");
   }
 
@@ -805,19 +782,13 @@ await _seedTestSuppliers(db);
   // =========================
   static Future<Map<String, dynamic>?> getSupplierById(int id) async {
     final dbClient = await db;
-
     final result = await dbClient.query(
       "suppliers",
       where: "id = ?",
       whereArgs: [id],
       limit: 1,
     );
-
-    if (result.isNotEmpty) {
-      return result.first;
-    }
-
-    return null;
+    return result.isNotEmpty ? result.first : null;
   }
 
   // =========================
@@ -830,7 +801,6 @@ await _seedTestSuppliers(db);
     required String category,
   }) async {
     final dbClient = await db;
-
     return await dbClient.update(
       "suppliers",
       {
@@ -843,10 +813,9 @@ await _seedTestSuppliers(db);
     );
   }
 
-  // delete supplier
+  // Delete Supplier
   static Future<int> deleteSupplier(int id) async {
     final dbClient = await db;
-
     return await dbClient.delete("suppliers", where: "id = ?", whereArgs: [id]);
   }
 
@@ -855,21 +824,18 @@ await _seedTestSuppliers(db);
   // =========================
   static Future<double> getTotalPurchaseAmount() async {
     final dbClient = await db;
-
     final result = await dbClient.rawQuery('''
       SELECT SUM(purchase_price * quantity) as total
       FROM products
     ''');
-
     return (result.first["total"] as num?)?.toDouble() ?? 0.0;
   }
 
   // =========================
-  // 💰 ADD SALE
+  // 💰 ADD SALE (FIXED: Fixed runtime field matching)
   // =========================
   static Future<void> addSale(int productId, int qty) async {
     final dbClient = await db;
-
     final product = await dbClient.query(
       'products',
       where: 'id = ?',
@@ -878,8 +844,8 @@ await _seedTestSuppliers(db);
 
     if (product.isEmpty) return;
 
-    int currentQty = product.first['quantity'] as int;
-    double price = (product.first['sellingPrice'] as num).toDouble();
+    int currentQty = (product.first['quantity'] as num? ?? 0).toInt();
+    double price = (product.first['selling_price'] as num? ?? 0.0).toDouble();
 
     if (currentQty < qty) {
       throw Exception("Not enough stock");
@@ -904,21 +870,17 @@ await _seedTestSuppliers(db);
   // =========================
   static Future<int> getProductCount() async {
     final dbClient = await db;
-
     final res = await dbClient.rawQuery(
       "SELECT COUNT(*) as count FROM products",
     );
-
-    return (res.first["count"] as num).toInt();
+    return (res.first["count"] as num? ?? 0).toInt();
   }
 
   static Future<int> getSalesCount() async {
     final dbClient = await db;
-
     final res = await dbClient.rawQuery(
       "SELECT SUM(total) as totalSales FROM invoices",
     );
-
     return (res.first["totalSales"] as num?)?.toInt() ?? 0;
   }
 
@@ -927,14 +889,12 @@ await _seedTestSuppliers(db);
   // =========================
   static Future<double> getTodaySales() async {
     final dbClient = await db;
-
     final res = await dbClient.rawQuery('''
       SELECT SUM(total) AS todaySales
       FROM invoices
       WHERE DATE(createdAt) = DATE('now','localtime')
     ''');
-
-    return (res.first["todaySales"] as num?)?.toDouble() ?? 0;
+    return (res.first["todaySales"] as num?)?.toDouble() ?? 0.0;
   }
 
   // =========================
@@ -942,14 +902,12 @@ await _seedTestSuppliers(db);
   // =========================
   static Future<double> getReceivablesAmount() async {
     final dbClient = await db;
-
     final res = await dbClient.rawQuery('''
-      SELECT SUM(balanceAmount) AS receivables
+      SELECT SUM(balanceDue) AS receivables
       FROM invoices
-      WHERE balanceAmount > 0
+      WHERE balanceDue > 0
     ''');
-
-    return (res.first["receivables"] as num?)?.toDouble() ?? 0;
+    return (res.first["receivables"] as num?)?.toDouble() ?? 0.0;
   }
 
   // =========================
@@ -957,7 +915,6 @@ await _seedTestSuppliers(db);
   // =========================
   static Future<List<double>> getLast7DaysSales() async {
     final dbClient = await db;
-
     List<double> data = List.filled(7, 0);
 
     for (int i = 0; i < 7; i++) {
@@ -968,10 +925,8 @@ await _seedTestSuppliers(db);
         "SELECT SUM(total) as total FROM invoices WHERE date = ?",
         [formatted],
       );
-
       data[i] = (res.first["total"] as num?)?.toDouble() ?? 0.0;
     }
-
     return data;
   }
 
@@ -980,7 +935,6 @@ await _seedTestSuppliers(db);
   // =========================
   static Future<List<double>> getLast7WeeksSales() async {
     final dbClient = await db;
-
     List<double> data = List.filled(7, 0);
 
     for (int i = 0; i < 7; i++) {
@@ -999,10 +953,8 @@ await _seedTestSuppliers(db);
         ''',
         [start, end],
       );
-
       data[i] = (res.first["total"] as num?)?.toDouble() ?? 0.0;
     }
-
     return data;
   }
 
@@ -1011,7 +963,6 @@ await _seedTestSuppliers(db);
   // =========================
   static Future<List<double>> getLast7MonthsSales() async {
     final dbClient = await db;
-
     List<double> data = List.filled(7, 0);
 
     for (int i = 0; i < 7; i++) {
@@ -1019,7 +970,6 @@ await _seedTestSuppliers(db);
         DateTime.now().year,
         DateTime.now().month - (6 - i),
       );
-
       final month = "${date.year}-${_two(date.month)}";
 
       final res = await dbClient.rawQuery(
@@ -1030,10 +980,8 @@ await _seedTestSuppliers(db);
         ''',
         [month],
       );
-
       data[i] = (res.first["total"] as num?)?.toDouble() ?? 0.0;
     }
-
     return data;
   }
 
@@ -1042,7 +990,6 @@ await _seedTestSuppliers(db);
   // =========================
   static Future<List<double>> getLast7YearsSales() async {
     final dbClient = await db;
-
     List<double> data = List.filled(7, 0);
 
     for (int i = 0; i < 7; i++) {
@@ -1056,10 +1003,8 @@ await _seedTestSuppliers(db);
         ''',
         [year],
       );
-
       data[i] = (res.first["total"] as num?)?.toDouble() ?? 0.0;
     }
-
     return data;
   }
 
@@ -1068,7 +1013,6 @@ await _seedTestSuppliers(db);
   // =========================
   static Future<void> saveGraphVisibility(bool value) async {
     final dbClient = await db;
-
     await dbClient.insert('settings', {
       'key': 'showGraph',
       'value': value ? 'true' : 'false',
@@ -1080,18 +1024,15 @@ await _seedTestSuppliers(db);
   // =========================
   static Future<bool> getGraphVisibility() async {
     final dbClient = await db;
-
     final res = await dbClient.query(
       'settings',
       where: 'key = ?',
       whereArgs: ['showGraph'],
     );
-
     if (res.isNotEmpty) {
       return res.first['value'] == 'true';
     }
-
-    return true; // default ON
+    return true;
   }
 
   // =========================
@@ -1111,7 +1052,6 @@ await _seedTestSuppliers(db);
 
   static Future<void> reduceProductStock(int productId, int soldQty) async {
     final dbClient = await db;
-
     final product = await dbClient.query(
       'products',
       where: 'id = ?',
@@ -1119,12 +1059,10 @@ await _seedTestSuppliers(db);
     );
 
     if (product.isNotEmpty) {
-      int currentQty = product.first['quantity'] as int;
+      int currentQty = (product.first['quantity'] as num? ?? 0).toInt();
       int newQty = currentQty - soldQty;
 
-      if (newQty < 0) {
-        newQty = 0;
-      }
+      if (newQty < 0) newQty = 0;
 
       await dbClient.update(
         'products',
@@ -1139,7 +1077,6 @@ await _seedTestSuppliers(db);
     List<Map<String, dynamic>> items,
   ) async {
     final dbClient = await db;
-
     for (var item in items) {
       final product = await dbClient.query(
         'products',
@@ -1148,13 +1085,11 @@ await _seedTestSuppliers(db);
       );
 
       if (product.isNotEmpty) {
-        int currentQty = product.first['quantity'] as int;
-        int soldQty = item['qty'] as int;
+        int currentQty = (product.first['quantity'] as num? ?? 0).toInt();
+        int soldQty = (item['qty'] as num? ?? 0).toInt();
         int newQty = currentQty - soldQty;
 
-        if (newQty < 0) {
-          newQty = 0;
-        }
+        if (newQty < 0) newQty = 0;
 
         await dbClient.update(
           'products',
@@ -1177,7 +1112,6 @@ await _seedTestSuppliers(db);
     required double total,
   }) async {
     final dbClient = await db;
-
     return await dbClient.transaction((txn) async {
       int invoiceId = await txn.insert('invoices', {
         'date': _today(),
@@ -1185,11 +1119,12 @@ await _seedTestSuppliers(db);
         'discount': discount,
         'tax': tax,
         'total': total,
+        'createdAt': DateTime.now().toIso8601String(),
       });
 
       for (var item in items) {
-        double price = item['price'];
-        int qty = item['qty'];
+        double price = (item['price'] as num? ?? 0.0).toDouble();
+        int qty = (item['qty'] as num? ?? 0).toInt();
 
         await txn.insert('invoice_items', {
           'invoiceId': invoiceId,
@@ -1205,7 +1140,6 @@ await _seedTestSuppliers(db);
           [qty, item['id']],
         );
       }
-
       return invoiceId;
     });
   }
@@ -1219,7 +1153,6 @@ await _seedTestSuppliers(db);
     required double amount,
   }) async {
     final dbClient = await db;
-
     await dbClient.insert("invoice_items", {
       "invoiceId": invoiceId,
       "productId": productId,
@@ -1230,13 +1163,8 @@ await _seedTestSuppliers(db);
     });
   }
 
-  // =========================
-  // 🧾 BILLING SUPPORT METHODS
-  // =========================
-
   static Future<void> updateProductQuantity(int id, int newQty) async {
     final dbClient = await db;
-
     await dbClient.update(
       'products',
       {'quantity': newQty},
@@ -1245,8 +1173,8 @@ await _seedTestSuppliers(db);
     );
   }
 
-  Future<void> updateInvoiceStatus(int id, String method) async {
-    final dbClient = await DBHelper.db;
+  static Future<void> updateInvoiceStatusStatic(int id, String method) async {
+    final dbClient = await db;
     await dbClient.update(
       'invoices',
       {'status': 'Paid', 'paymentMethod': method},
@@ -1257,7 +1185,6 @@ await _seedTestSuppliers(db);
 
   static Future<void> processBill(List<Map<String, dynamic>> cartItems) async {
     final dbClient = await db;
-
     await dbClient.transaction((txn) async {
       for (var item in cartItems) {
         final product = await txn.query(
@@ -1268,14 +1195,15 @@ await _seedTestSuppliers(db);
 
         if (product.isEmpty) continue;
 
-        int currentQty = product.first['quantity'] as int;
-        int soldQty = item['qty'];
+        int currentQty = (product.first['quantity'] as num? ?? 0).toInt();
+        int soldQty = (item['qty'] as num? ?? 0).toInt();
 
         if (currentQty < soldQty) {
           throw Exception("Not enough stock for ${item['name']}");
         }
 
-        double price = (product.first['sellingPrice'] as num).toDouble();
+        double price = (product.first['selling_price'] as num? ?? 0.0)
+            .toDouble();
         double total = price * soldQty;
 
         await txn.rawUpdate(
@@ -1299,8 +1227,7 @@ await _seedTestSuppliers(db);
       where: "id = ?",
       whereArgs: [id],
     );
-    if (maps.isNotEmpty) return maps.first;
-    return null;
+    return maps.isNotEmpty ? maps.first : null;
   }
 
   static Future<int> updateStock(int id, int changeAmount) async {
@@ -1313,13 +1240,11 @@ await _seedTestSuppliers(db);
 
   static Future<void> deleteProduct(int id) async {
     final dbClient = await db;
-
     await dbClient.delete('products', where: 'id = ?', whereArgs: [id]);
   }
 
   static Future<void> saveSetting(String key, String value) async {
     final dbClient = await db;
-
     await dbClient.insert('settings', {
       'key': key,
       'value': value,
@@ -1328,38 +1253,20 @@ await _seedTestSuppliers(db);
 
   static Future<String?> getSetting(String key) async {
     final dbClient = await db;
-
     final res = await dbClient.query(
       'settings',
       where: 'key = ?',
       whereArgs: [key],
     );
-
-    if (res.isNotEmpty) return res.first['value'] as String;
-    return null;
+    return res.isNotEmpty ? res.first['value'] as String : null;
   }
 
-  static Future<void> createProfileTable(Database db) async {
-    await db.execute('''
-      CREATE TABLE profile(
-       id INTEGER PRIMARY KEY AUTOINCREMENT,
-       storeName TEXT,
-       tagline TEXT,
-       logoPath TEXT
-      )
-    ''');
-  }
-
-  // =========================
-  // SAVE PROFILE
-  // =========================
   static Future<void> saveProfile({
     required String storeName,
     required String tagline,
     required String logoPath,
   }) async {
     final dbClient = await db;
-
     final existing = await dbClient.query("profile");
 
     if (existing.isNotEmpty) {
@@ -1379,31 +1286,18 @@ await _seedTestSuppliers(db);
     }
   }
 
-  // =========================
-  // GET PROFILE
-  // =========================
   static Future<Map<String, dynamic>?> getProfile() async {
     final dbClient = await db;
-
     final result = await dbClient.query("profile");
-
-    if (result.isNotEmpty) {
-      return result.first;
-    }
-
-    return null;
+    return result.isNotEmpty ? result.first : null;
   }
 
-  // =========================
-  // 🔹 SAVE LOGIN BRANDING
-  // =========================
   static Future<void> saveLoginBranding({
     required String appName,
     required String tagline,
     required String logoPath,
   }) async {
     final dbClient = await db;
-
     final res = await dbClient.query('login_branding');
 
     if (res.isEmpty) {
@@ -1422,23 +1316,14 @@ await _seedTestSuppliers(db);
     }
   }
 
-  // =========================
-  // 🔹 GET LOGIN BRANDING
-  // =========================
   static Future<Map<String, dynamic>?> getLoginBranding() async {
     final dbClient = await db;
-
     final res = await dbClient.query('login_branding');
-
     return res.isNotEmpty ? res.first : null;
   }
 
-  // =========================
-  // 🔹 UPDATE SINGLE PROFILE FIELD
-  // =========================
   static Future<void> updateProfileField(String field, String value) async {
     final dbClient = await db;
-
     final existing = await dbClient.query("profile");
 
     if (existing.isNotEmpty) {
@@ -1453,16 +1338,13 @@ await _seedTestSuppliers(db);
     }
   }
 
-  // =====================================================
-  // 🔹 HISTORICAL DASHBOARD QUERIES (30 Days Ago)
-  // =====================================================
   static Future<int> getPastProductCount() async {
     final dbClient = await db;
     final result = await dbClient.rawQuery('''
       SELECT COUNT(*) as count FROM products
       WHERE created_at <= date('now', '-30 days')
     ''');
-    return (result.first["count"] as num?)?.toInt() ?? 0;
+    return (result.first["count"] as num? ?? 0).toInt();
   }
 
   static Future<int> getPastSalesCount() async {
@@ -1471,7 +1353,7 @@ await _seedTestSuppliers(db);
       SELECT SUM(total) as totalSales FROM invoices
       WHERE date <= date('now', '-30 days')
     ''');
-    return (result.first["totalSales"] as num?)?.toInt() ?? 0;
+    return (result.first["totalSales"] as num? ?? 0).toInt();
   }
 
   static Future<int> getPastSupplierCount() async {
@@ -1480,7 +1362,7 @@ await _seedTestSuppliers(db);
       SELECT COUNT(*) as count FROM suppliers
       WHERE created_at <= date('now', '-30 days')
     ''');
-    return (result.first["count"] as num?)?.toInt() ?? 0;
+    return (result.first["count"] as num? ?? 0).toInt();
   }
 
   static Future<int> getPastLowStockCount() async {
@@ -1489,20 +1371,31 @@ await _seedTestSuppliers(db);
       SELECT COUNT(*) as count FROM products
       WHERE quantity <= 5 AND created_at <= date('now', '-30 days')
     ''');
-    return (result.first["count"] as num?)?.toInt() ?? 0;
+    return (result.first["count"] as num? ?? 0).toInt();
   }
 
-  // =========================
-  // 👥 GET ALL USERS (ROLES)
-  // =========================
+  static Future<Map<String, dynamic>> getInventoryOverview() async {
+    final dbClient = await db;
+
+    final result = await dbClient.rawQuery('''
+      SELECT
+        COUNT(*) AS totalItems,
+        COALESCE(SUM(quantity * selling_price), 0) AS totalValue
+      FROM products
+    ''');
+
+    final row = result.first;
+    return {
+      'totalItems': (row['totalItems'] as int?) ?? 0,
+      'totalValue': (row['totalValue'] as num?)?.toDouble() ?? 0.0,
+    };
+  }
+
   static Future<List<Map<String, dynamic>>> getAllUsers() async {
     final dbClient = await db;
     return await dbClient.query('users', orderBy: 'id ASC');
   }
 
-  // =========================
-  // ➕ ADD NEW STAFF / ROLE
-  // =========================
   static Future<bool> addStaffMember({
     required String name,
     required String role,
@@ -1511,7 +1404,6 @@ await _seedTestSuppliers(db);
     required String phone,
   }) async {
     final dbClient = await db;
-
     final existing = await dbClient.query(
       'users',
       where: 'email = ?',
@@ -1529,12 +1421,8 @@ await _seedTestSuppliers(db);
     return true;
   }
 
-  // =====================================================
-  // 🆕 INVENTORY SCREEN SUPPORT
-  // =====================================================
   static Future<Map<String, int>> getInventorySummary() async {
     final dbClient = await db;
-
     final all = await dbClient.rawQuery("SELECT COUNT(*) as c FROM products");
     final low = await dbClient.rawQuery(
       "SELECT COUNT(*) as c FROM products WHERE quantity > 0 AND quantity <= lsl",
@@ -1550,19 +1438,19 @@ await _seedTestSuppliers(db);
     ''');
 
     return {
-      'all': (all.first['c'] as num).toInt(),
-      'low': (low.first['c'] as num).toInt(),
-      'out': (out.first['c'] as num).toInt(),
-      'expiring': (expiring.first['c'] as num).toInt(),
+      'all': (all.first['c'] as num? ?? 0).toInt(),
+      'low': (low.first['c'] as num? ?? 0).toInt(),
+      'out': (out.first['c'] as num? ?? 0).toInt(),
+      'expiring': (expiring.first['c'] as num? ?? 0).toInt(),
     };
   }
 
   static Future<List<Map<String, dynamic>>> getProductsFiltered({
     String filter = 'all',
     String query = '',
+    String sortBy = 'name_asc', // 🆕 Added optional sort parameter
   }) async {
     final dbClient = await db;
-
     String where = '1=1';
     List<dynamic> args = [];
 
@@ -1580,11 +1468,22 @@ await _seedTestSuppliers(db);
       args.addAll(['%$query%', '%$query%', '%$query%']);
     }
 
+    // 🆕 Determine the sorting statement based on user selection
+    String orderByClause = 'name ASC'; // default fallback
+    if (sortBy == 'stock_asc') {
+      orderByClause = 'quantity ASC';
+    } else if (sortBy == 'value_desc') {
+      // Total stock value = quantity * selling_price
+      orderByClause = '(quantity * selling_price) DESC';
+    } else {
+      orderByClause = 'name ASC';
+    }
+
     return await dbClient.query(
       'products',
       where: where,
       whereArgs: args,
-      orderBy: 'name ASC',
+      orderBy: orderByClause, // 🆕 dynamic order by clause
     );
   }
 
@@ -1598,7 +1497,6 @@ await _seedTestSuppliers(db);
     String warehouse = 'Main store',
   }) async {
     final dbClient = await db;
-
     await dbClient.transaction((txn) async {
       await txn.rawUpdate(
         "UPDATE products SET quantity = quantity + ?, purchase_price = ? WHERE id = ?",
@@ -1627,7 +1525,6 @@ await _seedTestSuppliers(db);
     String warehouse = 'Main store',
   }) async {
     final dbClient = await db;
-
     final product = await dbClient.query(
       'products',
       where: 'id = ?',
@@ -1635,7 +1532,7 @@ await _seedTestSuppliers(db);
     );
     if (product.isEmpty) return false;
 
-    final currentQty = (product.first['quantity'] as num).toInt();
+    final currentQty = (product.first['quantity'] as num? ?? 0).toInt();
     if (currentQty < quantity) return false;
 
     await dbClient.transaction((txn) async {
@@ -1656,13 +1553,11 @@ await _seedTestSuppliers(db);
         'date': DateTime.now().toIso8601String(),
       });
     });
-
     return true;
   }
 
   static Future<List<Map<String, dynamic>>> getLowStockProducts() async {
     final dbClient = await db;
-
     return await dbClient.rawQuery('''
       SELECT *,
         (lsl * 2) - quantity AS suggestedQty
@@ -1674,13 +1569,11 @@ await _seedTestSuppliers(db);
 
   static Future<double> getLowStockRestockValue() async {
     final dbClient = await db;
-
     final res = await dbClient.rawQuery('''
       SELECT SUM((lsl * 2 - quantity) * purchase_price) as total
       FROM products
       WHERE quantity <= lsl
     ''');
-
     return (res.first['total'] as num?)?.toDouble() ?? 0.0;
   }
 
@@ -1702,11 +1595,9 @@ await _seedTestSuppliers(db);
     int productId,
   ) async {
     final dbClient = await db;
-
     final rows = await dbClient.rawQuery(
       '''
-      SELECT
-        id, type, quantity, unitCost, reason, reference, note, warehouse, date
+      SELECT id, type, quantity, unitCost, reason, reference, note, warehouse, date
       FROM stock_transactions
       WHERE productId = ?
       ORDER BY date ASC
@@ -1721,8 +1612,7 @@ await _seedTestSuppliers(db);
     );
     if (product.isEmpty) return [];
 
-    int currentQty = (product.first['quantity'] as num?)?.toInt() ?? 0;
-
+    int currentQty = (product.first['quantity'] as num? ?? 0).toInt();
     final result = <Map<String, dynamic>>[];
     int runningBalance = currentQty;
 
@@ -1730,22 +1620,17 @@ await _seedTestSuppliers(db);
       final row = Map<String, dynamic>.from(rows[i]);
       row['running_balance'] = runningBalance;
 
-      final qty = (row['quantity'] as num?)?.toInt() ?? 0;
+      final qty = (row['quantity'] as num? ?? 0).toInt();
       if (row['type'] == 'in') {
         runningBalance -= qty;
       } else {
         runningBalance += qty;
       }
-
       result.insert(0, row);
     }
-
     return result.reversed.toList();
   }
 
-  // =========================
-  // ── Purchase Orders ─────────────────────────────────────────
-  // =========================
   static Future<List<Map<String, dynamic>>> getSuppliersList() async {
     final dbClient = await db;
     return await dbClient.query('suppliers', orderBy: 'supplierName ASC');
@@ -1825,9 +1710,6 @@ await _seedTestSuppliers(db);
     });
   }
 
-  // =========================
-  // 📥 RECEIVE PURCHASE ORDER
-  // =========================
   static Future<void> receivePurchaseOrder({
     required int poId,
     required List<Map<String, dynamic>> items,
@@ -1837,7 +1719,7 @@ await _seedTestSuppliers(db);
       var allFull = true;
 
       for (final item in items) {
-        final receivedQty = item['receivedQty'] as int;
+        final receivedQty = (item['receivedQty'] as num? ?? 0).toInt();
 
         await txn.update(
           'purchase_order_items',
@@ -1858,7 +1740,7 @@ await _seedTestSuppliers(db);
           where: 'id = ?',
           whereArgs: [item['id']],
         );
-        final orderedQty = row.first['orderedQty'] as int;
+        final orderedQty = (row.first['orderedQty'] as num? ?? 0).toInt();
         if (receivedQty < orderedQty) allFull = false;
       }
 
@@ -1874,9 +1756,6 @@ await _seedTestSuppliers(db);
     });
   }
 
-  // =========================
-  // 🚚 UPDATE SUPPLIER FULL (saves paymentTerms too)
-  // =========================
   static Future<int> updateSupplierFull({
     required int id,
     required String supplierName,
@@ -1898,9 +1777,6 @@ await _seedTestSuppliers(db);
     );
   }
 
-  // =========================
-  // 👥 CUSTOMERS
-  // =========================
   static Future<List<Map<String, dynamic>>> getCustomers() async {
     final dbClient = await db;
     return await dbClient.query('customers', orderBy: 'name ASC');
@@ -1921,9 +1797,6 @@ await _seedTestSuppliers(db);
     });
   }
 
-  // =========================
-  // 💳 RECORD SPLIT PAYMENT (Cash + UPI)
-  // =========================
   static Future<void> recordSplitPayment({
     required int invoiceId,
     required double cashAmount,
@@ -1933,7 +1806,6 @@ await _seedTestSuppliers(db);
     String? customerName,
   }) async {
     final dbClient = await db;
-
     await dbClient.transaction((txn) async {
       await txn.insert('invoice_payments', {
         'invoiceId': invoiceId,
@@ -1961,433 +1833,4 @@ await _seedTestSuppliers(db);
       );
     });
   }
-  // =========================
-  // 🧪 SEED TEST PRODUCTS (runs once — skips if products already exist)
-  // =========================
-  static Future<void> _seedTestProducts(Database db) async {
-    final existing = await db.rawQuery("SELECT COUNT(*) as c FROM products");
-    final count = (existing.first['c'] as num? ?? 0).toInt();
-    if (count > 0) return; // already seeded / has real data, don't touch
-
-    final testProducts = <Map<String, dynamic>>[
-      // ───────── IN STOCK (9) ─────────
-      {
-        'name': 'Basmati Rice 5kg',
-        'category': 'Grocery',
-        'sgst': 0.0,
-        'cgst': 0.0,
-        'hsn_code': '1006',
-        'supplier': 'Divya',
-        'expiry_date': '2027-01-15',
-        'purchase_price': 320.0,
-        'selling_price': 380.0,
-        'quantity': 60,
-        'lsl': 10,
-        'unit': 'kg',
-        'description': 'Premium long-grain basmati rice',
-        'barcode': '890100000001',
-        'image_path': '',
-        'discount': 0.0,
-      },
-      {
-        'name': 'Sunflower Oil 1L',
-        'category': 'Grocery',
-        'sgst': 0.0,
-        'cgst': 0.0,
-        'hsn_code': '1512',
-        'supplier': 'Rajesh',
-        'expiry_date': '2027-03-10',
-        'purchase_price': 140.0,
-        'selling_price': 165.0,
-        'quantity': 80,
-        'lsl': 15,
-        'unit': 'ltr',
-        'description': 'Refined sunflower cooking oil',
-        'barcode': '890100000002',
-        'image_path': '',
-        'discount': 0.0,
-      },
-      {
-        'name': 'Toor Dal 1kg',
-        'category': 'Grocery',
-        'sgst': 0.0,
-        'cgst': 0.0,
-        'hsn_code': '0713',
-        'supplier': 'Divya',
-        'expiry_date': '2026-12-20',
-        'purchase_price': 110.0,
-        'selling_price': 130.0,
-        'quantity': 45,
-        'lsl': 10,
-        'unit': 'kg',
-        'description': 'Unpolished toor dal',
-        'barcode': '890100000003',
-        'image_path': '',
-        'discount': 0.0,
-      },
-      {
-        'name': 'Wheat Atta 5kg',
-        'category': 'Grocery',
-        'sgst': 0.0,
-        'cgst': 0.0,
-        'hsn_code': '1101',
-        'supplier': 'Rajesh',
-        'expiry_date': '2027-02-05',
-        'purchase_price': 210.0,
-        'selling_price': 245.0,
-        'quantity': 55,
-        'lsl': 10,
-        'unit': 'kg',
-        'description': 'Chakki fresh atta',
-        'barcode': '890100000004',
-        'image_path': '',
-        'discount': 0.0,
-      },
-      {
-        'name': 'Refined Sugar 1kg',
-        'category': 'Grocery',
-        'sgst': 0.0,
-        'cgst': 0.0,
-        'hsn_code': '1701',
-        'supplier': 'Divya',
-        'expiry_date': '2028-01-01',
-        'purchase_price': 42.0,
-        'selling_price': 50.0,
-        'quantity': 90,
-        'lsl': 20,
-        'unit': 'kg',
-        'description': 'Fine refined white sugar',
-        'barcode': '890100000005',
-        'image_path': '',
-        'discount': 0.0,
-      },
-      {
-        'name': 'Iodised Salt 1kg',
-        'category': 'Grocery',
-        'sgst': 0.0,
-        'cgst': 0.0,
-        'hsn_code': '2501',
-        'supplier': 'Vignesh',
-        'expiry_date': '2028-06-01',
-        'purchase_price': 18.0,
-        'selling_price': 22.0,
-        'quantity': 100,
-        'lsl': 20,
-        'unit': 'kg',
-        'description': 'Free-flow iodised salt',
-        'barcode': '890100000006',
-        'image_path': '',
-        'discount': 5.0,
-      },
-      {
-        'name': 'Tea Powder 250g',
-        'category': 'Food',
-        'sgst': 0.0,
-        'cgst': 0.0,
-        'hsn_code': '0902',
-        'supplier': 'Naveen',
-        'expiry_date': '2027-05-10',
-        'purchase_price': 95.0,
-        'selling_price': 120.0,
-        'quantity': 40,
-        'lsl': 10,
-        'unit': 'pcs',
-        'description': 'Strong CTC blend tea',
-        'barcode': '890100000007',
-        'image_path': '',
-        'discount': 10.0,
-      },
-      {
-        'name': 'Filter Coffee Powder 200g',
-        'category': 'Food',
-        'sgst': 2.5,
-        'cgst': 2.5,
-        'hsn_code': '0901',
-        'supplier': 'Naveen',
-        'expiry_date': '2027-04-15',
-        'purchase_price': 130.0,
-        'selling_price': 160.0,
-        'quantity': 35,
-        'lsl': 10,
-        'unit': 'pcs',
-        'description': 'South Indian filter coffee blend',
-        'barcode': '890100000008',
-        'image_path': '',
-        'discount': 0.0,
-      },
-      {
-        'name': 'Glucose Biscuits Pack',
-        'category': 'Food',
-        'sgst': 0.0,
-        'cgst': 0.0,
-        'hsn_code': '1905',
-        'supplier': 'Vignesh',
-        'expiry_date': '2026-11-30',
-        'purchase_price': 18.0,
-        'selling_price': 25.0,
-        'quantity': 70,
-        'lsl': 15,
-        'unit': 'pcs',
-        'description': 'Classic glucose biscuits',
-        'barcode': '890100000009',
-        'image_path': '',
-        'discount': 0.0,
-      },
-      {
-        'name': 'Chocolate Bar 50g',
-        'category': 'Food',
-        'sgst': 0.0,
-        'cgst': 0.0,
-        'hsn_code': '1806',
-        'supplier': 'Vignesh',
-        'expiry_date': '2026-10-20',
-        'purchase_price': 15.0,
-        'selling_price': 25.0,
-        'quantity': 8,
-        'lsl': 20,
-        'unit': 'pcs',
-        'description': 'Milk chocolate bar',
-        'barcode': '890100000010',
-        'image_path': '',
-        'discount': 15.0,
-      },
-      {
-        'name': 'Bathing Soap',
-        'category': 'Beauty',
-        'sgst': 0.0,
-        'cgst': 0.0,
-        'hsn_code': '3401',
-        'supplier': 'Naveen',
-        'expiry_date': '2028-02-01',
-        'purchase_price': 22.0,
-        'selling_price': 30.0,
-        'quantity': 6,
-        'lsl': 15,
-        'unit': 'pcs',
-        'description': 'Moisturizing bathing soap',
-        'barcode': '890100000011',
-        'image_path': '',
-        'discount': 0.0,
-      },
-      {
-        'name': 'Shampoo Sachet Box',
-        'category': 'Beauty',
-        'sgst': 0.0,
-        'cgst': 0.0,
-        'hsn_code': '3305',
-        'supplier': 'Naveen',
-        'expiry_date': '2027-09-01',
-        'purchase_price': 55.0,
-        'selling_price': 75.0,
-        'quantity': 4,
-        'lsl': 10,
-        'unit': 'pcs',
-        'description': 'Box of 12 shampoo sachets',
-        'barcode': '890100000012',
-        'image_path': '',
-        'discount': 0.0,
-      },
-      {
-        'name': 'Toothpaste 100g',
-        'category': 'Beauty',
-        'sgst': 9.0,
-        'cgst': 9.0,
-        'hsn_code': '3306',
-        'supplier': 'Naveen',
-        'expiry_date': '2027-08-15',
-        'purchase_price': 48.0,
-        'selling_price': 62.0,
-        'quantity': 5,
-        'lsl': 12,
-        'unit': 'pcs',
-        'description': 'Fluoride toothpaste',
-        'barcode': '890100000013',
-        'image_path': '',
-        'discount': 0.0,
-      },
-      {
-        'name': 'Detergent Powder 1kg',
-        'category': 'Home Appliances',
-        'sgst': 0.0,
-        'cgst': 0.0,
-        'hsn_code': '3402',
-        'supplier': 'Naveen',
-        'expiry_date': '2028-03-01',
-        'purchase_price': 65.0,
-        'selling_price': 85.0,
-        'quantity': 3,
-        'lsl': 10,
-        'unit': 'kg',
-        'description': 'Stain-removing detergent powder',
-        'barcode': '890100000014',
-        'image_path': '',
-        'discount': 0.0,
-      },
-      {
-        'name': 'Spice Mix Combo',
-        'category': 'Grocery',
-        'sgst': 0.0,
-        'cgst': 0.0,
-        'hsn_code': '0910',
-        'supplier': 'Vignesh',
-        'expiry_date': '2027-01-20',
-        'purchase_price': 40.0,
-        'selling_price': 55.0,
-        'quantity': 2,
-        'lsl': 8,
-        'unit': 'pcs',
-        'description': 'Combo of everyday spices',
-        'barcode': '890100000015',
-        'image_path': '',
-        'discount': 0.0,
-      },
-      {
-        'name': 'Moong Dal 1kg',
-        'category': 'Grocery',
-        'sgst': 0.0,
-        'cgst': 0.0,
-        'hsn_code': '0713',
-        'supplier': 'Vignesh',
-        'expiry_date': '2026-12-01',
-        'purchase_price': 115.0,
-        'selling_price': 135.0,
-        'quantity': 0,
-        'lsl': 10,
-        'unit': 'kg',
-        'description': 'Split yellow moong dal',
-        'barcode': '890100000016',
-        'image_path': '',
-        'discount': 0.0,
-      },
-      {
-        'name': 'Rice Bran Oil 1L',
-        'category': 'Grocery',
-        'sgst': 0.0,
-        'cgst': 0.0,
-        'hsn_code': '1515',
-        'supplier': 'Vignesh',
-        'expiry_date': '2027-02-28',
-        'purchase_price': 150.0,
-        'selling_price': 175.0,
-        'quantity': 0,
-        'lsl': 12,
-        'unit': 'ltr',
-        'description': 'Heart-healthy rice bran oil',
-        'barcode': '890100000017',
-        'image_path': '',
-        'discount': 0.0,
-      },
-      {
-        'name': 'Notebook 200pg',
-        'category': 'Stationery',
-        'sgst': 0.0,
-        'cgst': 0.0,
-        'hsn_code': '4820',
-        'supplier': 'Rajesh',
-        'expiry_date': '',
-        'purchase_price': 25.0,
-        'selling_price': 35.0,
-        'quantity': 0,
-        'lsl': 20,
-        'unit': 'pcs',
-        'description': 'Ruled 200-page notebook',
-        'barcode': '890100000018',
-        'image_path': '',
-        'discount': 0.0,
-      },
-      {
-        'name': 'Ball Pen Pack of 5',
-        'category': 'Stationery',
-        'sgst': 0.0,
-        'cgst': 0.0,
-        'hsn_code': '9608',
-        'supplier': 'Rajesh',
-        'expiry_date': '',
-        'purchase_price': 20.0,
-        'selling_price': 30.0,
-        'quantity': 0,
-        'lsl': 15,
-        'unit': 'pcs',
-        'description': 'Smooth-writing ball pens, pack of 5',
-        'barcode': '890100000019',
-        'image_path': '',
-        'discount': 0.0,
-      },
-      {
-        'name': 'Milk Powder 500g',
-        'category': 'Food',
-        'sgst': 6.0,
-        'cgst': 6.0,
-        'hsn_code': '0402',
-        'supplier': 'Rajesh',
-        'expiry_date': '2026-09-30',
-        'purchase_price': 210.0,
-        'selling_price': 250.0,
-        'quantity': 0,
-        'lsl': 10,
-        'unit': 'pcs',
-        'description': 'Full cream milk powder',
-        'barcode': '890100000020',
-        'image_path': '',
-        'discount': 0.0,
-      },
-    ];
-
-    for (final p in testProducts) {
-      await db.insert('products', p);
-    }
-  }
-
-  // =========================================================
-  // 🧪 SEED TEST SUPPLIERS (Aligned with UI Fields & Products)
-  // =========================================================
-  static Future<void> _seedTestSuppliers(Database db) async {
-    final existing = await db.rawQuery("SELECT COUNT(*) as c FROM suppliers");
-    final count = (existing.first['c'] as num? ?? 0).toInt();
-    if (count > 0) return; // Already seeded, do not overwrite
-
-    final testSuppliers = <Map<String, dynamic>>[
-      {
-        'supplierName': 'Vignesh',
-        'companyName': 'Vignesh',
-        'contactNumber': '7010164362',
-        'email': 'vignesh@test.com',
-        'category': 'Grocery, Food',
-        'gst': '33AAHCC1098Q1Z9',
-        'address': 'Salt Pan Road, Tuticorin',
-      },
-      {
-        'supplierName': 'Naveen',
-        'companyName': 'Naveen',
-        'contactNumber': '9488464414',
-        'email': 'naveen@test.com',
-        'category': 'Food, Beauty, Home Appliances',
-        'gst': '33AAFCC2109N1Z4',
-        'address': '78 Distribution Hub, Trichy',
-      },
-      {
-        'supplierName': 'Divya',
-        'companyName': 'Divya',
-        'contactNumber': '8825853188',
-        'email': 'divya@test.com',
-        'category': 'Grocery',
-        'gst': '33AABCS1234F1Z5',
-        'address': 'No. 12, Mount Road, Chennai',
-      },
-      {
-        'supplierName': 'Rajesh',
-        'companyName': 'Rajesh',
-        'contactNumber': '8667491369',
-        'email': 'rajesh@test.com',
-        'category': 'Grocery, Stationery, Food',
-        'gst': '33AACFG5678K1Z2',
-        'address': 'Plot 5, Industrial Estate, Coimbatore',
-      },
-    ];
-
-    for (final s in testSuppliers) {
-      await db.insert('suppliers', s);
-    }
-  }
-
 }

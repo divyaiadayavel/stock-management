@@ -339,19 +339,39 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
   }
 
   Future<void> _save() async {
-    if (companyCtrl.text.trim().isEmpty || phoneCtrl.text.trim().isEmpty) {
+    final phoneText = phoneCtrl.text.trim();
+    final contactText = contactCtrl.text.trim();
+
+    // 1. Separate message for missing Contact Name
+    if (contactText.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Contact name is required")));
+      return;
+    }
+
+    // 2. Separate message for missing Phone Number
+    if (phoneText.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Phone number is required")));
+      return;
+    }
+
+    // 3. Separate message for invalid 10-digit Phone Format
+    if (!RegExp(r'^\d{10}$').hasMatch(phoneText)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Company name and phone are required")),
+        const SnackBar(content: Text("Enter a valid 10-digit phone number")),
       );
       return;
     }
 
     await DBHelper.addSupplier(
-      supplierName: contactCtrl.text.trim().isNotEmpty
-          ? contactCtrl.text.trim()
-          : companyCtrl.text.trim(),
-      companyName: companyCtrl.text.trim(),
-      contactNumber: phoneCtrl.text.trim(),
+      supplierName: contactText,
+      companyName: companyCtrl.text.trim().isNotEmpty
+          ? companyCtrl.text.trim()
+          : contactText,
+      contactNumber: phoneText,
       email: "",
       category: _selectedCategories.join(", "),
       gst: gstCtrl.text.trim(),
@@ -409,7 +429,6 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
               hint: "Enter the Company Name",
               icon: Icons.business_outlined,
               controller: companyCtrl,
-              required: true,
             ),
 
             SizedBox(height: R.sp(context, 16)),
@@ -424,6 +443,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
                     hint: "Supplier Name",
                     icon: Icons.person_outline,
                     controller: contactCtrl,
+                    required: true,
                   ),
                 ),
                 SizedBox(width: R.sp(context, 12)),

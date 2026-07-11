@@ -1,16 +1,20 @@
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-final imageProvider = StateProvider<File?>((ref) => null);
+final imageProvider = StateProvider.autoDispose<File?>((ref) => null);
 
-final selectedCategoryProvider = StateProvider<String>((ref) => "Electronics");
+final selectedCategoryProvider = StateProvider.autoDispose<String>(
+  (ref) => "Electronics",
+);
 
-final selectedSupplierProvider = StateProvider<String?>((ref) => null);
+final selectedSupplierProvider = StateProvider.autoDispose<String?>(
+  (ref) => null,
+);
 
-final profitMarginProvider = StateProvider<double>((ref) => 0);
+final profitMarginProvider = StateProvider.autoDispose<double>((ref) => 0);
 
-final showGstProvider = StateProvider<bool>((ref) => false);
+final showGstProvider = StateProvider.autoDispose<bool>((ref) => false);
 
-final suppliersProvider = StateProvider<List<String>>((ref) => []);
+final suppliersProvider = StateProvider.autoDispose<List<String>>((ref) => []);
 
-final discountProvider = StateProvider<double>((ref) => 0);
+final discountProvider = StateProvider.autoDispose<double>((ref) => 0);
