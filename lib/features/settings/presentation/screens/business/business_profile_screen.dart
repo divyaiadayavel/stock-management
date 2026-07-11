@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../../core/constants/app_colors.dart';
+import '../../../../../core/constants/app_sizes.dart';
+import '../../../../../core/constants/app_spacing.dart';
+import '../../../../../core/constants/app_text_styles.dart';
 import '../../providers/settings_provider.dart';
 
 class BusinessProfileScreen extends ConsumerStatefulWidget {
@@ -34,7 +37,14 @@ class _BusinessProfileScreenState extends ConsumerState<BusinessProfileScreen> {
     }
   }
 
-  void _openEditDialog(String title, String dbKey, String currentValue) {
+  // ── Simple, clean edit dialog — plain AlertDialog so Flutter
+  //    handles keyboard avoidance automatically (no manual padding hacks) ──
+  void _openEditDialog(
+    String title,
+    String dbKey,
+    String currentValue, {
+    bool required = true,
+  }) {
     final TextEditingController ctrl = TextEditingController(
       text: currentValue,
     );
@@ -43,43 +53,145 @@ class _BusinessProfileScreenState extends ConsumerState<BusinessProfileScreen> {
     showDialog(
       context: context,
       builder: (dialogContext) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Text("Edit $title"),
-          content: TextField(
-            controller: ctrl,
-            decoration: InputDecoration(
-              labelText: title,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text("Cancel"),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final navigator = Navigator.of(dialogContext);
-                String newValue = ctrl.text.trim();
+        bool isSaving = false;
+        String? errorText;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> handleSave() async {
+              final newValue = ctrl.text.trim();
+
+              if (required && newValue.isEmpty) {
+                setDialogState(() => errorText = "$title cannot be empty");
+                return;
+              }
+
+              setDialogState(() {
+                isSaving = true;
+                errorText = null;
+              });
+
+              try {
                 await ref
                     .read(settingsRepositoryProvider)
                     .updateProfileField(dbKey, newValue);
 
                 if (!mounted) return;
-                navigator.pop();
-                _loadData();
+                Navigator.pop(dialogContext);
+                await _loadData();
+
+                if (!mounted) return;
                 messenger.showSnackBar(
-                  SnackBar(content: Text("$title updated successfully")),
+                  SnackBar(content: Text("$title updated")),
                 );
-              },
-              child: const Text("Save"),
-            ),
-          ],
+              } catch (e) {
+                setDialogState(() {
+                  isSaving = false;
+                  errorText = "Failed to save. Try again.";
+                });
+              }
+            }
+
+            return AlertDialog(
+              backgroundColor: AppColors.card,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppSizes.radiusLg),
+              ),
+              titlePadding: const EdgeInsets.fromLTRB(
+                AppSpacing.xl,
+                AppSpacing.xl,
+                AppSpacing.xl,
+                AppSpacing.sm,
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(
+                AppSpacing.xl,
+                AppSpacing.sm,
+                AppSpacing.xl,
+                AppSpacing.md,
+              ),
+              title: Text(
+                title,
+                style: AppTextStyles.cardValue.copyWith(
+                  fontSize: 17,
+                  fontFamily: AppTextStyles.fontDisplay,
+                ),
+              ),
+              content: TextField(
+                controller: ctrl,
+                autofocus: true,
+                textInputAction: TextInputAction.done,
+                onChanged: (_) {
+                  if (errorText != null) {
+                    setDialogState(() => errorText = null);
+                  }
+                },
+                onSubmitted: (_) => handleSave(),
+                style: AppTextStyles.cardValue.copyWith(
+                  fontFamily: AppTextStyles.fontBody,
+                  fontSize: 15,
+                ),
+                decoration: InputDecoration(
+                  errorText: errorText,
+                  filled: true,
+                  fillColor: AppColors.surface2,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                    vertical: AppSpacing.md,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+                    borderSide: const BorderSide(
+                      color: AppColors.primary,
+                      width: 1.5,
+                    ),
+                  ),
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+                    borderSide: const BorderSide(color: AppColors.red),
+                  ),
+                ),
+              ),
+              actionsPadding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                0,
+                AppSpacing.md,
+                AppSpacing.md,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving
+                      ? null
+                      : () => Navigator.pop(dialogContext),
+                  child: Text(
+                    "Cancel",
+                    style: AppTextStyles.button.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: isSaving ? null : handleSave,
+                  child: isSaving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          "Save",
+                          style: AppTextStyles.button.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -88,152 +200,163 @@ class _BusinessProfileScreenState extends ConsumerState<BusinessProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        iconTheme: const IconThemeData(color: AppColors.textPrimaryDark),
+        titleSpacing: 0,
+        title: Text(
           "Business Profile",
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          style: AppTextStyles.cardValue.copyWith(
+            fontSize: 22,
+            fontFamily: AppTextStyles.fontDisplay,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimaryDark,
+          ),
         ),
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.only(left: 16, top: 16, bottom: 8),
-                      child: Text(
-                        "Business Information",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ),
-                    _buildListItem(
-                      icon: Icons.store_mall_directory_outlined,
-                      title: "Business Name",
-                      value: profileData['storeName']?.isEmpty ?? true
-                          ? "Not set"
-                          : profileData['storeName'],
-                      dbKey: "storeName",
-                    ),
-                    _buildDivider(),
-                    _buildListItem(
-                      icon: Icons.location_on_outlined,
-                      title: "Business Address",
-                      value: profileData['businessAddress']?.isEmpty ?? true
-                          ? "Not set"
-                          : profileData['businessAddress'],
-                      dbKey: "businessAddress",
-                    ),
-                    _buildDivider(),
-                    _buildListItem(
-                      icon: Icons.phone_outlined,
-                      title: "Phone Number",
-                      value: profileData['phoneNumber']?.isEmpty ?? true
-                          ? "Not set"
-                          : profileData['phoneNumber'],
-                      dbKey: "phoneNumber",
-                    ),
-                    _buildDivider(),
-                    _buildListItem(
-                      icon: Icons.email_outlined,
-                      title: "Email Address",
-                      value: profileData['emailAddress']?.isEmpty ?? true
-                          ? "Not set"
-                          : profileData['emailAddress'],
-                      dbKey: "emailAddress",
-                    ),
-                    _buildDivider(),
-                    _buildListItem(
-                      icon: Icons.receipt_long_outlined,
-                      title: "GST Number",
-                      value: profileData['gstNumber']?.isEmpty ?? true
-                          ? "Not set"
-                          : profileData['gstNumber'],
-                      dbKey: "gstNumber",
-                    ),
-                    _buildDivider(),
-                    _buildListItem(
-                      icon: Icons.account_balance_wallet_outlined,
-                      title: "Tax Registration Type",
-                      value: profileData['taxRegistrationType']?.isEmpty ?? true
-                          ? "Regular"
-                          : profileData['taxRegistrationType'],
-                      dbKey: "taxRegistrationType",
-                    ),
-                  ],
-                ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.screenPadding,
+                vertical: AppSpacing.md,
               ),
-            ),
-    );
-  }
-
-  Widget _buildDivider() {
-    return const Divider(
-      height: 1,
-      thickness: 1,
-      indent: 60,
-      color: Color(0xFFEEEEEE),
-    );
-  }
-
-  Widget _buildListItem({
-    required IconData icon,
-    required String title,
-    required String value,
-    required String dbKey,
-  }) {
-    return InkWell(
-      onTap: () =>
-          _openEditDialog(title, dbKey, value == "Not set" ? "" : value),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.indigo.shade50,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: Colors.indigo.shade400, size: 22),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
+                  _fieldCard(
+                    icon: Icons.store_mall_directory_outlined,
+                    iconColor: AppColors.primary,
+                    title: "Business Name",
+                    value: (profileData['storeName']?.isEmpty ?? true)
+                        ? "Not set"
+                        : profileData['storeName'],
+                    dbKey: "storeName",
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    value,
-                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                  _fieldCard(
+                    icon: Icons.location_on_outlined,
+                    iconColor: AppColors.cyan,
+                    title: "Business Address",
+                    value: (profileData['businessAddress']?.isEmpty ?? true)
+                        ? "Not set"
+                        : profileData['businessAddress'],
+                    dbKey: "businessAddress",
+                    required: false,
+                  ),
+                  _fieldCard(
+                    icon: Icons.phone_outlined,
+                    iconColor: AppColors.green,
+                    title: "Phone Number",
+                    value: (profileData['phoneNumber']?.isEmpty ?? true)
+                        ? "Not set"
+                        : profileData['phoneNumber'],
+                    dbKey: "phoneNumber",
+                    required: false,
+                  ),
+                  _fieldCard(
+                    icon: Icons.email_outlined,
+                    iconColor: AppColors.orange,
+                    title: "Email Address",
+                    value: (profileData['emailAddress']?.isEmpty ?? true)
+                        ? "Not set"
+                        : profileData['emailAddress'],
+                    dbKey: "emailAddress",
+                    required: false,
+                  ),
+                  _fieldCard(
+                    icon: Icons.receipt_long_outlined,
+                    iconColor: AppColors.primaryHover,
+                    title: "GST Number",
+                    value: (profileData['gstNumber']?.isEmpty ?? true)
+                        ? "Not set"
+                        : profileData['gstNumber'],
+                    dbKey: "gstNumber",
+                    required: false,
+                  ),
+                  _fieldCard(
+                    icon: Icons.account_balance_wallet_outlined,
+                    iconColor: AppColors.cyanDim,
+                    title: "Tax Registration Type",
+                    value:
+                        (profileData['taxRegistrationType']?.isEmpty ?? true)
+                        ? "Regular"
+                        : profileData['taxRegistrationType'],
+                    dbKey: "taxRegistrationType",
+                    required: false,
                   ),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right, color: Colors.grey.shade400),
-          ],
+    );
+  }
+
+  Widget _fieldCard({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String value,
+    required String dbKey,
+    bool required = true,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Material(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppSizes.cardRadius),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppSizes.cardRadius),
+          onTap: () => _openEditDialog(
+            title,
+            dbKey,
+            value == "Not set" ? "" : value,
+            required: required,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.cardPadding,
+              vertical: AppSpacing.lg,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: const BoxDecoration(
+                    color: AppColors.surface2,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: iconColor, size: AppSizes.iconMd),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: AppTextStyles.cardValue.copyWith(
+                          fontSize: 16,
+                          fontFamily: AppTextStyles.fontDisplay,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimaryDark,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        value,
+                        style: AppTextStyles.small.copyWith(fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

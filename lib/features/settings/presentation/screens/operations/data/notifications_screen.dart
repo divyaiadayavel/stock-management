@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../../../core/constants/app_colors.dart';
+import '../../../../../../core/constants/app_sizes.dart';
+import '../../../../../../core/constants/app_spacing.dart';
+import '../../../../../../core/constants/app_text_styles.dart';
 import '../../../providers/settings_provider.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
@@ -57,93 +60,75 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        iconTheme: const IconThemeData(color: AppColors.textPrimaryDark),
+        titleSpacing: 0,
+        title: Text(
           "Notifications",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            fontSize: 18,
+          style: AppTextStyles.cardValue.copyWith(
+            fontSize: 22,
+            fontFamily: AppTextStyles.fontDisplay,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimaryDark,
           ),
         ),
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.screenPadding,
+                vertical: AppSpacing.md,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.only(left: 4, bottom: 12),
-                    child: Text(
-                      "Alert Settings",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                  _sectionHeader("Alert Settings"),
+                  _toggleCard(
+                    icon: Icons.warning_amber_rounded,
+                    iconColor: AppColors.orange,
+                    title: "Low Stock Alert",
+                    subtitle: "Get notified for low stock",
+                    dbKey: "notifLowStock",
                   ),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: Column(
-                      children: [
-                        _buildToggleItem(
-                          icon: Icons.warning_amber_rounded,
-                          iconColor: Colors.orange,
-                          title: "Low Stock Alert",
-                          subtitle: "Get notified for low stock",
-                          dbKey: "notifLowStock",
-                        ),
-                        _buildDivider(),
-                        _buildToggleItem(
-                          icon: Icons.monetization_on_outlined,
-                          iconColor: Colors.amber,
-                          title: "Payment Due Reminder",
-                          subtitle: "Remind for pending payments",
-                          dbKey: "notifPayment",
-                        ),
-                        _buildDivider(),
-                        _buildToggleItem(
-                          icon: Icons.pie_chart_outline,
-                          iconColor: Colors.green,
-                          title: "Daily Sales Summary",
-                          subtitle: "Get daily sales report",
-                          dbKey: "notifDailySales",
-                        ),
-                        _buildDivider(),
-                        _buildToggleItem(
-                          icon: Icons.shopping_bag_outlined,
-                          iconColor: Colors.purple,
-                          title: "New Order Notification",
-                          subtitle: "Get notified for new orders",
-                          dbKey: "notifNewOrder",
-                        ),
-                        _buildDivider(),
-                        _buildToggleItem(
-                          icon: Icons.email_outlined,
-                          iconColor: Colors.redAccent,
-                          title: "Email Notifications",
-                          subtitle: "Receive updates on email",
-                          dbKey: "notifEmail",
-                        ),
-                        _buildDivider(),
-                        _buildToggleItem(
-                          icon: Icons.volume_up_outlined,
-                          iconColor: Colors.teal,
-                          title: "Sound",
-                          subtitle: "Play sound for notifications",
-                          dbKey: "notifSound",
-                        ),
-                      ],
-                    ),
+_toggleCard(
+  icon: Icons.monetization_on_outlined,
+  iconColor: Colors.amber, // Fixed line
+  title: "Payment Due Reminder",
+  subtitle: "Remind for pending payments",
+  dbKey: "notifPayment",
+),
+                  _toggleCard(
+                    icon: Icons.pie_chart_outline,
+                    iconColor: AppColors.green,
+                    title: "Daily Sales Summary",
+                    subtitle: "Get daily sales report",
+                    dbKey: "notifDailySales",
+                  ),
+                  _toggleCard(
+                    icon: Icons.shopping_bag_outlined,
+                    iconColor: AppColors.primary, 
+                    title: "New Order Notification",
+                    subtitle: "Get notified for new orders",
+                    dbKey: "notifNewOrder",
+                  ),
+                  _toggleCard(
+                    icon: Icons.email_outlined,
+                    iconColor: AppColors.red,
+                    title: "Email Notifications",
+                    subtitle: "Receive updates on email",
+                    dbKey: "notifEmail",
+                  ),
+                  _toggleCard(
+                    icon: Icons.volume_up_outlined,
+                    iconColor: AppColors.cyan,
+                    title: "Sound",
+                    subtitle: "Play sound for notifications",
+                    dbKey: "notifSound",
                   ),
                 ],
               ),
@@ -151,10 +136,22 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     );
   }
 
-  Widget _buildDivider() =>
-      Divider(height: 1, thickness: 1, indent: 60, color: Colors.grey.shade100);
+  Widget _sectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: AppSpacing.sm, top: AppSpacing.sm),
+      child: Text(
+        title,
+        style: AppTextStyles.cardValue.copyWith(
+          fontSize: 17,
+          fontFamily: AppTextStyles.fontDisplay,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textPrimaryDark,
+        ),
+      ),
+    );
+  }
 
-  Widget _buildToggleItem({
+  Widget _toggleCard({
     required IconData icon,
     required Color iconColor,
     required String title,
@@ -162,42 +159,62 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     required String dbKey,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(AppSizes.cardRadius),
+        ),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.cardPadding,
+          vertical: AppSpacing.md,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(
+                color: AppColors.surface2,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: iconColor, size: AppSizes.iconMd),
             ),
-            child: Icon(icon, color: iconColor, size: 22),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    title,
+                    style: AppTextStyles.cardValue.copyWith(
+                      fontSize: 16,
+                      fontFamily: AppTextStyles.fontDisplay,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimaryDark,
+                    ),
                   ),
-                ),
-                Text(
-                  subtitle,
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                ),
-              ],
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    style: AppTextStyles.small.copyWith(fontSize: 13),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
-          ),
-          Switch(
-            value: notifs[dbKey]!,
-            activeThumbColor: Colors.blue,
-            onChanged: (v) => _updateToggle(dbKey, v),
-          ),
-        ],
+            Switch(
+              value: notifs[dbKey] ?? false,
+              activeThumbColor: AppColors.textWhite,
+              activeTrackColor: AppColors.primary,
+              inactiveThumbColor: AppColors.textWhite,
+              inactiveTrackColor: AppColors.borderStrong,
+              onChanged: (v) => _updateToggle(dbKey, v),
+            ),
+          ],
+        ),
       ),
     );
   }

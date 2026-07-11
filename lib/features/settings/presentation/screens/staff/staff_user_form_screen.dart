@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../../core/constants/app_colors.dart';
+import '../../../../../core/constants/app_sizes.dart';
+import '../../../../../core/constants/app_spacing.dart';
+import '../../../../../core/constants/app_text_styles.dart';
 import '../../../domain/entities/staff_user.dart';
 import '../../providers/settings_provider.dart';
 
@@ -45,9 +48,9 @@ class _AddRoleScreenState extends ConsumerState<AddRoleScreen> {
   void initState() {
     super.initState();
     final staff = widget.staffUser;
-    _nameCtrl     = TextEditingController(text: staff?.name  ?? '');
-    _emailCtrl    = TextEditingController(text: staff?.email ?? '');
-    _phoneCtrl    = TextEditingController(text: staff?.phone ?? '');
+    _nameCtrl = TextEditingController(text: staff?.name ?? '');
+    _emailCtrl = TextEditingController(text: staff?.email ?? '');
+    _phoneCtrl = TextEditingController(text: staff?.phone ?? '');
     _passwordCtrl = TextEditingController();
     _selectedRole = (staff?.role.trim().isNotEmpty ?? false)
         ? staff!.role
@@ -71,12 +74,12 @@ class _AddRoleScreenState extends ConsumerState<AddRoleScreen> {
     setState(() => _isSaving = true);
 
     final staff = StaffUser(
-      id:       widget.staffUser?.id,
-      name:     _nameCtrl.text.trim(),
-      role:     _selectedRole,
-      email:    _emailCtrl.text.trim(),
+      id: widget.staffUser?.id,
+      name: _nameCtrl.text.trim(),
+      role: _selectedRole,
+      email: _emailCtrl.text.trim(),
       password: _passwordCtrl.text.trim(),
-      phone:    _phoneCtrl.text.trim(),
+      phone: _phoneCtrl.text.trim(),
       isActive: _isActive,
     );
 
@@ -119,28 +122,32 @@ class _AddRoleScreenState extends ConsumerState<AddRoleScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        iconTheme: const IconThemeData(color: Colors.white),
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        iconTheme: const IconThemeData(color: AppColors.textPrimaryDark),
+        titleSpacing: 0,
         title: Text(
           _isEditing ? 'Edit Staff User' : 'Add Staff User',
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            fontSize: 18,
+          style: AppTextStyles.cardValue.copyWith(
+            fontSize: 22,
+            fontFamily: AppTextStyles.fontDisplay,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimaryDark,
           ),
         ),
       ),
       bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        minimum: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.lg),
         child: SizedBox(
-          height: 50,
+          height: 52,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppSizes.radiusMd),
               ),
             ),
             onPressed: _isSaving ? null : _saveStaffUser,
@@ -150,22 +157,22 @@ class _AddRoleScreenState extends ConsumerState<AddRoleScreen> {
                     height: 22,
                     child: CircularProgressIndicator(
                       strokeWidth: 2.4,
-                      color: Colors.white,
+                      color: AppColors.textWhite,
                     ),
                   )
                 : Text(
                     _isEditing ? 'Save Changes' : 'Add Staff User',
-                    style: const TextStyle(
+                    style: AppTextStyles.button.copyWith(
                       fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textWhite,
                     ),
                   ),
           ),
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding, vertical: AppSpacing.md),
         child: Form(
           key: _formKey,
           child: Column(
@@ -177,6 +184,7 @@ class _AddRoleScreenState extends ConsumerState<AddRoleScreen> {
                   TextFormField(
                     controller: _nameCtrl,
                     textInputAction: TextInputAction.next,
+                    style: AppTextStyles.cardValue.copyWith(fontFamily: AppTextStyles.fontBody, fontSize: 15),
                     decoration: _fieldDecoration(
                       label: 'Full Name',
                       icon: Icons.person_outline,
@@ -187,11 +195,12 @@ class _AddRoleScreenState extends ConsumerState<AddRoleScreen> {
                       return null;
                     },
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: AppSpacing.md),
                   TextFormField(
                     controller: _emailCtrl,
                     keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.next,
+                    style: AppTextStyles.cardValue.copyWith(fontFamily: AppTextStyles.fontBody, fontSize: 15),
                     decoration: _fieldDecoration(
                       label: 'Email Address',
                       icon: Icons.email_outlined,
@@ -204,11 +213,12 @@ class _AddRoleScreenState extends ConsumerState<AddRoleScreen> {
                       return valid ? null : 'Enter a valid email';
                     },
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: AppSpacing.md),
                   TextFormField(
                     controller: _phoneCtrl,
                     keyboardType: TextInputType.phone,
                     textInputAction: TextInputAction.next,
+                    style: AppTextStyles.cardValue.copyWith(fontFamily: AppTextStyles.fontBody, fontSize: 15),
                     decoration: _fieldDecoration(
                       label: 'Phone Number',
                       icon: Icons.phone_outlined,
@@ -225,12 +235,13 @@ class _AddRoleScreenState extends ConsumerState<AddRoleScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: AppSpacing.xl),
               _sectionTitle('Access'),
               _panel(
                 children: [
                   DropdownButtonFormField<String>(
                     initialValue: _selectedRole,
+                    style: AppTextStyles.cardValue.copyWith(fontFamily: AppTextStyles.fontBody, fontSize: 15),
                     decoration: _fieldDecoration(
                       label: 'Assign Role',
                       icon: Icons.badge_outlined,
@@ -244,20 +255,20 @@ class _AddRoleScreenState extends ConsumerState<AddRoleScreen> {
                       setState(() => _selectedRole = value);
                     },
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpacing.sm),
                   Padding(
                     padding: const EdgeInsets.only(left: 4),
                     child: Text(
                       _roleDescription(_selectedRole),
-                      style:
-                          TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                      style: AppTextStyles.small.copyWith(color: AppColors.textSecondary, fontSize: 12),
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: AppSpacing.md),
                   TextFormField(
                     controller: _passwordCtrl,
                     obscureText: true,
                     textInputAction: TextInputAction.done,
+                    style: AppTextStyles.cardValue.copyWith(fontFamily: AppTextStyles.fontBody, fontSize: 15),
                     decoration: _fieldDecoration(
                       label: _isEditing ? 'New Password' : 'Password',
                       icon: Icons.lock_outline,
@@ -276,19 +287,23 @@ class _AddRoleScreenState extends ConsumerState<AddRoleScreen> {
                       return null;
                     },
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: AppSpacing.md),
                   SwitchListTile.adaptive(
                     value: _isActive,
                     contentPadding: EdgeInsets.zero,
-                    activeThumbColor: AppColors.primary,
-                    title: const Text(
+                    activeThumbColor: AppColors.textWhite,
+                    activeTrackColor: AppColors.primary,
+                    inactiveThumbColor: AppColors.textWhite,
+                    inactiveTrackColor: AppColors.borderStrong,
+                    title: Text(
                       'Active Account',
-                      style: TextStyle(fontWeight: FontWeight.w700),
+                      style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w600, fontSize: 16),
                     ),
                     subtitle: Text(
                       _isActive
                           ? 'User can sign in and use assigned access'
                           : 'User is blocked from staff access',
+                      style: AppTextStyles.small,
                     ),
                     onChanged: (value) => setState(() => _isActive = value),
                   ),
@@ -303,13 +318,14 @@ class _AddRoleScreenState extends ConsumerState<AddRoleScreen> {
 
   Widget _sectionTitle(String title) {
     return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 10),
+      padding: const EdgeInsets.only(left: 4, bottom: AppSpacing.sm),
       child: Text(
         title,
-        style: const TextStyle(
-          fontSize: 15,
-          fontWeight: FontWeight.bold,
-          color: Colors.black87,
+        style: AppTextStyles.cardValue.copyWith(
+          fontSize: 17,
+          fontFamily: AppTextStyles.fontDisplay,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textPrimaryDark,
         ),
       ),
     );
@@ -318,13 +334,12 @@ class _AddRoleScreenState extends ConsumerState<AddRoleScreen> {
   Widget _panel({required List<Widget> children}) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppSizes.cardRadius),
       ),
-      child: Column(children: children),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
     );
   }
 
@@ -336,17 +351,25 @@ class _AddRoleScreenState extends ConsumerState<AddRoleScreen> {
     return InputDecoration(
       labelText: label,
       helperText: helperText,
-      prefixIcon: Icon(icon),
+      prefixIcon: Icon(icon, color: AppColors.textSecondary),
       filled: true,
-      fillColor: Colors.grey.shade50,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      fillColor: AppColors.surface2,
+      labelStyle: AppTextStyles.small.copyWith(fontSize: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+        borderSide: BorderSide.none,
+      ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey.shade200),
+        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+        borderSide: BorderSide.none,
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.primary, width: 1.4),
+        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+        borderSide: const BorderSide(color: AppColors.red, width: 1.0),
       ),
     );
   }

@@ -1,34 +1,28 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- ✅ CAMERA -->
+    <!-- ========================= -->
+    <!-- CAMERA -->
+    <!-- ========================= -->
     <uses-permission android:name="android.permission.CAMERA"/>
 
-    <!-- ✅ Android 13+ (API 33+) -->
+    <!-- ========================= -->
+    <!-- STORAGE -->
+    <!-- ========================= -->
+
+    <!-- Android 13+ -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
 
-    <!-- ✅ For older Android (below 13) -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+    <!-- Android 12 and below -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32"/>
 
-    <!-- ✅ Internet permission for API calls -->
+    <!-- ========================= -->
+    <!-- INTERNET -->
+    <!-- ========================= -->
+
     <uses-permission android:name="android.permission.INTERNET"/>
-    <queries>
-    <!-- WhatsApp (wa.me links + direct app) -->
-    <package android:name="com.whatsapp" />
-    <package android:name="com.whatsapp.w4b" />          <!-- WhatsApp Business -->
- 
-    <!-- Phone dialer (tel: scheme) -->
-    <intent>
-        <action android:name="android.intent.action.DIAL" />
-        <data android:scheme="tel" />
-    </intent>
- 
-    <!-- Generic https so canLaunchUrl works for wa.me fallback -->
-    <intent>
-        <action android:name="android.intent.action.VIEW" />
-        <data android:scheme="https" />
-    </intent>
-    </queries>
+
     <application
         android:label="stock_management"
         android:name="${applicationName}"
@@ -50,35 +44,51 @@
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme"/>
 
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/device_filter"/>
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"/>
+            </intent-filter>
+
         </activity>
 
-        <!-- Flutter required -->
+        <!-- Flutter -->
         <meta-data
             android:name="flutterEmbedding"
-            android:value="2" />
+            android:value="2"/>
 
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.provider"
             android:exported="false"
             android:grantUriPermissions="true">
+
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"/>
+
         </provider>
 
     </application>
 
     <!-- Required for text processing -->
     <queries>
+
         <intent>
+
             <action android:name="android.intent.action.PROCESS_TEXT"/>
+
             <data android:mimeType="text/plain"/>
+
         </intent>
+
     </queries>
 
 </manifest>

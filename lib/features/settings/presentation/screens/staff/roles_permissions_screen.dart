@@ -1,15 +1,16 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../../core/constants/app_colors.dart';
+import '../../../../../core/constants/app_sizes.dart';
+import '../../../../../core/constants/app_spacing.dart';
+import '../../../../../core/constants/app_text_styles.dart';
 import '../../../../auth/presentation/controllers/access_policy.dart';
 import '../../../domain/entities/staff_user.dart';
 import '../../providers/settings_provider.dart';
-// import '../providers/staff_provider.dart';
 import 'staff_user_form_screen.dart';
 
-enum _StaffStatusFilter { all, active, inactive }
+enum StaffStatusFilter { all, active, inactive }
 
 class UserRolesScreen extends ConsumerStatefulWidget {
   const UserRolesScreen({super.key});
@@ -22,7 +23,7 @@ class _UserRolesScreenState extends ConsumerState<UserRolesScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
 
   String _selectedRole = 'All';
-  _StaffStatusFilter _statusFilter = _StaffStatusFilter.all;
+  StaffStatusFilter _statusFilter = StaffStatusFilter.all;
 
   static const List<String> _baseRoles = [
     'Admin',
@@ -91,29 +92,37 @@ class _UserRolesScreenState extends ConsumerState<UserRolesScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
+          backgroundColor: AppColors.card,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(AppSizes.radiusLg),
           ),
-          title: const Text(
+          title: Text(
             'Delete Staff User',
-            style: TextStyle(fontWeight: FontWeight.bold),
+            style: AppTextStyles.cardValue.copyWith(
+              fontSize: 18,
+              fontFamily: AppTextStyles.fontDisplay,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-          content: Text('Remove ${staff.name} from staff access?'),
+          content: Text(
+            'Remove ${staff.name} from staff access?',
+            style: AppTextStyles.small.copyWith(fontSize: 15),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
               child: Text(
                 'Cancel',
-                style: TextStyle(color: Colors.grey.shade600),
+                style: AppTextStyles.button.copyWith(color: AppColors.textSecondary),
               ),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.red,
-                foregroundColor: Colors.white,
+                foregroundColor: AppColors.textWhite,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(AppSizes.radiusMd),
                 ),
               ),
               onPressed: () => Navigator.pop(dialogContext, true),
@@ -154,14 +163,14 @@ class _UserRolesScreenState extends ConsumerState<UserRolesScreen> {
     _searchCtrl.clear();
     setState(() {
       _selectedRole = 'All';
-      _statusFilter = _StaffStatusFilter.all;
+      _statusFilter = StaffStatusFilter.all;
     });
   }
 
   bool get _hasActiveFilter {
     return _searchCtrl.text.trim().isNotEmpty ||
         _selectedRole != 'All' ||
-        _statusFilter != _StaffStatusFilter.all;
+        _statusFilter != StaffStatusFilter.all;
   }
 
   void _showMessage(String message, {bool isError = false}) {
@@ -169,8 +178,8 @@ class _UserRolesScreenState extends ConsumerState<UserRolesScreen> {
       SnackBar(
         content: Text(message),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        backgroundColor: isError ? AppColors.red : Colors.grey.shade900,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
+        backgroundColor: isError ? AppColors.red : AppColors.textPrimaryDark,
       ),
     );
   }
@@ -184,305 +193,234 @@ class _UserRolesScreenState extends ConsumerState<UserRolesScreen> {
     final staffState = ref.watch(staffControllerProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: AppColors.background,
       body: staffState.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Scaffold(
-          appBar: AppBar(
-            backgroundColor: AppColors.primary,
-            title: const Text('Staff Access'),
-          ),
-          body: _ErrorState(message: _cleanError(error), onRetry: _reload),
-        ),
+        error: (error, _) => _ErrorState(message: _cleanError(error), onRetry: _reload),
         data: (staff) {
           final filteredStaff = _filteredStaff(staff);
           final roles = _availableRoles(staff);
 
-          return Stack(
-            children: [
-              // Styled Modern Header Background
-              Container(
-                height: 220,
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [AppColors.primary, Color(0xFF1E40AF)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(32),
-                    bottomRight: Radius.circular(32),
-                  ),
-                ),
-              ),
-              SafeArea(
-                child: RefreshIndicator(
-                  onRefresh: _reload,
-                  color: AppColors.primary,
-                  child: CustomScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    slivers: [
-                      // Modern Custom Header / App Bar
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+          return SafeArea(
+            child: RefreshIndicator(
+              onRefresh: _reload,
+              color: AppColors.primary,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(AppSpacing.screenPadding, AppSpacing.sm, AppSpacing.screenPadding, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
                             children: [
-                              Row(
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
-                                    onPressed: () => Navigator.maybePop(context),
-                                  ),
-                                  const Text(
-                                    'Staff Access',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                      fontSize: 22,
-                                    ),
-                                  ),
-                                ],
+                              IconButton(
+                                padding: EdgeInsets.zero,
+                                alignment: Alignment.centerLeft,
+                                icon: const Icon(Icons.arrow_back, color: AppColors.textPrimaryDark, size: 24),
+                                onPressed: () => Navigator.maybePop(context),
                               ),
-                              const SizedBox(height: 16),
-                              _OverviewPanel(
-                                total: staff.length,
-                                active: staff.where((item) => item.isActive).length,
-                                inactive: staff.where((item) => !item.isActive).length,
-                                admins: staff.where(_isAdmin).length,
+                              Text(
+                                'Staff Access',
+                                style: AppTextStyles.cardValue.copyWith(
+                                  fontSize: 22,
+                                  fontFamily: AppTextStyles.fontDisplay,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimaryDark,
+                                ),
                               ),
                             ],
                           ),
-                        ),
+                          const SizedBox(height: AppSpacing.md),
+                          _OverviewPanel(
+                            total: staff.length,
+                            active: staff.where((item) => item.isActive).length,
+                            inactive: staff.where((item) => !item.isActive).length,
+                            admins: staff.where(_isAdmin).length,
+                          ),
+                        ],
                       ),
-                      
-                      // Persistent Modern Sticky Filter/Search Bar Panel
-                      SliverAppBar(
-                        pinned: true,
-                        backgroundColor: const Color(0xFFF8F9FA),
-                        automaticallyImplyLeading: false,
-                        elevation: 0,
-                        collapsedHeight: 124,
-                        expandedHeight: 124,
-                        flexibleSpace: FlexibleSpaceBar(
-                          background: Container(
-                            color: const Color(0xFFF8F9FA),
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                            child: Column(
+                    ),
+                  ),
+
+                  // Filters & Search
+                  SliverPersistentHeader(
+                    pinned: true,
+                    delegate: _StickyFilterDelegate(
+                      child: Container(
+                        color: AppColors.background,
+                        padding: const EdgeInsets.fromLTRB(AppSpacing.screenPadding, AppSpacing.md, AppSpacing.screenPadding, AppSpacing.sm),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildSearchField(),
+                            const SizedBox(height: AppSpacing.md),
+                            Row(
                               children: [
-                                _buildSearchField(),
-                                const SizedBox(height: 10),
-                                SizedBox(
-                                  height: 38,
-                                  child: ListView(
-                                    scrollDirection: Axis.horizontal,
-                                    physics: const BouncingScrollPhysics(),
-                                    children: [
-                                      _buildStatusFilters(),
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                                        child: VerticalDivider(width: 1, color: Colors.grey.shade300, indent: 6, endIndent: 6),
-                                      ),
-                                      _buildRoleHorizontalChips(roles),
+                                Expanded(
+                                  child: _buildDropdownFilter<StaffStatusFilter>(
+                                    value: _statusFilter,
+                                    items: [
+                                      const DropdownMenuItem(value: StaffStatusFilter.all, child: Text('All Status')),
+                                      const DropdownMenuItem(value: StaffStatusFilter.active, child: Text('Active Only')),
+                                      const DropdownMenuItem(value: StaffStatusFilter.inactive, child: Text('Inactive Only')),
                                     ],
+                                    onChanged: (val) => setState(() => _statusFilter = val!),
+                                    icon: Icons.filter_list_rounded,
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                Expanded(
+                                  child: _buildDropdownFilter<String>(
+                                    value: _selectedRole,
+                                    items: roles.map((r) => DropdownMenuItem(value: r, child: Text(r == 'All' ? 'All Roles' : r))).toList(),
+                                    onChanged: (val) => setState(() => _selectedRole = val!),
+                                    icon: Icons.badge_outlined,
                                   ),
                                 ),
                               ],
                             ),
-                          ),
+                          ],
                         ),
                       ),
+                      minHeight: 124.0,
+                      maxHeight: 124.0,
+                    ),
+                  ),
 
-                      // Staff User List content
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
-                        sliver: SliverList(
-                          delegate: SliverChildListDelegate([
-                            _buildSectionHeader(filteredStaff.length),
-                            const SizedBox(height: 8),
-                            if (filteredStaff.isEmpty)
-                              _EmptyState(hasStaff: staff.isNotEmpty)
-                            else
-                              ...filteredStaff.map(
-                                (item) => _StaffUserCard(
-                                  staff: item,
-                                  roleColor: _roleColor(item.role),
-                                  roleDescription: _roleDescription(item.role),
-                                  initials: _initials(item.name),
-                                  onEdit: () => _openStaffForm(item),
-                                  onStatusChanged: (value) =>
-                                      _toggleStaffStatus(item, value, staff),
-                                  onDelete: () => _confirmDelete(item, staff),
-                                ),
-                              ),
-                            const SizedBox(height: 16),
-                            _RoleGuide(
-                              roles: roles.where((role) => role != 'All').toList(),
-                              roleColor: _roleColor,
-                              roleIcon: _roleIcon,
-                              roleDescription: _roleDescription,
+                  // List
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(AppSpacing.screenPadding, AppSpacing.sm, AppSpacing.screenPadding, 100),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate([
+                        _buildSectionHeader(filteredStaff.length),
+                        const SizedBox(height: AppSpacing.sm),
+                        if (filteredStaff.isEmpty)
+                          _EmptyState(hasStaff: staff.isNotEmpty)
+                        else
+                          ...filteredStaff.map(
+                            (item) => _StaffUserCard(
+                              staff: item,
+                              roleColor: _roleColor(item.role),
+                              roleDescription: _roleDescription(item.role),
+                              initials: _initials(item.name),
+                              onEdit: () => _openStaffForm(item),
+                              onStatusChanged: (value) => _toggleStaffStatus(item, value, staff),
+                              onDelete: () => _confirmDelete(item, staff),
                             ),
-                          ]),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              // Floating Action Button Styled Layer
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [const Color(0xFFF8F9FA).withOpacity(0.0), const Color(0xFFF8F9FA)],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                  ),
-                  child: SafeArea(
-                    top: false,
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 54,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          elevation: 3,
-                          shadowColor: AppColors.primary.withOpacity(0.4),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
                           ),
+                        const SizedBox(height: AppSpacing.lg),
+                        _RoleGuide(
+                          roles: roles.where((role) => role != 'All').toList(),
+                          roleColor: _roleColor,
+                          roleIcon: _roleIcon,
+                          roleDescription: _roleDescription,
                         ),
-                        onPressed: () => _openStaffForm(),
-                        icon: const Icon(Icons.person_add_alt_1_rounded, size: 20),
-                        label: const Text(
-                          'Add Staff User',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 0.3),
-                        ),
-                      ),
+                      ]),
                     ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           );
         },
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      // FIX: Rely on valueOrNull so it properly only shows when we have data
+      floatingActionButton: staffState.valueOrNull != null
+          ? Container(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: AppColors.textWhite,
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+                  ),
+                ),
+                onPressed: () => _openStaffForm(),
+                icon: const Icon(Icons.person_add_alt_1_rounded, size: 20),
+                label: Text(
+                  'Add Staff User',
+                  style: AppTextStyles.button.copyWith(fontWeight: FontWeight.w700, fontSize: 16),
+                ),
+              ),
+            )
+          : null,
     );
   }
 
   Widget _buildSearchField() {
-    return Container(
-      decoration: BoxDecoration(
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: TextField(
-        controller: _searchCtrl,
-        onChanged: (_) => setState(() {}),
-        textInputAction: TextInputAction.search,
-        style: const TextStyle(fontSize: 14),
-        decoration: InputDecoration(
-          hintText: 'Search name, phone or email...',
-          hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-          prefixIcon: const Icon(Icons.search_rounded, color: Colors.grey, size: 20),
-          suffixIcon: _searchCtrl.text.isEmpty
-              ? null
-              : IconButton(
-                  tooltip: 'Clear',
-                  icon: const Icon(Icons.cancel_rounded, color: Colors.grey, size: 20),
-                  onPressed: () {
-                    _searchCtrl.clear();
-                    setState(() {});
-                  },
-                ),
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-          ),
+    return TextField(
+      controller: _searchCtrl,
+      onChanged: (_) => setState(() {}),
+      textInputAction: TextInputAction.search,
+      style: AppTextStyles.cardValue.copyWith(fontFamily: AppTextStyles.fontBody, fontSize: 15),
+      decoration: InputDecoration(
+        hintText: 'Search staff...',
+        hintStyle: AppTextStyles.small.copyWith(fontSize: 14),
+        prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textSecondary, size: 20),
+        suffixIcon: _searchCtrl.text.isEmpty
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary, size: 18),
+                onPressed: () {
+                  _searchCtrl.clear();
+                  setState(() {});
+                },
+              ),
+        filled: true,
+        fillColor: AppColors.surface2,
+        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 0),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
       ),
     );
   }
 
-  Widget _buildStatusFilters() {
-    return Row(
-      children: [
-        _statusChip('All', _StaffStatusFilter.all, Icons.done_all_rounded),
-        const SizedBox(width: 8),
-        _statusChip('Active', _StaffStatusFilter.active, Icons.check_circle_rounded),
-        const SizedBox(width: 8),
-        _statusChip('Inactive', _StaffStatusFilter.inactive, Icons.remove_circle_rounded),
-      ],
-    );
-  }
-
-  Widget _statusChip(String label, _StaffStatusFilter filter, IconData icon) {
-    final selected = _statusFilter == filter;
-    final color = selected ? AppColors.primary : Colors.grey.shade700;
-
-    return ChoiceChip(
-      avatar: Icon(icon, size: 14, color: color),
-      label: Text(label),
-      selected: selected,
-      showCheckmark: false,
-      backgroundColor: Colors.white,
-      selectedColor: AppColors.primary.withOpacity(0.12),
-      side: BorderSide(
-        color: selected ? AppColors.primary.withOpacity(0.3) : Colors.transparent,
+  Widget _buildDropdownFilter<T>({
+    required T value,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?> onChanged,
+    required IconData icon,
+  }) {
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
       ),
-      elevation: selected ? 0 : 1,
-      pressElevation: 0,
-      shadowColor: Colors.black.withOpacity(0.1),
-      labelStyle: TextStyle(color: color, fontWeight: selected ? FontWeight.bold : FontWeight.normal, fontSize: 13),
-      onSelected: (_) => setState(() => _statusFilter = filter),
-    );
-  }
-
-  Widget _buildRoleHorizontalChips(List<String> roles) {
-    return Row(
-      children: roles.map((role) {
-        final selected = _selectedRole == role;
-        final color = selected ? AppColors.primary : Colors.grey.shade700;
-        return Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: ChoiceChip(
-            label: Text(role),
-            selected: selected,
-            showCheckmark: false,
-            backgroundColor: Colors.white,
-            selectedColor: AppColors.primary.withOpacity(0.12),
-            side: BorderSide(
-              color: selected ? AppColors.primary.withOpacity(0.3) : Colors.transparent,
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: AppColors.textSecondary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<T>(
+                value: value,
+                isExpanded: true,
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textSecondary, size: 20),
+                style: AppTextStyles.small.copyWith(fontWeight: FontWeight.w600, color: AppColors.textPrimaryDark),
+                items: items,
+                onChanged: onChanged,
+              ),
             ),
-            elevation: selected ? 0 : 1,
-            pressElevation: 0,
-            shadowColor: Colors.black.withOpacity(0.1),
-            labelStyle: TextStyle(color: color, fontWeight: selected ? FontWeight.bold : FontWeight.normal, fontSize: 13),
-            onSelected: (_) => setState(() => _selectedRole = role),
           ),
-        );
-      }).toList(),
+        ],
+      ),
     );
   }
 
@@ -490,23 +428,23 @@ class _UserRolesScreenState extends ConsumerState<UserRolesScreen> {
     return Row(
       children: [
         Text(
-          '$count Staff User${count == 1 ? '' : 's'}',
-          style: TextStyle(
+          '$count Staff',
+          style: AppTextStyles.small.copyWith(
             fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: Colors.grey.shade600,
+            fontWeight: FontWeight.w700,
           ),
         ),
         const Spacer(),
         if (_hasActiveFilter)
-          TextButton.icon(
+          TextButton(
             onPressed: _clearFilters,
-            icon: const Icon(Icons.refresh_rounded, size: 14),
-            label: const Text('Reset Filters', style: TextStyle(fontSize: 13)),
             style: TextButton.styleFrom(
               foregroundColor: AppColors.primary,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
+            child: Text('Clear Filters', style: AppTextStyles.button.copyWith(fontSize: 13, color: AppColors.primary)),
           ),
       ],
     );
@@ -518,22 +456,21 @@ class _UserRolesScreenState extends ConsumerState<UserRolesScreen> {
     return staff.where((item) {
       final matchesRole = _selectedRole == 'All' || item.role == _selectedRole;
       final matchesStatus = switch (_statusFilter) {
-        _StaffStatusFilter.all => true,
-        _StaffStatusFilter.active => item.isActive,
-        _StaffStatusFilter.inactive => !item.isActive,
+        StaffStatusFilter.all => true,
+        StaffStatusFilter.active => item.isActive,
+        StaffStatusFilter.inactive => !item.isActive,
       };
-      final matchesQuery =
-          query.isEmpty ||
+      final matchesQuery = query.isEmpty ||
           item.name.toLowerCase().contains(query) ||
           item.email.toLowerCase().contains(query) ||
-          item.phone.toLowerCase().contains(query) ||
-          item.role.toLowerCase().contains(query);
+          item.phone.toLowerCase().contains(query);
 
       return matchesRole && matchesStatus && matchesQuery;
-    }).toList()..sort((a, b) {
-      if (a.isActive != b.isActive) return a.isActive ? -1 : 1;
-      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
-    });
+    }).toList()
+      ..sort((a, b) {
+        if (a.isActive != b.isActive) return a.isActive ? -1 : 1;
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
   }
 
   List<String> _availableRoles(List<StaffUser> staff) {
@@ -546,16 +483,10 @@ class _UserRolesScreenState extends ConsumerState<UserRolesScreen> {
   }
 
   String _initials(String name) {
-    final parts = name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((part) => part.isNotEmpty)
-        .toList();
-
+    final parts = name.trim().split(RegExp(r'\s+')).where((part) => part.isNotEmpty).toList();
     if (parts.isEmpty) return 'ST';
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'
-        .toUpperCase();
+    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'.toUpperCase();
   }
 
   Color _roleColor(String role) {
@@ -569,9 +500,9 @@ class _UserRolesScreenState extends ConsumerState<UserRolesScreen> {
       case 'salesperson':
         return Colors.deepPurple;
       case 'inventory staff':
-        return Colors.teal;
+        return AppColors.cyan;
       default:
-        return Colors.blueGrey;
+        return AppColors.textSecondary;
     }
   }
 
@@ -594,7 +525,6 @@ class _UserRolesScreenState extends ConsumerState<UserRolesScreen> {
 
   String _roleDescription(String role) {
     final accessSummary = RoleAccessPolicy.accessSummary(role);
-
     switch (role.toLowerCase()) {
       case 'admin':
         return 'Full control over settings, stock, sales, reports, and staff. $accessSummary';
@@ -609,6 +539,36 @@ class _UserRolesScreenState extends ConsumerState<UserRolesScreen> {
       default:
         return 'Custom staff access. $accessSummary';
     }
+  }
+}
+
+// ── Components ─────────────────────────────────────────────────────────────
+
+class _StickyFilterDelegate extends SliverPersistentHeaderDelegate {
+  final Widget child;
+  final double minHeight;
+  final double maxHeight;
+
+  _StickyFilterDelegate({
+    required this.child,
+    required this.minHeight,
+    required this.maxHeight,
+  });
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return SizedBox.expand(child: child);
+  }
+
+  @override
+  double get maxExtent => maxHeight;
+
+  @override
+  double get minExtent => minHeight;
+
+  @override
+  bool shouldRebuild(covariant _StickyFilterDelegate oldDelegate) {
+    return maxHeight != oldDelegate.maxHeight || minHeight != oldDelegate.minHeight || child != oldDelegate.child;
   }
 }
 
@@ -629,17 +589,10 @@ class _OverviewPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppSizes.cardRadius),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -647,71 +600,43 @@ class _OverviewPanel extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.groups_2_rounded,
-                  color: AppColors.primary,
-                  size: 20,
-                ),
+                width: 44,
+                height: 44,
+                decoration: const BoxDecoration(color: AppColors.surface2, shape: BoxShape.circle),
+                child: const Icon(Icons.groups_2_rounded, color: AppColors.primary, size: AppSizes.iconMd),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Team Access Overview',
-                      style: TextStyle(
+                    Text(
+                      'Team Access',
+                      style: AppTextStyles.cardValue.copyWith(
                         fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E293B),
+                        fontFamily: AppTextStyles.fontDisplay,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimaryDark,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 3),
                     Text(
-                      '$active active of $total staff accounts',
-                      style: TextStyle(
-                        color: Colors.grey.shade500,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
+                      '$active active of $total staff',
+                      style: AppTextStyles.small.copyWith(fontSize: 13),
                     ),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.lg),
           Row(
             children: [
-              Expanded(
-                child: _MiniMetric(
-                  label: 'Active',
-                  value: active.toString(),
-                  color: AppColors.green,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _MiniMetric(
-                  label: 'Inactive',
-                  value: inactive.toString(),
-                  color: Colors.grey.shade500,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _MiniMetric(
-                  label: 'Admins',
-                  value: admins.toString(),
-                  color: AppColors.orange,
-                ),
-              ),
+              Expanded(child: _MiniMetric(label: 'Active', value: active.toString(), color: AppColors.green)),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(child: _MiniMetric(label: 'Inactive', value: inactive.toString(), color: AppColors.textSecondary)),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(child: _MiniMetric(label: 'Admins', value: admins.toString(), color: AppColors.orange)),
             ],
           ),
         ],
@@ -721,12 +646,7 @@ class _OverviewPanel extends StatelessWidget {
 }
 
 class _MiniMetric extends StatelessWidget {
-  const _MiniMetric({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
+  const _MiniMetric({required this.label, required this.value, required this.color});
   final String label;
   final String value;
   final Color color;
@@ -734,34 +654,17 @@ class _MiniMetric extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
       decoration: BoxDecoration(
         color: color.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.1), width: 1),
+        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            value,
-            style: TextStyle(
-              color: color,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 1),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: Colors.grey.shade600,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          Text(value, style: AppTextStyles.cardValue.copyWith(color: color, fontSize: 18, fontFamily: AppTextStyles.fontDisplay)),
+          const SizedBox(height: 2),
+          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTextStyles.small.copyWith(color: color.withOpacity(0.8), fontSize: 12, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -790,35 +693,20 @@ class _StaffUserCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        border: Border.all(color: Colors.grey.shade100),
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppSizes.cardRadius),
       ),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-          childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+          tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.cardPadding, vertical: 4),
+          childrenPadding: const EdgeInsets.fromLTRB(AppSpacing.cardPadding, 0, AppSpacing.cardPadding, AppSpacing.cardPadding),
           leading: CircleAvatar(
             radius: 22,
             backgroundColor: roleColor.withOpacity(0.1),
-            child: Text(
-              initials,
-              style: TextStyle(
-                color: roleColor,
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
-            ),
+            child: Text(initials, style: AppTextStyles.cardValue.copyWith(color: roleColor, fontSize: 14)),
           ),
           title: Row(
             children: [
@@ -827,52 +715,48 @@ class _StaffUserCard extends StatelessWidget {
                   staff.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E293B),
-                  ),
+                  style: AppTextStyles.cardValue.copyWith(fontSize: 16, fontFamily: AppTextStyles.fontDisplay, fontWeight: FontWeight.w600, color: AppColors.textPrimaryDark),
                 ),
               ),
-              const SizedBox(width: 4),
-              _StatusMiniIndicator(isActive: staff.isActive),
+              const SizedBox(width: AppSpacing.sm),
+              Container(width: 8, height: 8, decoration: BoxDecoration(color: staff.isActive ? AppColors.green : AppColors.textSecondary, shape: BoxShape.circle)),
             ],
           ),
           subtitle: Padding(
             padding: const EdgeInsets.only(top: 2),
-            child: Text(
-              staff.email,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
-            ),
+            child: Text(staff.email, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTextStyles.small.copyWith(fontSize: 13)),
           ),
           children: [
-            Divider(color: Colors.grey.shade100, height: 1),
-            const SizedBox(height: 12),
+            Divider(color: AppColors.borderStrong, height: 1),
+            const SizedBox(height: AppSpacing.md),
             if (staff.phone.trim().isNotEmpty) ...[
               Row(
                 children: [
-                  Icon(Icons.phone_iphone_rounded, size: 14, color: Colors.grey.shade400),
-                  const SizedBox(width: 8),
-                  Text(
-                    staff.phone,
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                  ),
+                  const Icon(Icons.phone_iphone_rounded, size: 14, color: AppColors.textSecondary),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(staff.phone, style: AppTextStyles.small.copyWith(fontSize: 13)),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: AppSpacing.sm),
             ],
             Row(
               children: [
-                _RolePill(role: staff.role, color: roleColor),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(color: roleColor.withOpacity(0.1), borderRadius: BorderRadius.circular(AppSizes.radiusLg)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.shield_outlined, color: roleColor, size: 13),
+                      const SizedBox(width: 5),
+                      Text(staff.role, style: AppTextStyles.small.copyWith(color: roleColor, fontSize: 11, fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ),
                 const Spacer(),
                 Row(
                   children: [
-                    Text(
-                      staff.isActive ? 'Active Status' : 'Inactive Status',
-                      style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
-                    ),
+                    Text(staff.isActive ? 'Active' : 'Inactive', style: AppTextStyles.small.copyWith(fontSize: 12)),
                     const SizedBox(width: 6),
                     SizedBox(
                       height: 28,
@@ -881,7 +765,10 @@ class _StaffUserCard extends StatelessWidget {
                         scale: 0.75,
                         child: Switch.adaptive(
                           value: staff.isActive,
-                          activeColor: AppColors.primary,
+                          activeThumbColor: AppColors.textWhite,
+                          activeTrackColor: AppColors.primary,
+                          inactiveThumbColor: AppColors.textWhite,
+                          inactiveTrackColor: AppColors.borderStrong,
                           onChanged: onStatusChanged,
                         ),
                       ),
@@ -890,108 +777,49 @@ class _StaffUserCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: AppSpacing.md),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                roleDescription,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 12, height: 1.3),
-              ),
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              decoration: BoxDecoration(color: AppColors.surface2, borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
+              child: Text(roleDescription, maxLines: 3, overflow: TextOverflow.ellipsis, style: AppTextStyles.small.copyWith(fontSize: 12, height: 1.3)),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.lg),
             Row(
               children: [
- Expanded(
-  child: OutlinedButton.icon(
-    style: OutlinedButton.styleFrom(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      side: BorderSide(color: Colors.grey.shade200),
-      backgroundColor: Colors.white,
-      foregroundColor: Colors.grey.shade700,
-    ),
-    onPressed: onEdit,
-    icon: const Icon(Icons.edit_outlined, size: 16),
-    label: const Text('Edit Details', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-  ),
-),
-                const SizedBox(width: 8),
                 Expanded(
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      backgroundColor: AppColors.red.withOpacity(0.04),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
+                      side: const BorderSide(color: AppColors.borderStrong),
+                      backgroundColor: AppColors.card,
+                      foregroundColor: AppColors.textPrimaryDark,
+                    ),
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_outlined, size: 16),
+                    label: Text('Edit', style: AppTextStyles.button.copyWith(fontSize: 13, color: AppColors.textPrimaryDark)),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
+                      backgroundColor: AppColors.red.withOpacity(0.06),
                       foregroundColor: AppColors.red,
-                      side: BorderSide(color: AppColors.red.withOpacity(0.15)),
+                      side: BorderSide.none,
                     ),
                     onPressed: onDelete,
                     icon: const Icon(Icons.delete_outline_rounded, size: 16),
-                    label: const Text('Delete', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    label: Text('Delete', style: AppTextStyles.button.copyWith(fontSize: 13, color: AppColors.red)),
                   ),
                 ),
               ],
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _StatusMiniIndicator extends StatelessWidget {
-  const _StatusMiniIndicator({required this.isActive});
-  final bool isActive;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 7,
-      height: 7,
-      decoration: BoxDecoration(
-        color: isActive ? AppColors.green : Colors.grey.shade400,
-        shape: BoxShape.circle,
-      ),
-    );
-  }
-}
-
-class _RolePill extends StatelessWidget {
-  const _RolePill({required this.role, required this.color});
-
-  final String role;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.15), width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.shield_outlined, color: color, size: 13),
-          const SizedBox(width: 5),
-          Text(
-            role,
-            style: TextStyle(
-              color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1013,48 +841,53 @@ class _RoleGuide extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade100),
-      ),
+      decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(AppSizes.cardRadius)),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 14),
-          childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+          tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.cardPadding),
+          childrenPadding: const EdgeInsets.fromLTRB(AppSpacing.cardPadding, 0, AppSpacing.cardPadding, AppSpacing.lg),
           leading: Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.08),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.gavel_rounded,
-              color: AppColors.primary,
-              size: 16,
-            ),
+            width: 44,
+            height: 44,
+            decoration: const BoxDecoration(color: AppColors.surface2, shape: BoxShape.circle),
+            child: const Icon(Icons.gavel_rounded, color: AppColors.primary, size: AppSizes.iconMd),
           ),
-          title: const Text(
+          title: Text(
             'Permissions Guide',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            style: AppTextStyles.cardValue.copyWith(fontSize: 16, fontFamily: AppTextStyles.fontDisplay, fontWeight: FontWeight.w600, color: AppColors.textPrimaryDark),
           ),
           subtitle: Text(
-            RoleAccessPolicy.allowAllRolesTemporarily
-                ? 'Temporary unlimited access enabled'
-                : 'View system rules by roles',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+            RoleAccessPolicy.allowAllRolesTemporarily ? 'Temporary unlimited access enabled' : 'View system rules by roles',
+            style: AppTextStyles.small.copyWith(fontSize: 13),
           ),
           children: roles
-              .map(
-                (role) => _RoleGuideRow(
-                  role: role,
-                  color: roleColor(role),
-                  icon: roleIcon(role),
-                  description: roleDescription(role),
-                ),
-              )
+              .map((role) => Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.md),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          margin: const EdgeInsets.only(top: 2),
+                          decoration: BoxDecoration(color: roleColor(role).withOpacity(0.1), shape: BoxShape.circle),
+                          child: Icon(roleIcon(role), color: roleColor(role), size: 14),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(role, style: AppTextStyles.cardValue.copyWith(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimaryDark)),
+                              const SizedBox(height: 2),
+                              Text(roleDescription(role), style: AppTextStyles.small.copyWith(fontSize: 12, height: 1.3)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ))
               .toList(),
         ),
       ),
@@ -1062,99 +895,23 @@ class _RoleGuide extends StatelessWidget {
   }
 }
 
-class _RoleGuideRow extends StatelessWidget {
-  const _RoleGuideRow({
-    required this.role,
-    required this.color,
-    required this.icon,
-    required this.description,
-  });
-
-  final String role;
-  final Color color;
-  final IconData icon;
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 30,
-            height: 30,
-            margin: const EdgeInsets.only(top: 2),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.08),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 14),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  role,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF334155),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  description,
-                  style: TextStyle(color: Colors.grey.shade500, fontSize: 12, height: 1.3),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.hasStaff});
-
   final bool hasStaff;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 36),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade100),
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.xxl),
+      decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(AppSizes.cardRadius)),
       child: Column(
         children: [
-          Icon(
-            hasStaff ? Icons.manage_search_rounded : Icons.person_add_disabled_rounded,
-            color: Colors.grey.shade300,
-            size: 48,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            hasStaff ? 'No Matches Found' : 'No Staff Members Registered',
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF334155)),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            hasStaff
-                ? 'Try matching a different keyword, status configuration, or filter parameter.'
-                : 'Register system users to control store level privileges and track assignments.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey.shade400, fontSize: 12, height: 1.3),
-          ),
+          Icon(hasStaff ? Icons.manage_search_rounded : Icons.person_add_disabled_rounded, color: AppColors.borderStrong, size: 48),
+          const SizedBox(height: AppSpacing.md),
+          Text(hasStaff ? 'No Matches Found' : 'No Staff Found', textAlign: TextAlign.center, style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 16, color: AppColors.textPrimaryDark)),
+          const SizedBox(height: AppSpacing.xs),
+          Text(hasStaff ? 'Try adjusting your filters.' : 'Add staff to get started.', textAlign: TextAlign.center, style: AppTextStyles.small.copyWith(fontSize: 13, height: 1.4)),
         ],
       ),
     );
@@ -1163,49 +920,47 @@ class _EmptyState extends StatelessWidget {
 
 class _ErrorState extends StatelessWidget {
   const _ErrorState({required this.message, required this.onRetry});
-
   final String message;
   final Future<void> Function() onRetry;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.cloud_off_rounded, color: AppColors.red, size: 48),
-            const SizedBox(height: 12),
-            const Text(
-              'Failed to retrieve staff records',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              height: 40,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: AppColors.textPrimaryDark),
+        title: Text(
+          'Staff Access',
+          style: AppTextStyles.cardValue.copyWith(fontSize: 22, fontFamily: AppTextStyles.fontDisplay, fontWeight: FontWeight.w700, color: AppColors.textPrimaryDark),
+        ),
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xxl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.cloud_off_rounded, color: AppColors.red, size: 48),
+              const SizedBox(height: AppSpacing.md),
+              Text('Failed to load staff', style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 16)),
+              const SizedBox(height: AppSpacing.xs),
+              Text(message, textAlign: TextAlign.center, style: AppTextStyles.small.copyWith(fontSize: 13)),
+              const SizedBox(height: AppSpacing.xl),
+              SizedBox(
+                height: 44,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: AppColors.textWhite, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd))),
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: Text('Try Again', style: AppTextStyles.button.copyWith(fontSize: 14, color: AppColors.textWhite)),
                 ),
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh_rounded, size: 16),
-                label: const Text('Try Again', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
-

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../../../core/constants/app_colors.dart';
+import '../../../../../../core/constants/app_sizes.dart';
+import '../../../../../../core/constants/app_spacing.dart';
+import '../../../../../../core/constants/app_text_styles.dart';
 import '../../../providers/settings_provider.dart';
 
 class BackupSyncScreen extends ConsumerStatefulWidget {
@@ -51,124 +54,95 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        iconTheme: const IconThemeData(color: AppColors.textPrimaryDark),
+        titleSpacing: 0,
+        title: Text(
           "Backup & Sync",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            fontSize: 18,
+          style: AppTextStyles.cardValue.copyWith(
+            fontSize: 22,
+            fontFamily: AppTextStyles.fontDisplay,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimaryDark,
           ),
         ),
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.screenPadding,
+                vertical: AppSpacing.md,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.only(left: 4, bottom: 12),
-                    child: Text(
-                      "Backup",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                  _sectionHeader("Backup"),
+                  _toggleCard(
+                    icon: Icons.cloud_queue,
+                    iconColor: AppColors.green,
+                    title: "Google Drive Backup",
+                    subtitle: "Last backup: 20 May 2024, 10:30 AM",
+                    value: googleDrive,
+                    dbKey: "googleDriveBackup",
                   ),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: Column(
-                      children: [
-                        _buildToggleItem(
-                          icon: Icons.cloud_queue,
-                          iconColor: Colors.green,
-                          title: "Google Drive Backup",
-                          subtitle: "Last backup: 20 May 2024, 10:30 AM",
-                          value: googleDrive,
-                          dbKey: "googleDriveBackup",
-                        ),
-                        _buildDivider(),
-                        _buildToggleItem(
-                          icon: Icons.autorenew,
-                          iconColor: Colors.teal,
-                          title: "Auto Backup",
-                          subtitle: "Daily at 10:00 PM",
-                          value: autoBackup,
-                          dbKey: "autoBackup",
-                        ),
-                        _buildDivider(),
-                        _buildActionItem(
-                          icon: Icons.save_alt,
-                          iconColor: Colors.blueAccent,
-                          title: "Local Backup",
-                          subtitle: "Create backup on this device",
-                        ),
-                        _buildDivider(),
-                        _buildActionItem(
-                          icon: Icons.file_upload_outlined,
-                          iconColor: Colors.orange,
-                          title: "Export Data",
-                          subtitle: "Export data in Excel/CSV",
-                        ),
-                      ],
-                    ),
+                  _toggleCard(
+                    icon: Icons.autorenew,
+                    iconColor: AppColors.cyan,
+                    title: "Auto Backup",
+                    subtitle: "Daily at 10:00 PM",
+                    value: autoBackup,
+                    dbKey: "autoBackup",
+                  ),
+                  _actionCard(
+                    icon: Icons.save_alt,
+                    iconColor: AppColors.primary,
+                    title: "Local Backup",
+                    subtitle: "Create backup on this device",
+                    onTap: () {},
+                  ),
+                  _actionCard(
+                    icon: Icons.file_upload_outlined,
+                    iconColor: AppColors.orange,
+                    title: "Export Data",
+                    subtitle: "Export data in Excel/CSV",
+                    onTap: () {},
+                  ),
+                  
+                  const SizedBox(height: AppSpacing.lg),
+                  _sectionHeader("Restore"),
+                  _actionCard(
+                    icon: Icons.restore,
+                    iconColor: AppColors.red,
+                    title: "Restore from Backup",
+                    subtitle: "Restore your previous backup",
+                    onTap: () {},
                   ),
 
-                  const SizedBox(height: 24),
-                  const Padding(
-                    padding: EdgeInsets.only(left: 4, bottom: 12),
-                    child: Text(
-                      "Restore",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: _buildActionItem(
-                      icon: Icons.restore,
-                      iconColor: Colors.purple,
-                      title: "Restore from Backup",
-                      subtitle: "Restore your previous backup",
-                    ),
-                  ),
-
-                  const SizedBox(height: 40),
+                  const SizedBox(height: AppSpacing.xxl),
                   Center(
                     child: Text(
                       "Last synced: 20 May 2024, 10:30 AM",
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
+                      style: AppTextStyles.small.copyWith(
+                        color: AppColors.textSecondary,
                         fontSize: 13,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-
+                  const SizedBox(height: AppSpacing.md),
+                  
                   SizedBox(
                     width: double.infinity,
-                    height: 50,
+                    height: 52,
                     child: OutlinedButton(
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.blue, width: 1.5),
+                        side: const BorderSide(color: AppColors.primary, width: 1.5),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
                         ),
                       ),
                       onPressed: () {
@@ -176,12 +150,12 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
                           const SnackBar(content: Text("Syncing...")),
                         );
                       },
-                      child: const Text(
+                      child: Text(
                         "Sync Now",
-                        style: TextStyle(
+                        style: AppTextStyles.button.copyWith(
                           fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary,
                         ),
                       ),
                     ),
@@ -192,10 +166,22 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
     );
   }
 
-  Widget _buildDivider() =>
-      Divider(height: 1, thickness: 1, indent: 60, color: Colors.grey.shade100);
+  Widget _sectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: AppSpacing.sm, top: AppSpacing.sm),
+      child: Text(
+        title,
+        style: AppTextStyles.cardValue.copyWith(
+          fontSize: 17,
+          fontFamily: AppTextStyles.fontDisplay,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textPrimaryDark,
+        ),
+      ),
+    );
+  }
 
-  Widget _buildToggleItem({
+  Widget _toggleCard({
     required IconData icon,
     required Color iconColor,
     required String title,
@@ -204,87 +190,125 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
     required String dbKey,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: iconColor, size: 22),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-          Switch(
-            value: value,
-            activeThumbColor: Colors.blue,
-            onChanged: (v) => _updateToggle(dbKey, v),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionItem({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-  }) {
-    return InkWell(
-      onTap: () {},
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(AppSizes.cardRadius),
+        ),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.cardPadding,
+          vertical: AppSpacing.md,
+        ),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(
+                color: AppColors.surface2,
+                shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: iconColor, size: 22),
+              child: Icon(icon, color: iconColor, size: AppSizes.iconMd),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                    style: AppTextStyles.cardValue.copyWith(
+                      fontSize: 16,
+                      fontFamily: AppTextStyles.fontDisplay,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimaryDark,
                     ),
                   ),
+                  const SizedBox(height: 3),
                   Text(
                     subtitle,
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                    style: AppTextStyles.small.copyWith(fontSize: 13),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right, color: Colors.grey.shade400),
+            Switch(
+              value: value,
+              activeThumbColor: AppColors.textWhite,
+              activeTrackColor: AppColors.primary,
+              inactiveThumbColor: AppColors.textWhite,
+              inactiveTrackColor: AppColors.borderStrong,
+              onChanged: (newValue) => _updateToggle(dbKey, newValue),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _actionCard({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Material(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppSizes.cardRadius),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppSizes.cardRadius),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.cardPadding,
+              vertical: AppSpacing.lg,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: const BoxDecoration(
+                    color: AppColors.surface2,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: iconColor, size: AppSizes.iconMd),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: AppTextStyles.cardValue.copyWith(
+                          fontSize: 16,
+                          fontFamily: AppTextStyles.fontDisplay,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimaryDark,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        style: AppTextStyles.small.copyWith(fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: AppColors.textSecondary, size: 20),
+              ],
+            ),
+          ),
         ),
       ),
     );
