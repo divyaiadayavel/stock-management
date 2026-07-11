@@ -9,7 +9,7 @@ import '../../../auth/presentation/providers/access_provider.dart';
 import '../../../auth/presentation/widgets/access_guard.dart';
 import '../../../products/presentation/screens/product_screen.dart';
 import '../../../sales/presentation/screens/current_bill_screen.dart';
-import '../../../settings/presentation/screens/settings_screen.dart';
+import '../../../More/presentation/screens/more_screen.dart';
 import '../../../inventory/presentation/screens/inventory_screen.dart';
 import 'dashboard_screen.dart';
 
@@ -42,8 +42,8 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
     ),
     // index 3 → More / Settings
     (
-      AppFeature.settings,
-      AccessGuard(feature: AppFeature.settings, child: SettingsScreen()),
+      AppFeature.more,
+      AccessGuard(feature: AppFeature.more, child: MoreScreen()),
     ),
   ];
 
@@ -51,8 +51,8 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
   static const List<(IconData, String, AppFeature)> _navItems = [
     (Icons.home_outlined, 'Home', AppFeature.dashboard),
     (Icons.inventory_2_outlined, 'Products', AppFeature.products),
-   (Icons.widgets_outlined, 'Inventory', AppFeature.inventory),
-    (Icons.more_horiz, 'More', AppFeature.settings),
+    (Icons.widgets_outlined, 'Inventory', AppFeature.inventory),
+    (Icons.more_horiz, 'More', AppFeature.more),
   ];
 
   bool _canAccess(AppFeature feature) =>

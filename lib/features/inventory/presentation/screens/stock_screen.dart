@@ -3,18 +3,12 @@
 // =========================================================
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/utils/responsive_helper.dart';
-
 import '../providers/inventory_providers.dart';
-
-import 'stock_in_screen.dart';
-import 'stock_out_screen.dart';
-import 'low_stock_screen.dart';
 import 'product_detail_screen.dart';
 
 class StockScreen extends ConsumerStatefulWidget {
@@ -47,7 +41,7 @@ class _StockScreenState extends ConsumerState<StockScreen> {
         child: AppBar(
           backgroundColor: AppColors.background,
           elevation: 0,
-          automaticallyImplyLeading: true, // 🆕 allow back to Inventory hub
+          automaticallyImplyLeading: true,
           titleSpacing: R.sp(context, AppSpacing.screenPadding),
           title: _searchOpen
               ? TextField(
@@ -61,7 +55,7 @@ class _StockScreenState extends ConsumerState<StockScreen> {
                   onChanged: (v) =>
                       ref.read(inventorySearchProvider.notifier).state = v,
                 )
-              : Text('Stock', style: AppTextStyles.heading), // 🆕 title changed
+              : Text('Stock', style: AppTextStyles.heading),
           actions: [
             IconButton(
               icon: Icon(
@@ -172,64 +166,12 @@ class _StockScreenState extends ConsumerState<StockScreen> {
           ),
         ],
       ),
-      // bottomNavigationBar: SafeArea(
-      //   child: Container(
-      //     padding: EdgeInsets.symmetric(
-      //       horizontal: R.sp(context, AppSpacing.screenPadding),
-      //       vertical: R.sp(context, AppSpacing.sm),
-      //     ),
-      //     decoration: BoxDecoration(
-      //       color: AppColors.card,
-      //       border: Border(top: BorderSide(color: AppColors.border)),
-      //     ),
-      //     child: Row(
-      //       children: [
-      //         Expanded(
-      //           child: _ActionButton(
-      //             label: '+ In',
-      //             onTap: () async {
-      //               await Navigator.push(
-      //                 context,
-      //                 MaterialPageRoute(builder: (_) => const StockInScreen()),
-      //               );
-      //               refreshInventory(ref);
-      //             },
-      //           ),
-      //         ),
-      //         SizedBox(width: R.sp(context, AppSpacing.sm)),
-      //         Expanded(
-      //           child: _ActionButton(
-      //             label: '− Out',
-      //             onTap: () async {
-      //               await Navigator.push(
-      //                 context,
-      //                 MaterialPageRoute(builder: (_) => const StockOutScreen()),
-      //               );
-      //               refreshInventory(ref);
-      //             },
-      //           ),
-      //         ),
-      //         SizedBox(width: R.sp(context, AppSpacing.sm)),
-      //         Expanded(
-      //           child: _ActionButton(
-      //             label: 'Low stock',
-      //             onTap: () async {
-      //               await Navigator.push(
-      //                 context,
-      //                 MaterialPageRoute(builder: (_) => const LowStockScreen()),
-      //               );
-      //               refreshInventory(ref);
-      //             },
-      //           ),
-      //         ),
-      //       ],
-      //     ),
-      //   ),
-      // ),
     );
   }
 
   void _showSortSheet(BuildContext context) {
+    final currentSort = this.ref.read(inventorySortProvider);
+
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.card,
@@ -250,21 +192,45 @@ class _StockScreenState extends ConsumerState<StockScreen> {
               SizedBox(height: R.sp(sheetContext, AppSpacing.sm)),
               ListTile(
                 title: Text('Name (A–Z)', style: AppTextStyles.cardValue),
-                onTap: () => Navigator.pop(sheetContext),
+                trailing: currentSort == 'name_asc'
+                    ? const Icon(Icons.check, color: AppColors.primary)
+                    : null,
+                onTap: () {
+                  this.ref.read(inventorySortProvider.notifier).state =
+                      'name_asc';
+                  this.ref.invalidate(productsListProvider);
+                  Navigator.pop(sheetContext);
+                },
               ),
               ListTile(
                 title: Text(
                   'Stock (Low → High)',
                   style: AppTextStyles.cardValue,
                 ),
-                onTap: () => Navigator.pop(sheetContext),
+                trailing: currentSort == 'stock_asc'
+                    ? const Icon(Icons.check, color: AppColors.primary)
+                    : null,
+                onTap: () {
+                  this.ref.read(inventorySortProvider.notifier).state =
+                      'stock_asc';
+                  this.ref.invalidate(productsListProvider);
+                  Navigator.pop(sheetContext);
+                },
               ),
               ListTile(
                 title: Text(
                   'Value (High → Low)',
                   style: AppTextStyles.cardValue,
                 ),
-                onTap: () => Navigator.pop(sheetContext),
+                trailing: currentSort == 'value_desc'
+                    ? const Icon(Icons.check, color: AppColors.primary)
+                    : null,
+                onTap: () {
+                  this.ref.read(inventorySortProvider.notifier).state =
+                      'value_desc';
+                  this.ref.invalidate(productsListProvider);
+                  Navigator.pop(sheetContext);
+                },
               ),
             ],
           ),
@@ -412,35 +378,3 @@ class _ProductTile extends ConsumerWidget {
     );
   }
 }
-
-// class _ActionButton extends StatelessWidget {
-//   final String label;
-//   final VoidCallback onTap;
-
-//   const _ActionButton({required this.label, required this.onTap});
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return SizedBox(
-//       height: R.sp(context, AppSizes.buttonHeight),
-//       child: ElevatedButton(
-//         onPressed: onTap,
-//         style: ElevatedButton.styleFrom(
-//           backgroundColor: Colors.white,
-//           foregroundColor: Colors.black,
-//           elevation: 0,
-//           side: BorderSide(color: AppColors.border),
-//           shape: RoundedRectangleBorder(
-//             borderRadius: BorderRadius.circular(
-//               R.radius(context, AppSizes.radiusMd),
-//             ),
-//           ),
-//         ),
-//         child: Text(
-//           label,
-//           style: AppTextStyles.button.copyWith(color: Colors.black),
-//         ),
-//       ),
-//     );
-//   }
-// }

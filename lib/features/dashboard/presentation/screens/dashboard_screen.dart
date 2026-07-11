@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stock_management/features/reports/presentation/screens/reports_screen.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
@@ -13,6 +14,9 @@ import '../../../suppliers/presentation/screens/suppliers_screen.dart';
 import '../../../settings/presentation/screens/settings_screen.dart';
 import '../providers/dashboard_provider.dart';
 import '../../../../core/utils/responsive_helper.dart';
+import '../../../customers/presentation/screens/customer_screen.dart';
+import '../../../settings/presentation/screens/operations/hardware/printers_hardware_screen.dart';
+import '../../../inventory/presentation/screens/new_purchase_order_screen.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -60,7 +64,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     todaySalesAmount = await DBHelper.getTodaySales();
     receivablesAmount = await DBHelper.getReceivablesAmount();
 
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   String _formatIndianCurrency(double amount) {
@@ -93,7 +99,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               // =====================================================
               Row(
                 children: [
-                  // Welcome text
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -107,8 +112,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ],
                     ),
                   ),
-
-                  // ── Settings icon ──────────────────────────────
                   GestureDetector(
                     onTap: () => Navigator.push(
                       context,
@@ -128,10 +131,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ),
                     ),
                   ),
-
                   SizedBox(width: R.sp(context, AppSpacing.sm)),
-
-                  // ── Avatar circle ──────────────────────────────
                   Container(
                     width: 40,
                     height: 40,
@@ -232,20 +232,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ),
                       ],
                     ),
-
                     SizedBox(height: R.sp(context, AppSpacing.sm)),
-
-                    Text(
-                      _formatIndianCurrency(totalSales.toDouble()),
-                      style: AppTextStyles.heading.copyWith(
-                        color: Colors.white,
-                        fontSize: R.fs(context, 36),
-                        fontWeight: FontWeight.bold,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        _formatIndianCurrency(totalSales.toDouble()),
+                        style: AppTextStyles.heading.copyWith(
+                          color: Colors.white,
+                          fontSize: R.fs(context, 36),
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-
                     SizedBox(height: R.sp(context, AppSpacing.sm)),
-
                     Row(
                       children: [
                         Text(
@@ -301,7 +300,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ),
                 ],
               ),
-
               SizedBox(height: R.sp(context, AppSpacing.sm)),
               Row(
                 children: [
@@ -314,7 +312,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       count: "$totalProducts",
                       countColor: AppColors.cyan,
                       label: "Total Products",
-                      subLabel: "Products in inventory",
                       percentage: MetricHelper.calculatePercentage(
                         totalProducts,
                         pastProducts,
@@ -325,7 +322,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ),
                     ),
                   ),
-                  SizedBox(width: R.sp(context, AppSpacing.sm)),
+                  SizedBox(width: R.sp(context, AppSpacing.xs)),
                   Expanded(
                     child: _attentionCard(
                       context,
@@ -335,7 +332,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       count: "$lowStock",
                       countColor: AppColors.red,
                       label: "Low Stock Items",
-                      subLabel: "Need restocking",
                       percentage: MetricHelper.calculatePercentage(
                         lowStock,
                         pastLowStock,
@@ -346,7 +342,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ),
                     ),
                   ),
-                  SizedBox(width: R.sp(context, AppSpacing.sm)),
+                  SizedBox(width: R.sp(context, AppSpacing.xs)),
                   Expanded(
                     child: _attentionCard(
                       context,
@@ -356,7 +352,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       count: "$totalSuppliers",
                       countColor: AppColors.primary,
                       label: "Suppliers",
-                      subLabel: "Active suppliers counts",
                       percentage: MetricHelper.calculatePercentage(
                         totalSuppliers,
                         pastSuppliers,
@@ -406,53 +401,125 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               // =====================================================
               Text("Quick Actions", style: AppTextStyles.sectionTitle),
               SizedBox(height: R.sp(context, AppSpacing.lg)),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
+              Column(
                 children: [
-                  _quickActionCircle(
-                    context: context,
-                    icon: Icons.currency_rupee,
-                    label: "New Sale",
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => CurrentBillScreen()),
-                    ),
-                  ),
-                  _quickActionCircle(
-                    context: context,
-                    icon: Icons.add_box_outlined,
-                    label: "Add Product",
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const AddProductScreen(),
+                  // ── FIRST ROW: 4 ITEMS ──
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      // 🆕 CUSTOMERS QUICK ACTION
+                      _quickActionCircle(
+                        context: context,
+                        icon: Icons.people_outline,
+                        label: "Customers",
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const CustomersScreen(),
+                            ),
+                          );
+                          loadDashboardData(); // Refreshes data immediately when returning
+                        },
                       ),
-                    ),
-                  ),
-                  _quickActionCircle(
-                    context: context,
-                    icon: Icons.local_shipping_outlined,
-                    label: "Suppliers",
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const SuppliersScreen(),
+                      _quickActionCircle(
+                        context: context,
+                        icon: Icons.local_shipping_outlined,
+                        label: "Suppliers",
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const SuppliersScreen(),
+                            ),
+                          );
+                          loadDashboardData(); // Refreshes data immediately when returning
+                        },
                       ),
-                    ),
+                      // 🆕 PRINTER QUICK ACTION
+                      _quickActionCircle(
+                        context: context,
+                        icon: Icons.print_outlined,
+                        label: "Printer",
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const PrintersHardwareScreen(),
+                            ),
+                          );
+                          loadDashboardData(); // Refreshes data immediately when returning
+                        },
+                      ),
+                      _quickActionCircle(
+                        context: context,
+                        icon: Icons.add_box_outlined,
+                        label: "Add Product",
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const AddProductScreen(),
+                            ),
+                          );
+                          loadDashboardData(); // Refreshes data immediately when returning
+                        },
+                      ),
+                    ],
                   ),
-                  _quickActionCircle(
-                    context: context,
-                    icon: Icons.bar_chart_outlined,
-                    label: "Reports",
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text("Reports coming soon"),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                    },
+
+                  SizedBox(
+                    height: R.sp(context, AppSpacing.lg),
+                  ), // Vertical gap between lines
+                  // ── SECOND ROW: REMAINING 3 ITEMS ──
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _quickActionCircle(
+                        context: context,
+                        icon: Icons.receipt_long_outlined,
+                        label: "Purchase Order",
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const NewPurchaseOrderScreen(),
+                            ),
+                          );
+                          loadDashboardData(); // Refreshes data immediately when returning
+                        },
+                      ),
+                      _quickActionCircle(
+                        context: context,
+                        icon: Icons.bar_chart_outlined,
+                        label: "Reports",
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ReportsScreen(),
+                            ),
+                          );
+                          loadDashboardData(); // Refreshes data immediately when returning
+                        },
+                      ),
+                      _quickActionCircle(
+                        context: context,
+                        icon: Icons.currency_rupee,
+                        label: "New Sale",
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => CurrentBillScreen(),
+                            ),
+                          );
+                          loadDashboardData(); // Refreshes data immediately when returning
+                        },
+                      ),
+                      // Empty placeholder column to align the 3 items neatly underneath the 4 items above
+                      const SizedBox(width: 56),
+                    ],
                   ),
                 ],
               ),
@@ -467,7 +534,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 }
 
 // =====================================================
-// 🔹 ATTENTION CARD
+// 🔹 ATTENTION CARD (Streamlined UI)
 // =====================================================
 Widget _attentionCard(
   BuildContext context, {
@@ -477,73 +544,74 @@ Widget _attentionCard(
   required String count,
   required Color countColor,
   required String label,
-  required String subLabel,
   required double percentage,
   required bool isPositive,
 }) {
   return Container(
-    padding: EdgeInsets.all(R.sp(context, AppSpacing.md)),
+    padding: EdgeInsets.symmetric(
+      horizontal: R.sp(context, AppSpacing.sm),
+      vertical: R.sp(context, AppSpacing.md),
+    ),
     decoration: BoxDecoration(
       color: bgColor,
-      borderRadius: BorderRadius.circular(AppSizes.radiusLg),
-      border: Border.all(color: iconColor.withOpacity(0.15)),
+      borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+      border: Border.all(color: iconColor.withOpacity(0.12)),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: iconColor, size: AppSizes.iconMd),
-        SizedBox(height: R.sp(context, AppSpacing.xs)),
-        Text(
-          count,
-          style: AppTextStyles.cardValue.copyWith(
-            color: countColor,
-            fontSize: R.fs(context, 20),
-            fontWeight: FontWeight.bold,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Icon(icon, color: iconColor, size: R.icon(context, 18)),
+            Row(
+              children: [
+                Icon(
+                  isPositive ? Icons.trending_up : Icons.trending_down,
+                  size: R.icon(context, 10),
+                  color: isPositive ? AppColors.green : AppColors.red,
+                ),
+                SizedBox(width: R.sp(context, 2)),
+                Text(
+                  "${percentage.toStringAsFixed(0)}%",
+                  style: AppTextStyles.small.copyWith(
+                    color: isPositive ? AppColors.green : AppColors.red,
+                    fontSize: R.fs(context, 9),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        SizedBox(height: R.sp(context, AppSpacing.sm)),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            count,
+            style: AppTextStyles.cardValue.copyWith(
+              color: countColor,
+              fontSize: R.fs(context, 22),
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
+        SizedBox(height: R.sp(context, 2)),
         Text(
           label,
           style: AppTextStyles.small.copyWith(
             fontWeight: FontWeight.w600,
-            fontSize: R.fs(context, 11),
-          ),
-        ),
-        Text(
-          subLabel,
-          style: AppTextStyles.small.copyWith(
-            color: AppColors.textSecondary,
             fontSize: R.fs(context, 10),
+            color: AppColors.textSecondary,
           ),
-        ),
-        Row(
-          children: [
-            Icon(
-              isPositive ? Icons.trending_up : Icons.trending_down,
-              size: R.icon(context, 10),
-              color: isPositive ? AppColors.green : AppColors.red,
-            ),
-            SizedBox(width: R.sp(context, 4)),
-            Flexible(
-              child: Text(
-                "${percentage.toStringAsFixed(1)}%",
-                style: AppTextStyles.small.copyWith(
-                  color: isPositive ? AppColors.green : AppColors.red,
-                  fontSize: R.fs(context, 9),
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     ),
   );
 }
 
-// =====================================================
-// 🔹 QUICK ACTION CIRCLE
-// =====================================================
 Widget _quickActionCircle({
   required BuildContext context,
   required IconData icon,
@@ -553,6 +621,7 @@ Widget _quickActionCircle({
   return GestureDetector(
     onTap: onTap,
     child: Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           width: 56,
@@ -569,17 +638,20 @@ Widget _quickActionCircle({
               ),
             ],
           ),
-
           child: Icon(icon, color: AppColors.primary, size: AppSizes.iconMd),
         ),
         SizedBox(height: R.sp(context, AppSpacing.xs)),
-        Text(
-          label,
-          style: AppTextStyles.small.copyWith(
-            fontSize: R.fs(context, 11),
-            color: AppColors.textSecondary,
+        Flexible(
+          child: Text(
+            label,
+            style: AppTextStyles.small.copyWith(
+              fontSize: R.fs(context, 11),
+              color: AppColors.textSecondary,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
-          textAlign: TextAlign.center,
         ),
       ],
     ),

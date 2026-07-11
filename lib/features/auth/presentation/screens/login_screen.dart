@@ -12,6 +12,7 @@ import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/storage/db_helper.dart';
 import 'package:stock_management/features/dashboard/presentation/screens/main_navigation.dart';
 import 'forgot_password_screen.dart';
+import 'package:flutter/foundation.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -24,9 +25,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     with SingleTickerProviderStateMixin {
   final formKey = GlobalKey<FormState>();
 
-  final emailController = TextEditingController();
-  final passwordController = TextEditingController();
-
+  final emailController = TextEditingController(
+  text: kDebugMode ? 'divyabharathi@catalystack.com' : '',
+);
+final passwordController = TextEditingController(
+  text: kDebugMode ? 'Rdivya@0108' : '',
+);
   final emailFocus = FocusNode();
   final passwordFocus = FocusNode();
 
