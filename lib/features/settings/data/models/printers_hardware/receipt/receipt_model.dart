@@ -16,6 +16,8 @@ class ReceiptModel extends Receipt {
     super.storePhone,
     super.gstNumber,
     super.footerNote,
+    super.paymentMode,
+    super.logoPath,
   });
 
   factory ReceiptModel.fromEntity(Receipt entity) {
@@ -34,6 +36,8 @@ class ReceiptModel extends Receipt {
       storePhone: entity.storePhone,
       gstNumber: entity.gstNumber,
       footerNote: entity.footerNote,
+      paymentMode: entity.paymentMode,
+      logoPath: entity.logoPath,
     );
   }
 
@@ -54,6 +58,8 @@ class ReceiptModel extends Receipt {
       storePhone: json['storePhone']?.toString(),
       gstNumber: json['gstNumber']?.toString(),
       footerNote: json['footerNote']?.toString(),
+      paymentMode: json['paymentMode']?.toString(),
+      logoPath: json['logoPath']?.toString(),
     );
   }
 
@@ -72,6 +78,8 @@ class ReceiptModel extends Receipt {
       'storePhone': storePhone,
       'gstNumber': gstNumber,
       'footerNote': footerNote,
+      'paymentMode': paymentMode,
+      'logoPath': logoPath,
     };
   }
 
@@ -90,6 +98,8 @@ class ReceiptModel extends Receipt {
     String? storePhone,
     String? gstNumber,
     String? footerNote,
+    String? paymentMode,
+    String? logoPath,
   }) {
     return ReceiptModel(
       receiptId: receiptId ?? this.receiptId,
@@ -104,6 +114,8 @@ class ReceiptModel extends Receipt {
       storePhone: storePhone ?? this.storePhone,
       gstNumber: gstNumber ?? this.gstNumber,
       footerNote: footerNote ?? this.footerNote,
+      paymentMode: paymentMode ?? this.paymentMode,
+      logoPath: logoPath ?? this.logoPath,
     );
   }
 
@@ -139,7 +151,9 @@ class ReceiptModel extends Receipt {
         storeAddress == other.storeAddress &&
         storePhone == other.storePhone &&
         gstNumber == other.gstNumber &&
-        footerNote == other.footerNote;
+        footerNote == other.footerNote &&
+        paymentMode == other.paymentMode &&
+        logoPath == other.logoPath;
   }
 
   @override
@@ -155,5 +169,7 @@ class ReceiptModel extends Receipt {
       storeAddress.hashCode ^
       storePhone.hashCode ^
       gstNumber.hashCode ^
-      footerNote.hashCode;
+      footerNote.hashCode ^
+      paymentMode.hashCode ^
+      logoPath.hashCode;
 }

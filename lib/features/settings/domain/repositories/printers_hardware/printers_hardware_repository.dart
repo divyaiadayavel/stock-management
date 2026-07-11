@@ -53,4 +53,6 @@ abstract class PrintersHardwareRepository {
   Future<Map<String, dynamic>> runPrinterDiagnostics(
     PrinterDevice printer,
   );
+
+  
 }

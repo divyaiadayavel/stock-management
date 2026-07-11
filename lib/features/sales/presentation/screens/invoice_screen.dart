@@ -14,7 +14,12 @@ import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/storage/db_helper.dart';
 import '../../../../core/utils/responsive_helper.dart';
+import '../../../settings/domain/entities/printers_hardware/receipt/receipt.dart';
+import '../../../settings/domain/entities/printers_hardware/receipt/receipt_item.dart';
+import '../../../settings/presentation/providers/printers_hardware/printer_management/printers_hardware_provider.dart';
+import '../../../settings/presentation/providers/settings_provider.dart';
 import '../providers/invoice_provider.dart';
+import '../providers/payment_provider.dart';
 
 class InvoiceScreen extends ConsumerStatefulWidget {
   final int invoiceId;
@@ -34,6 +39,7 @@ class InvoiceScreen extends ConsumerStatefulWidget {
 
 class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
   DateTime _invoiceDate = DateTime.now();
+  String? _paymentMode;
 
   @override
   void initState() {
@@ -65,11 +71,18 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
     ref.read(totalProvider.notifier).state = (invoice.first['total'] as num)
         .toDouble();
 
+    // 'paymentMode' may not exist as a column on every install; falls back
+    // to whatever was picked on the payment screen, then to 'Cash'.
+    final savedPaymentMode = invoice.first['paymentMode']?.toString();
+
     if (invoice.first['createdAt'] != null) {
       setState(() {
         _invoiceDate =
             DateTime.tryParse(invoice.first['createdAt'].toString()) ??
             DateTime.now();
+        _paymentMode = (savedPaymentMode?.trim().isNotEmpty ?? false)
+            ? savedPaymentMode
+            : ref.read(paymentProvider);
       });
     }
   }
@@ -183,9 +196,85 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
     );
   }
 
+  bool _isPrinting = false;
+
+  /// Converts the invoice currently shown on screen into a generic [Receipt].
+  /// This is the only "translation" Sales needs to do — everything after
+  /// this point (thermal ESC/POS formatting, PDF formatting, the logo, GST
+  /// split, etc.) is the printer module's responsibility.
+  Receipt _buildReceiptFromInvoice() {
+    final items = ref.read(invoiceItemsProvider);
+    final subtotal = ref.read(subtotalProvider);
+    final tax = ref.read(taxProvider);
+    final total = ref.read(totalProvider);
+    final profile = ref.read(settingsControllerProvider).valueOrNull?.profile;
+
+    // e.g. INV-2026-0045
+    final invoiceNumber =
+        'INV-${_invoiceDate.year}-${widget.invoiceId.toString().padLeft(4, '0')}';
+
+    return Receipt(
+      receiptId: invoiceNumber,
+      timestamp: _invoiceDate,
+      cashierName: 'Staff',
+      storeName: profile?.storeName,
+      storeAddress: profile?.businessAddress,
+      storePhone: profile?.phoneNumber,
+      gstNumber: profile?.gstNumber,
+      logoPath: profile?.logoPath,
+      paymentMode: _paymentMode,
+      items: items.map((item) {
+        final qty = (item['qty'] as num?)?.toInt() ?? 1;
+        final amount = (item['amount'] as num?)?.toDouble() ?? 0;
+        return ReceiptItem(
+          itemName: item['name']?.toString() ?? 'Item',
+          quantity: qty,
+          unitPrice: qty > 0 ? amount / qty : amount,
+          totalAmount: amount,
+        );
+      }).toList(),
+      subTotal: subtotal,
+      taxAmount: tax,
+      grandTotal: total,
+    );
+  }
+
   Future<void> _printInvoice() async {
-    final pdfBytes = await _generatePdf();
-    await Printing.layoutPdf(onLayout: (format) async => pdfBytes);
+    if (_isPrinting) return;
+    setState(() => _isPrinting = true);
+
+    try {
+      final printerNotifier = ref.read(printersHardwareProvider.notifier);
+      final printer = await printerNotifier.ensureDefaultPrinterLoaded();
+
+      if (printer == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'No printer set up yet. Add one in Settings → Printers & Hardware.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      final receipt = _buildReceiptFromInvoice();
+      final success = await printerNotifier.printReceipt(receipt);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              success ? 'Printed on ${printer.name}' : 'Print failed. Please try again.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isPrinting = false);
+    }
   }
 
   @override
@@ -441,7 +530,7 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
                                     ),
                                   ),
                                   child: ElevatedButton(
-                                    onPressed: _printInvoice,
+                                    onPressed: _isPrinting ? null : _printInvoice,
                                     style: ElevatedButton.styleFrom(
                                       elevation: 0,
                                       backgroundColor: Colors.transparent,
@@ -452,12 +541,21 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
                                         ),
                                       ),
                                     ),
-                                    child: Text(
-                                      'Print',
-                                      style: AppTextStyles.button.copyWith(
-                                        color: Colors.white,
-                                      ),
-                                    ),
+                                    child: _isPrinting
+                                        ? SizedBox(
+                                            width: R.sp(context, 18),
+                                            height: R.sp(context, 18),
+                                            child: const CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : Text(
+                                            'Print',
+                                            style: AppTextStyles.button.copyWith(
+                                              color: Colors.white,
+                                            ),
+                                          ),
                                   ),
                                 ),
                               ),

@@ -28,7 +28,16 @@ class BluetoothDataSourceImpl implements BluetoothDataSource {
       if (!enabled) {
         throw const PrinterConnectionException('Bluetooth is disabled.');
       }
-      return await PrintBluetoothThermal.connect(macPrinterAddress: macAddress);
+      final connected =
+    await PrintBluetoothThermal.connectionStatus;
+
+if (connected) {
+  return true;
+}
+
+return await PrintBluetoothThermal.connect(
+  macPrinterAddress: macAddress,
+);
     } catch (e) {
       throw PrinterConnectionException('Failed to connect to Bluetooth printer.', cause: e);
     }
@@ -49,10 +58,10 @@ class BluetoothDataSourceImpl implements BluetoothDataSource {
       if (bytes.isEmpty) {
         throw const PrinterPrintingException('Cannot print empty data.');
       }
-      final connected = await PrintBluetoothThermal.connectionStatus;
-      if (!connected) {
-        throw const PrinterConnectionException('Bluetooth printer is not connected.');
-      }
+if (!await isConnected()) {
+  throw const PrinterConnectionException(
+      'Bluetooth printer is not connected.');
+}
       return await PrintBluetoothThermal.writeBytes(bytes);
     } catch (e) {
       throw PrinterPrintingException('Failed to print via Bluetooth.', cause: e);

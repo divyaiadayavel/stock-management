@@ -13,6 +13,12 @@ class Receipt {
   final double taxAmount;
   final double grandTotal;
   final String? footerNote;
+  final String? paymentMode;
+
+  /// Path to a logo image file (e.g. from [BusinessProfile.logoPath]) to
+  /// print at the top of the receipt. Ignored if null/empty, if the file
+  /// can't be read, or if the printer's capabilities don't support images.
+  final String? logoPath;
 
   const Receipt({
     required this.receiptId,
@@ -27,6 +33,8 @@ class Receipt {
     required this.taxAmount,
     required this.grandTotal,
     this.footerNote,
+    this.paymentMode,
+    this.logoPath,
   });
 
   Receipt copyWith({
@@ -42,6 +50,8 @@ class Receipt {
     double? taxAmount,
     double? grandTotal,
     String? footerNote,
+    String? paymentMode,
+    String? logoPath,
   }) {
     return Receipt(
       receiptId: receiptId ?? this.receiptId,
@@ -56,6 +66,8 @@ class Receipt {
       taxAmount: taxAmount ?? this.taxAmount,
       grandTotal: grandTotal ?? this.grandTotal,
       footerNote: footerNote ?? this.footerNote,
+      paymentMode: paymentMode ?? this.paymentMode,
+      logoPath: logoPath ?? this.logoPath,
     );
   }
 }
