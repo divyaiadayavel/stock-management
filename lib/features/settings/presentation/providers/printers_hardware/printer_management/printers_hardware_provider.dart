@@ -86,6 +86,32 @@ class PrintersHardwareNotifier
     }
   }
 
+  /// Public entry point for other features (e.g. Sales) that just need "the
+  /// printer to print on" without knowing anything about Bluetooth/WiFi/USB
+  /// or how/when the default printer gets loaded.
+  ///
+  /// Because this provider is `autoDispose`, [connectedPrinter] may not be
+  /// populated yet if no Settings screen has been opened this session (the
+  /// async load in [_loadDefaultPrinter] hasn't resolved, or was torn down).
+  /// This re-checks the saved-printers list on demand and returns null only
+  /// if the user genuinely has no printer configured.
+  Future<PrinterDevice?> ensureDefaultPrinterLoaded() async {
+    if (state.connectedPrinter != null) return state.connectedPrinter;
+    try {
+      final printers = await _repo.getSavedPrinters();
+      if (printers.isEmpty) return null;
+      final defaultPrinter = printers.first;
+      state = state.copyWith(
+        savedPrinters: printers,
+        connectedPrinter: defaultPrinter,
+      );
+      return defaultPrinter;
+    } catch (e) {
+      state = state.copyWith(errorMessage: _messageFromError(e));
+      return null;
+    }
+  }
+
   Future<void> refreshSavedPrinters() async {
     try {
       final printers = await _repo.getSavedPrinters();

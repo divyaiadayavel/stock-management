@@ -245,8 +245,25 @@ class PrintersHardwareRepositoryImpl implements PrintersHardwareRepository {
     if (bytes.isEmpty) return false;
     try {
       switch (printer.configuration.connectionType) {
-        case PrinterConnectionType.bluetooth:
-          return await _bluetoothDataSource.printBytes(bytes);
+case PrinterConnectionType.bluetooth:
+
+    if (!await _bluetoothDataSource.isConnected()) {
+
+        final mac = printer.configuration.macAddress;
+
+        if (mac == null) {
+            return false;
+        }
+
+        final connected =
+            await _bluetoothDataSource.reconnect(mac);
+
+        if (!connected) {
+            return false;
+        }
+    }
+
+    return await _bluetoothDataSource.printBytes(bytes);
         case PrinterConnectionType.wifi:
           return await _wifiDataSource.printBytes(bytes);
         case PrinterConnectionType.usb:
@@ -325,8 +342,31 @@ class PrintersHardwareRepositoryImpl implements PrintersHardwareRepository {
       final capabilities = printer.capabilities is PrinterCapabilityModel
           ? printer.capabilities as PrinterCapabilityModel
           : PrinterCapabilityModel.fromEntity(printer.capabilities);
-      final bytes = await _receiptBuilder.buildReceiptBytes(receiptModel, capabilities);
-      return await _printBytes(printer, bytes);
+final bytes =
+    await _receiptBuilder.buildReceiptBytes(
+        receiptModel,
+        capabilities,
+    );
+
+if (!await _isPrinterConnected(printer)) {
+
+    final connected =
+        await connectPrinter(printer);
+
+    if (!connected) {
+        return false;
+    }
+}
+if (!await _isPrinterConnected(printer)) {
+
+    final connected =
+        await connectPrinter(printer);
+
+    if (!connected) {
+        return false;
+    }
+}
+return await _printBytes(printer, bytes);
     } catch (e, st) {
       developer.log('Print receipt failed',
           error: e, stackTrace: st, name: 'PrintersHardwareRepository');
@@ -467,4 +507,5 @@ class PrintersHardwareRepositoryImpl implements PrintersHardwareRepository {
       'timestamp': DateTime.now().toIso8601String(),
     };
   }
+  
 }
