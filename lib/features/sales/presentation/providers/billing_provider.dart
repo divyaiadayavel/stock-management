@@ -41,13 +41,25 @@ class BillingNotifier extends StateNotifier<BillingState> {
   BillingNotifier() : super(const BillingState());
 
   void addToCart(Map<String, dynamic> product, int qty) {
-    final cart = [...state.cart];
+    final availableStock =
+        (product["quantity"] ?? product["stock"] ?? 0) as int;
+    if (availableStock <= 0) {
+      return;
+    }
 
+    final cart = [...state.cart];
     final index = cart.indexWhere((c) => c.productId == product["id"]);
 
     if (index != -1) {
-      cart[index].qty += qty;
+      // ── FIX: Cap the addition at available stock count ──
+      if (cart[index].qty + qty > availableStock) {
+        cart[index].qty = availableStock;
+      } else {
+        cart[index].qty += qty;
+      }
     } else {
+      final finalQty = qty > availableStock ? availableStock : qty;
+
       cart.add(
         CartItem(
           productId: product["id"],
@@ -57,7 +69,7 @@ class BillingNotifier extends StateNotifier<BillingState> {
           cgst: (product["cgst"] ?? 0).toDouble(),
           discount: (product["discount"] ?? 0).toDouble(),
           imagePath: product["image_path"],
-          qty: qty,
+          qty: finalQty,
         ),
       );
     }
@@ -65,10 +77,15 @@ class BillingNotifier extends StateNotifier<BillingState> {
     state = state.copyWith(cart: cart);
   }
 
-  void increaseQty(int index) {
+  // ── FIX: Enforce real availableStock bounds to prevent over-adding items ──
+  void increaseQty(int index, [int? availableStock]) {
     final cart = [...state.cart];
-    cart[index].qty++;
-    state = state.copyWith(cart: cart);
+    final maxStock = availableStock ?? 99999;
+
+    if (cart[index].qty < maxStock) {
+      cart[index].qty++;
+      state = state.copyWith(cart: cart);
+    }
   }
 
   void decreaseQty(int index) {

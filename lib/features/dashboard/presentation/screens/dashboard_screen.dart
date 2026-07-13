@@ -15,7 +15,7 @@ import '../../../settings/presentation/screens/settings_screen.dart';
 import '../providers/dashboard_provider.dart';
 import '../../../../core/utils/responsive_helper.dart';
 import '../../../customers/presentation/screens/customer_screen.dart';
-import '../../../settings/presentation/screens/operations/hardware/printers_hardware_screen.dart';
+import 'package:stock_management/features/settings/presentation/screens/operations/printers_hardware/printer_management/printers_hardware_screen.dart';
 import '../../../inventory/presentation/screens/new_purchase_order_screen.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -52,7 +52,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final lowStocks = await DBHelper.getLowStockCount();
 
     totalProducts = products;
+
+    // Hero card trend calculates based on today's sales transactions if needed
     totalSales = sales;
+
+    // ── FIXED: Assigned the db result to the correct state variable totalSuppliers ──
     totalSuppliers = suppliers;
     lowStock = lowStocks;
 
@@ -61,7 +65,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     pastSuppliers = await DBHelper.getPastSupplierCount();
     pastLowStock = await DBHelper.getPastLowStockCount();
 
-    todaySalesAmount = await DBHelper.getTodaySales();
+    // Swapped database values here
+    // 1. Hero Card gets Today's Sales Amount (converted to int for UI parsing)
+    final todaySalesRaw = await DBHelper.getTodaySales();
+    // 2. Today's Sales Card gets the total historical Sales Value count
+    final totalSalesCountRaw = await DBHelper.getSalesCount();
+
+    todaySalesAmount = totalSalesCountRaw.toDouble();
+    // We repurpose totalSales to act as the Hero Card's value directly
+    totalSales = todaySalesRaw.toInt();
+
     receivablesAmount = await DBHelper.getReceivablesAmount();
 
     if (mounted) {
@@ -94,9 +107,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // =====================================================
-              // 🔹 INLINE HEADER
-              // =====================================================
+              // Header Row
               Row(
                 children: [
                   Expanded(
@@ -154,9 +165,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
               SizedBox(height: R.sp(context, AppSpacing.lg)),
 
-              // =====================================================
-              // 🔹 HERO INVENTORY CARD
-              // =====================================================
+              // Hero Card (Now rendering Today's Sales Value)
               Container(
                 width: double.infinity,
                 padding: EdgeInsets.all(R.sp(context, AppSpacing.xl)),
@@ -182,11 +191,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          "SALES VALUE",
+                          "TODAY'S SALES",
                           style: AppTextStyles.small.copyWith(
-                            color: Colors.white60,
+                            color: Colors.white70,
                             letterSpacing: 1.2,
-                            fontSize: R.fs(context, 11),
+                            fontSize: R.fs(context, 15),
                           ),
                         ),
                         Container(
@@ -248,7 +257,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     Row(
                       children: [
                         Text(
-                          "$totalProducts units · $totalSales SKUs",
+                          "$totalProducts products",
                           style: AppTextStyles.small.copyWith(
                             color: Colors.white54,
                             fontSize: R.fs(context, 12),
@@ -282,22 +291,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
               SizedBox(height: R.sp(context, AppSpacing.sectionGap)),
 
-              // =====================================================
-              // 🔹 NEEDS ATTENTION
-              // =====================================================
+              // Attention Section
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text("Needs attention", style: AppTextStyles.sectionTitle),
-                  TextButton(
-                    onPressed: () {},
-                    child: Text(
-                      "View all",
-                      style: AppTextStyles.small.copyWith(
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  ),
                 ],
               ),
               SizedBox(height: R.sp(context, AppSpacing.sm)),
@@ -367,15 +365,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
               SizedBox(height: R.sp(context, AppSpacing.sectionGap)),
 
-              // =====================================================
-              // 🔹 DAILY SUMMARY CARDS
-              // =====================================================
+              // Daily Summary Row
               Row(
                 children: [
                   Expanded(
                     child: _summaryCard(
                       context,
-                      "Today's sales",
+                      "Sales Value",
                       _formatIndianCurrency(todaySalesAmount),
                       icon: Icons.attach_money_rounded,
                       iconColor: AppColors.green,
@@ -396,134 +392,127 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
               SizedBox(height: R.sp(context, AppSpacing.sectionGap)),
 
-              // =====================================================
-              // 🔹 QUICK ACTIONS
-              // =====================================================
+              // Quick Actions Section
               Text("Quick Actions", style: AppTextStyles.sectionTitle),
               SizedBox(height: R.sp(context, AppSpacing.lg)),
-              Column(
+              GridView.count(
+                crossAxisCount: 4, // 4 columns per row
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: R.sp(
+                  context,
+                  AppSpacing.xs,
+                ), // ⬇️ DECREASED: Tightens the space between Row 1 and Row 2
+                crossAxisSpacing: 0,
+                childAspectRatio: 0.88,
                 children: [
-                  // ── FIRST ROW: 4 ITEMS ──
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      // 🆕 CUSTOMERS QUICK ACTION
-                      _quickActionCircle(
-                        context: context,
-                        icon: Icons.people_outline,
-                        label: "Customers",
-                        onTap: () async {
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const CustomersScreen(),
-                            ),
-                          );
-                          loadDashboardData(); // Refreshes data immediately when returning
-                        },
-                      ),
-                      _quickActionCircle(
-                        context: context,
-                        icon: Icons.local_shipping_outlined,
-                        label: "Suppliers",
-                        onTap: () async {
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const SuppliersScreen(),
-                            ),
-                          );
-                          loadDashboardData(); // Refreshes data immediately when returning
-                        },
-                      ),
-                      // 🆕 PRINTER QUICK ACTION
-                      _quickActionCircle(
-                        context: context,
-                        icon: Icons.print_outlined,
-                        label: "Printer",
-                        onTap: () async {
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const PrintersHardwareScreen(),
-                            ),
-                          );
-                          loadDashboardData(); // Refreshes data immediately when returning
-                        },
-                      ),
-                      _quickActionCircle(
-                        context: context,
-                        icon: Icons.add_box_outlined,
-                        label: "Add Product",
-                        onTap: () async {
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const AddProductScreen(),
-                            ),
-                          );
-                          loadDashboardData(); // Refreshes data immediately when returning
-                        },
-                      ),
-                    ],
+                  // 1
+                  _quickActionCircle(
+                    context: context,
+                    icon: Icons.people_outline,
+                    label: "Customers",
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const CustomersScreen(),
+                        ),
+                      );
+                      loadDashboardData();
+                    },
                   ),
-
-                  SizedBox(
-                    height: R.sp(context, AppSpacing.lg),
-                  ), // Vertical gap between lines
-                  // ── SECOND ROW: REMAINING 3 ITEMS ──
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _quickActionCircle(
-                        context: context,
-                        icon: Icons.receipt_long_outlined,
-                        label: "Purchase Order",
-                        onTap: () async {
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const NewPurchaseOrderScreen(),
-                            ),
-                          );
-                          loadDashboardData(); // Refreshes data immediately when returning
-                        },
-                      ),
-                      _quickActionCircle(
-                        context: context,
-                        icon: Icons.bar_chart_outlined,
-                        label: "Reports",
-                        onTap: () async {
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const ReportsScreen(),
-                            ),
-                          );
-                          loadDashboardData(); // Refreshes data immediately when returning
-                        },
-                      ),
-                      _quickActionCircle(
-                        context: context,
-                        icon: Icons.currency_rupee,
-                        label: "New Sale",
-                        onTap: () async {
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => CurrentBillScreen(),
-                            ),
-                          );
-                          loadDashboardData(); // Refreshes data immediately when returning
-                        },
-                      ),
-                      // Empty placeholder column to align the 3 items neatly underneath the 4 items above
-                      const SizedBox(width: 56),
-                    ],
+                  // 2
+                  _quickActionCircle(
+                    context: context,
+                    icon: Icons.local_shipping_outlined,
+                    label: "Suppliers",
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const SuppliersScreen(),
+                        ),
+                      );
+                      loadDashboardData();
+                    },
                   ),
+                  // 3
+                  _quickActionCircle(
+                    context: context,
+                    icon: Icons.print_outlined,
+                    label: "Printer",
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PrintersHardwareScreen(),
+                        ),
+                      );
+                      loadDashboardData();
+                    },
+                  ),
+                  // 4
+                  _quickActionCircle(
+                    context: context,
+                    icon: Icons.add_box_outlined,
+                    label: "Add Product",
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AddProductScreen(),
+                        ),
+                      );
+                      loadDashboardData();
+                    },
+                  ),
+                  // 5
+                  _quickActionCircle(
+                    context: context,
+                    icon: Icons.receipt_long_outlined,
+                    label: "Purchase Order",
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const NewPurchaseOrderScreen(),
+                        ),
+                      );
+                      loadDashboardData();
+                    },
+                  ),
+                  // 6
+                  _quickActionCircle(
+                    context: context,
+                    icon: Icons.bar_chart_outlined,
+                    label: "Reports",
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ReportsScreen(),
+                        ),
+                      );
+                      loadDashboardData();
+                    },
+                  ),
+                  // 7
+                  _quickActionCircle(
+                    context: context,
+                    icon: Icons.currency_rupee,
+                    label: "New Sale",
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => CurrentBillScreen()),
+                      );
+                      loadDashboardData();
+                    },
+                  ),
+                  // Empty space placeholder
+                  const SizedBox.shrink(),
                 ],
               ),
-
               SizedBox(height: R.sp(context, AppSpacing.sectionGap)),
             ],
           ),
@@ -533,9 +522,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 }
 
-// =====================================================
-// 🔹 ATTENTION CARD (Streamlined UI)
-// =====================================================
 Widget _attentionCard(
   BuildContext context, {
   required IconData icon,
@@ -658,9 +644,6 @@ Widget _quickActionCircle({
   );
 }
 
-// =====================================================
-// 🔹 SUMMARY CARD
-// =====================================================
 Widget _summaryCard(
   BuildContext context,
   String title,
@@ -720,9 +703,6 @@ Widget _summaryCard(
   );
 }
 
-// =====================================================
-// 🔹 METRIC HELPER
-// =====================================================
 class MetricHelper {
   static double calculatePercentage(num current, num previous) {
     if (previous == 0) return 0.0;

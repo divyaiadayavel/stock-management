@@ -67,6 +67,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   double? _originalPurchasePrice;
   double? _originalSellingPrice;
   int _originalQuantity = 0;
+
   @override
   void initState() {
     super.initState();
@@ -83,7 +84,11 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           widget.product!['purchase_price']?.toString() ?? "";
       sellingController.text =
           widget.product!['selling_price']?.toString() ?? "";
-      quantityController.text = widget.product!['quantity']?.toString() ?? "";
+
+      // FIX: Prevent negative values when loading into edit mode
+      final initialQty = widget.product!['quantity'] as int? ?? 0;
+      quantityController.text = (initialQty < 0 ? 0 : initialQty).toString();
+
       descriptionController.text = widget.product!['description'] ?? "";
       hsnController.text = widget.product!['hsn_code'] ?? "";
       unitController.text = widget.product!['unit'] ?? "";
@@ -114,8 +119,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         }
       });
     } else {
-      // 🆕 Fresh "Add Product" entry — force-clear any leftover image state
-      // in case the provider survived from a previous session.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(imageProvider.notifier).state = null;
         ref.read(selectedCategoryProvider.notifier).state = "Electronics";
@@ -131,7 +134,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     purchaseController.removeListener(calculateProfit);
     sellingController.removeListener(calculateProfit);
 
-    // 🆕 Explicitly invalidate and reset all providers immediately upon exiting the screen scope
     ref.invalidate(imageProvider);
     ref.invalidate(selectedCategoryProvider);
     ref.invalidate(selectedSupplierProvider);
@@ -152,7 +154,10 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
       final newPurchase = double.tryParse(purchaseController.text) ?? 0;
       final newSelling = double.tryParse(sellingController.text) ?? 0;
-      final newQtyTotal = int.tryParse(quantityController.text) ?? 0;
+
+      // FIX: Force visual limits against negative numbers
+      int newQtyTotal = int.tryParse(quantityController.text) ?? 0;
+      if (newQtyTotal < 0) newQtyTotal = 0;
 
       if (_isPriceChangedFromOriginal()) {
         final addedQty = newQtyTotal - _originalQuantity;
@@ -242,6 +247,10 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         return;
       }
 
+      // FIX: Force baseline floor to prevent negative entries
+      int saveQty = int.tryParse(quantityController.text) ?? 0;
+      if (saveQty < 0) saveQty = 0;
+
       final newProductId = await DBHelper.addProduct(
         name: nameController.text.trim(),
         category: selectedCategory,
@@ -252,7 +261,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         expiryDate: expiryController.text.trim(),
         purchasePrice: double.tryParse(purchaseController.text) ?? 0,
         sellingPrice: double.tryParse(sellingController.text) ?? 0,
-        quantity: int.tryParse(quantityController.text) ?? 0,
+        quantity: saveQty,
         lsl: int.tryParse(lslController.text) ?? 10,
         unit: unitController.text.trim(),
         description: descriptionController.text.trim(),
@@ -265,7 +274,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         productId: newProductId,
         purchasePrice: double.tryParse(purchaseController.text) ?? 0,
         sellingPrice: double.tryParse(sellingController.text) ?? 0,
-        quantity: int.tryParse(quantityController.text) ?? 0,
+        quantity: saveQty,
       );
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -331,7 +340,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             ),
             suffixIcon: suffixIcon,
             filled: true,
-            fillColor: Colors.white,
+            fillColor: readOnly ? Colors.grey.shade100 : Colors.white,
             contentPadding: EdgeInsets.symmetric(
               horizontal: R.fluid(context, 14, 18),
               vertical: R.fluid(context, 14, 18),
@@ -403,6 +412,10 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       if (quantityController.text.trim().isEmpty) {
         _showMissingFieldSnack("Quantity is required");
         return false;
+      }
+      // FIX: Correct live text values if typed manually into negatives
+      if ((int.tryParse(quantityController.text) ?? 0) < 0) {
+        quantityController.text = "0";
       }
       if (lslController.text.trim().isEmpty) {
         _showMissingFieldSnack("Low Stock Limit is required");
@@ -820,6 +833,13 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     required String? selectedSupplier,
     required List<String> suppliers,
   }) {
+    // FIX: Dynamically build units array ensuring loaded db value doesn't cause assertion failures
+    final List<String> baseUnits = ["Kg", "gram", "litre", "piece", "box"];
+    if (unitController.text.isNotEmpty &&
+        !baseUnits.contains(unitController.text)) {
+      baseUnits.add(unitController.text);
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -899,7 +919,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                   ),
                 ),
               ),
-              items: ["Kg", "gram", "litre", "piece", "box"].map((unit) {
+              items: baseUnits.map((unit) {
                 return DropdownMenuItem(
                   value: unit,
                   child: Text(unit, overflow: TextOverflow.ellipsis),
@@ -1091,6 +1111,9 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 icon: Icons.currency_rupee,
                 keyboard: const TextInputType.numberWithOptions(decimal: true),
                 requiredField: true,
+                readOnly:
+                    widget.product !=
+                    null, // FIX: Block editing purchase price on edit
               ),
             ),
             const SizedBox(width: 14),
@@ -1101,6 +1124,9 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 icon: Icons.sell_outlined,
                 keyboard: const TextInputType.numberWithOptions(decimal: true),
                 requiredField: true,
+                readOnly:
+                    widget.product !=
+                    null, // FIX: Block editing selling price on edit
               ),
             ),
           ],

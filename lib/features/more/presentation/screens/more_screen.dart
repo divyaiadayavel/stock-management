@@ -122,29 +122,6 @@ class MoreScreen extends ConsumerWidget {
             fontSize: R.fs(context, 22),
           ),
         ),
-        actions: [
-          Padding(
-            padding: EdgeInsets.only(right: R.sp(context, AppSpacing.md)),
-            child: Container(
-              width: R.sp(context, 40),
-              height: R.sp(context, 40),
-              decoration: BoxDecoration(
-                color: AppColors.card,
-                borderRadius: BorderRadius.circular(
-                  R.radius(context, AppSizes.cardRadius),
-                ),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: IconButton(
-                padding: EdgeInsets.zero,
-                icon: const Icon(Icons.search),
-                color: AppColors.textSecondary,
-                iconSize: R.icon(context, 20),
-                onPressed: () {},
-              ),
-            ),
-          ),
-        ],
       ),
       body: summaryAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -205,7 +182,6 @@ class MoreScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            // FIXED: Using R.sp instead of R.imgSize to prevent 17000px width!
             width: R.sp(context, 44),
             height: R.sp(context, 44),
             decoration: BoxDecoration(
@@ -267,6 +243,7 @@ class MoreScreen extends ConsumerWidget {
         title: 'Suppliers',
         subtitle:
             '${formatShortCurrency(s.supplierPayable)} payable · ${s.supplierCount}',
+        color: const Color(0xFF3B82F6),
         onTap: (ctx) => Navigator.push(
           ctx,
           MaterialPageRoute(builder: (_) => const SuppliersScreen()),
@@ -277,6 +254,7 @@ class MoreScreen extends ConsumerWidget {
         title: 'Customers',
         subtitle:
             '${formatShortCurrency(s.customerDue)} due · ${s.customerCount}',
+        color: const Color(0xFF22C55E),
         onTap: (ctx) => Navigator.push(
           ctx,
           MaterialPageRoute(builder: (_) => const CustomersScreen()),
@@ -286,6 +264,7 @@ class MoreScreen extends ConsumerWidget {
         icon: Icons.description_outlined,
         title: 'Purchase orders',
         subtitle: '${s.poOpenCount} open · ${s.poDueCount} due',
+        color: const Color(0xFF8B5CF6),
         onTap: (ctx) => Navigator.push(
           ctx,
           MaterialPageRoute(builder: (_) => const NewPurchaseOrderScreen()),
@@ -295,6 +274,7 @@ class MoreScreen extends ConsumerWidget {
         icon: Icons.bar_chart_outlined,
         title: 'Reports',
         subtitle: 'valuation · GST · profit',
+        color: const Color(0xFF14B8A6),
         onTap: (ctx) => Navigator.push(
           ctx,
           MaterialPageRoute(builder: (_) => const ReportsScreen()),
@@ -302,14 +282,33 @@ class MoreScreen extends ConsumerWidget {
       ),
     ];
 
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: R.sp(context, AppSpacing.sm),
-      crossAxisSpacing: R.sp(context, AppSpacing.sm),
-      childAspectRatio: 1.35,
-      children: cards.map((c) => _summaryCard(context, c)).toList(),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: R.sp(context, 68),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: _summaryCard(context, cards[0])),
+              SizedBox(width: R.sp(context, AppSpacing.sm)),
+              Expanded(child: _summaryCard(context, cards[1])),
+            ],
+          ),
+        ),
+        SizedBox(height: R.sp(context, AppSpacing.sm)),
+        SizedBox(
+          height: R.sp(context, 68),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: _summaryCard(context, cards[2])),
+              SizedBox(width: R.sp(context, AppSpacing.sm)),
+              Expanded(child: _summaryCard(context, cards[3])),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -317,7 +316,10 @@ class MoreScreen extends ConsumerWidget {
     return GestureDetector(
       onTap: () => data.onTap(context),
       child: Container(
-        padding: EdgeInsets.all(R.sp(context, AppSpacing.cardPadding)),
+        padding: EdgeInsets.symmetric(
+          horizontal: R.sp(context, 8),
+          vertical: R.sp(context, 2),
+        ),
         decoration: BoxDecoration(
           color: AppColors.card,
           borderRadius: BorderRadius.circular(
@@ -325,39 +327,60 @@ class MoreScreen extends ConsumerWidget {
           ),
           border: Border.all(color: AppColors.border),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Container(
-              padding: EdgeInsets.all(R.sp(context, 6)),
+              width: R.sp(context, 36),
+              height: R.sp(context, 36),
+              alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(R.radius(context, 8)),
+                color: data.color.withOpacity(0.12),
+                shape: BoxShape.circle,
               ),
               child: Icon(
                 data.icon,
-                color: AppColors.primary,
-                size: R.icon(context, 18),
+                color: data.color,
+                size: R.icon(context, 16),
               ),
             ),
-            const Spacer(),
-            Text(
-              data.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.cardValue.copyWith(
-                fontWeight: FontWeight.normal,
-                fontSize: R.fs(context, 14),
-              ),
-            ),
-            SizedBox(height: R.sp(context, 2)),
-            Text(
-              data.subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.small.copyWith(
-                color: AppColors.textSecondary,
-                fontSize: R.fs(context, 11),
+            SizedBox(width: R.sp(context, AppSpacing.md)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          data.title,
+                          style: AppTextStyles.cardValue.copyWith(
+                            fontWeight: FontWeight.normal,
+                            fontSize: R.fs(context, AppSizes.iconSm),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: R.icon(context, 14),
+                        color: AppColors.textSecondary,
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: R.sp(context, 2)),
+                  Text(
+                    data.subtitle,
+                    style: AppTextStyles.small.copyWith(
+                      color: AppColors.textSecondary,
+                      fontSize: R.fs(context, 11),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
             ),
           ],
@@ -384,6 +407,7 @@ class MoreScreen extends ConsumerWidget {
       _ListItemData(
         icon: Icons.add_box_outlined,
         label: 'New purchase order',
+        iconColor: const Color(0xFF8B5CF6),
         onTap: (ctx) => Navigator.push(
           ctx,
           MaterialPageRoute(builder: (_) => const NewPurchaseOrderScreen()),
@@ -392,6 +416,7 @@ class MoreScreen extends ConsumerWidget {
       _ListItemData(
         icon: Icons.warning_amber_outlined,
         label: 'Low stock',
+        iconColor: const Color(0xFFEF4444),
         onTap: (ctx) => Navigator.push(
           ctx,
           MaterialPageRoute(builder: (_) => const LowStockScreen()),
@@ -400,6 +425,7 @@ class MoreScreen extends ConsumerWidget {
       _ListItemData(
         icon: Icons.move_to_inbox_outlined,
         label: 'Receive order',
+        iconColor: const Color(0xFF22C55E),
         onTap: (ctx) => Navigator.push(
           ctx,
           MaterialPageRoute(builder: (_) => const StockInScreen()),
@@ -415,6 +441,7 @@ class MoreScreen extends ConsumerWidget {
       _ListItemData(
         icon: Icons.settings_outlined,
         label: 'Settings',
+        iconColor: Colors.grey.shade600,
         onTap: (ctx) => Navigator.push(
           ctx,
           MaterialPageRoute(builder: (_) => const SettingsScreen()),
@@ -425,11 +452,13 @@ class MoreScreen extends ConsumerWidget {
         label: 'Backup & sync',
         trailing: 'synced',
         trailingColor: Colors.green,
+        iconColor: const Color(0xFF3B82F6),
         onTap: (_) {},
       ),
       _ListItemData(
         icon: Icons.help_outline,
         label: 'Help & support',
+        iconColor: const Color(0xFFF59E0B),
         onTap: (_) {},
       ),
       _ListItemData(
@@ -505,7 +534,18 @@ class MoreScreen extends ConsumerWidget {
                       ),
               ),
               if (!isLast)
-                Divider(height: 1, color: AppColors.border, indent: 56),
+                Divider(
+                  height: 1,
+                  color: AppColors.border,
+                  indent: R.sp(
+                    context,
+                    16,
+                  ), // Starts close to the edge, matching the icon alignment column
+                  endIndent: R.sp(
+                    context,
+                    16,
+                  ), // Balanced matching space on the right side
+                ),
             ],
           );
         }),
@@ -532,7 +572,6 @@ class MoreScreen extends ConsumerWidget {
           TextButton(
             onPressed: () {
               Navigator.pop(dialogCtx);
-              // Call actual sign-out logic here
             },
             child: Text(
               'Sign out',
@@ -552,11 +591,13 @@ class _SummaryCardData {
   final IconData icon;
   final String title;
   final String subtitle;
+  final Color color;
   final void Function(BuildContext) onTap;
   _SummaryCardData({
     required this.icon,
     required this.title,
     required this.subtitle,
+    required this.color,
     required this.onTap,
   });
 }

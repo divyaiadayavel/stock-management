@@ -1,6 +1,3 @@
-// =========================================================
-// lib/features/inventory/presentation/screens/stock_screen.dart
-// =========================================================
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -94,27 +91,37 @@ class _StockScreenState extends ConsumerState<StockScreen> {
             ),
             child: summaryAsync.when(
               data: (summary) => Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _FilterChip(
-                    label: 'All ${summary['all']}',
-                    value: 'all',
-                    selected: activeFilter == 'all',
+                  Expanded(
+                    child: _FilterChip(
+                      label: 'All ${summary['all']}',
+                      value: 'all',
+                      selected: activeFilter == 'all',
+                    ),
                   ),
-                  _FilterChip(
-                    label: 'Low ${summary['low']}',
-                    value: 'low',
-                    selected: activeFilter == 'low',
+                  SizedBox(width: R.sp(context, 4)),
+                  Expanded(
+                    child: _FilterChip(
+                      label: 'Low ${summary['low']}',
+                      value: 'low',
+                      selected: activeFilter == 'low',
+                    ),
                   ),
-                  _FilterChip(
-                    label: 'Out ${summary['out']}',
-                    value: 'out',
-                    selected: activeFilter == 'out',
+                  SizedBox(width: R.sp(context, 4)),
+                  Expanded(
+                    child: _FilterChip(
+                      label: 'Out ${summary['out']}',
+                      value: 'out',
+                      selected: activeFilter == 'out',
+                    ),
                   ),
-                  _FilterChip(
-                    label: 'Expiring ${summary['expiring']}',
-                    value: 'expiring',
-                    selected: activeFilter == 'expiring',
+                  SizedBox(width: R.sp(context, 4)),
+                  Expanded(
+                    child: _FilterChip(
+                      label: 'Exp ${summary['expiring']}',
+                      value: 'expiring',
+                      selected: activeFilter == 'expiring',
+                    ),
                   ),
                 ],
               ),
@@ -258,9 +265,10 @@ class _FilterChip extends ConsumerWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         padding: EdgeInsets.symmetric(
-          horizontal: R.sp(context, AppSpacing.md + 2),
+          horizontal: R.sp(context, 2),
           vertical: R.sp(context, 6),
         ),
+        alignment: Alignment.center,
         decoration: BoxDecoration(
           gradient: selected ? AppColors.brandGradient : null,
           color: selected ? null : AppColors.card,
@@ -271,10 +279,12 @@ class _FilterChip extends ConsumerWidget {
         ),
         child: Text(
           label,
+          maxLines: 1,
+          textAlign: TextAlign.center,
           style: AppTextStyles.small.copyWith(
             color: selected ? AppColors.textWhite : Colors.black,
             fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-            fontSize: R.fs(context, 12),
+            fontSize: R.fs(context, 11),
           ),
         ),
       ),

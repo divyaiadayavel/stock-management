@@ -47,6 +47,7 @@ class InventoryScreen extends StatelessWidget {
         subtitle: 'Add received stock',
         icon: Icons.arrow_downward_rounded,
         color: _Accent.green,
+
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const StockInScreen()),
@@ -162,41 +163,47 @@ class InventoryScreen extends StatelessWidget {
 
               // ── STOCK SECTION ──
               Text('Stock', style: AppTextStyles.sectionTitle),
-              SizedBox(height: R.sp(context, AppSpacing.xs)),
-              Expanded(
-                flex: 2,
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Expanded(child: _InventoryCard(data: stockCards[0])),
-                          SizedBox(width: R.sp(context, AppSpacing.sm)),
-                          Expanded(child: _InventoryCard(data: stockCards[1])),
-                        ],
-                      ),
+              SizedBox(height: R.sp(context, AppSpacing.md)),
+
+              // ── STOCK SECTION ──
+              // Removed Expanded(flex: 2) and used a hard limit on the Column container instead
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    height: R.sp(context, 100), // Fixed height for Row 1
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(child: _InventoryCard(data: stockCards[0])),
+                        SizedBox(width: R.sp(context, AppSpacing.sm)),
+                        Expanded(child: _InventoryCard(data: stockCards[1])),
+                      ],
                     ),
-                    SizedBox(height: R.sp(context, AppSpacing.sm)),
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Expanded(child: _InventoryCard(data: stockCards[2])),
-                          SizedBox(width: R.sp(context, AppSpacing.sm)),
-                          Expanded(child: _InventoryCard(data: stockCards[3])),
-                        ],
-                      ),
+                  ),
+                  SizedBox(height: R.sp(context, AppSpacing.md)),
+                  SizedBox(
+                    height: R.sp(context, 100), // Fixed height for Row 2
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(child: _InventoryCard(data: stockCards[2])),
+                        SizedBox(width: R.sp(context, AppSpacing.sm)),
+                        Expanded(child: _InventoryCard(data: stockCards[3])),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
               SizedBox(height: R.sp(context, AppSpacing.md)),
 
               // ── PURCHASE SECTION ──
               Text('Purchase', style: AppTextStyles.sectionTitle),
-              SizedBox(height: R.sp(context, AppSpacing.xs)),
-              Expanded(
-                flex: 1,
+              SizedBox(height: R.sp(context, AppSpacing.md)),
+              SizedBox(
+                height: R.sp(context, 100), // Fixed height for Purchase Row
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Expanded(child: _InventoryCard(data: purchaseCards[0])),
                     SizedBox(width: R.sp(context, AppSpacing.sm)),
@@ -204,7 +211,8 @@ class InventoryScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              SizedBox(height: R.sp(context, AppSpacing.md)),
+
+              SizedBox(height: R.sp(context, AppSpacing.xl)),
 
               // ── PROMO BANNER ──
               const _InventoryPromoBanner(),
@@ -273,7 +281,7 @@ class _InventoryCard extends StatelessWidget {
                 size: R.icon(context, 16),
               ),
             ),
-            SizedBox(width: R.sp(context, AppSpacing.xs)),
+            SizedBox(width: R.sp(context, AppSpacing.md)),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -346,6 +354,7 @@ class _InventoryHeroCard extends StatelessWidget {
           ),
           child: Row(
             children: [
+              // ── TOTAL ITEMS ICON (LEFT) ──
               Container(
                 width: R.sp(context, 36),
                 height: R.sp(context, 36),
@@ -360,7 +369,8 @@ class _InventoryHeroCard extends StatelessWidget {
                   size: R.icon(context, 14),
                 ),
               ),
-              SizedBox(width: R.sp(context, AppSpacing.xs)),
+              SizedBox(width: R.sp(context, AppSpacing.md)),
+              // ── TOTAL ITEMS TEXT ──
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -376,12 +386,14 @@ class _InventoryHeroCard extends StatelessWidget {
                       snapshot.hasData ? '$totalItems' : '—',
                       style: AppTextStyles.cardValue.copyWith(
                         fontSize: R.fs(context, 20),
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
                 ),
               ),
+
+              // ── MIDDLE SEPARATOR ──
               Container(
                 width: 1,
                 height: R.sp(context, 28),
@@ -390,6 +402,24 @@ class _InventoryHeroCard extends StatelessWidget {
                   horizontal: R.sp(context, AppSpacing.xs),
                 ),
               ),
+
+              // ── TOTAL VALUE ICON (MOVED TO LEFT SIDE OF TEXT) ──
+              Container(
+                width: R.sp(context, 36),
+                height: R.sp(context, 36),
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  gradient: AppColors.brandGradient,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.bar_chart_rounded,
+                  color: Colors.white,
+                  size: R.icon(context, 14),
+                ),
+              ),
+              SizedBox(width: R.sp(context, AppSpacing.md)),
+              // ── TOTAL VALUE TEXT ──
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -405,27 +435,12 @@ class _InventoryHeroCard extends StatelessWidget {
                       snapshot.hasData ? '₹${_formatAmount(totalValue)}' : '—',
                       style: AppTextStyles.cardValue.copyWith(
                         fontSize: R.fs(context, 18),
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
-                ),
-              ),
-              SizedBox(width: R.sp(context, AppSpacing.xs)),
-              Container(
-                width: R.sp(context, 36),
-                height: R.sp(context, 36),
-                alignment: Alignment.center,
-                decoration: const BoxDecoration(
-                  gradient: AppColors.brandGradient,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.bar_chart_rounded,
-                  color: Colors.white,
-                  size: R.icon(context, 14),
                 ),
               ),
             ],
@@ -470,27 +485,30 @@ class _InventoryPromoBanner extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            width: R.sp(context, 48),
-            height: R.sp(context, 48),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(R.radius(context, 12)),
-              border: Border.all(color: Colors.grey.shade300, width: 1.0),
-            ),
-            clipBehavior: Clip.antiAlias,
+            width: R.sp(
+              context,
+              80,
+            ), // 👈 Increased further for a larger appearance
+            height: R.sp(
+              context,
+              80,
+            ), // 👈 Increased further for a larger appearance
             child: Image.asset(
               'assets/inventory.png',
-              fit: BoxFit.cover,
+              fit: BoxFit.contain,
               errorBuilder: (context, error, stackTrace) {
                 return Icon(
                   Icons.inventory_rounded,
                   color: AppColors.primary,
-                  size: R.icon(context, 20),
+                  size: R.icon(
+                    context,
+                    36,
+                  ), // 👈 Fallback icon size increased to match
                 );
               },
             ),
           ),
-          SizedBox(width: R.sp(context, AppSpacing.sm)),
+          SizedBox(width: R.sp(context, AppSpacing.md)),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

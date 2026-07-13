@@ -57,7 +57,14 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
     final data = await DBHelper.getAllProducts();
 
     setState(() {
-      products = data;
+      products = data.map((item) {
+        final mutableItem = Map<String, dynamic>.from(item);
+        final rawQty = mutableItem["quantity"] ?? 0;
+        if (rawQty < 0) {
+          mutableItem["quantity"] = 0;
+        }
+        return mutableItem;
+      }).toList();
       isLoading = false;
     });
   }
@@ -78,15 +85,9 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
       return searchMatch && categoryMatch;
     }).toList();
 
-    filteredProducts.sort(
-      (a, b) => (a["name"] ?? "").toString().toLowerCase().compareTo(
-        (b["name"] ?? "").toString().toLowerCase(),
-      ),
-    );
-
     filteredProducts.sort((a, b) {
-      final nameA = a["name"].toString();
-      final nameB = b["name"].toString();
+      final nameA = (a["name"] ?? "").toString().toLowerCase();
+      final nameB = (b["name"] ?? "").toString().toLowerCase();
       return isAscending ? nameA.compareTo(nameB) : nameB.compareTo(nameA);
     });
 
@@ -95,7 +96,6 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // ── Clean Custom Header (No AppBar Widget) ──
             Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: R.sp(context, AppSpacing.screenPadding / 2),
@@ -117,7 +117,6 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
               ),
             ),
 
-            // ── Main Content ──
             Expanded(
               child: isLoading
                   ? const Center(child: CircularProgressIndicator())
@@ -128,7 +127,6 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // SEARCH + FILTER
                           Row(
                             children: [
                               Expanded(
@@ -223,7 +221,6 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                             height: R.sp(context, AppSpacing.sectionGap),
                           ),
 
-                          // CATEGORY CHIPS
                           SizedBox(
                             height: R.searchH(context) - 8,
                             child: ListView.builder(
@@ -273,6 +270,8 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                             itemCount: filteredProducts.length,
                             itemBuilder: (context, index) {
                               final product = filteredProducts[index];
+                              final int currentStock =
+                                  (product["quantity"] ?? 0) as int;
 
                               return Container(
                                 margin: EdgeInsets.only(
@@ -292,7 +291,6 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
-                                    // ── LEFT: product info ──
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment:
@@ -346,8 +344,10 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                               _metaChip(
                                                 context: context,
                                                 label: "Stock",
-                                                value: "${product["quantity"]}",
-                                                valueColor: AppColors.cyanDim,
+                                                value: "$currentStock",
+                                                valueColor: currentStock <= 0
+                                                    ? AppColors.red
+                                                    : AppColors.cyanDim,
                                               ),
                                             ],
                                           ),
@@ -355,7 +355,6 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                       ),
                                     ),
 
-                                    // ── RIGHT: Add / Cart Adjuster ──
                                     SizedBox(
                                       width: R.isDesktop(context)
                                           ? 180
@@ -384,25 +383,49 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                     BorderRadius.circular(
                                                       AppSizes.radiusMd,
                                                     ),
-                                                onTap: () => ref
-                                                    .read(
-                                                      billingProvider.notifier,
-                                                    )
-                                                    .addToCart(product, 1),
+                                                onTap: () {
+                                                  if (currentStock <= 0) {
+                                                    ScaffoldMessenger.of(
+                                                      context,
+                                                    ).showSnackBar(
+                                                      const SnackBar(
+                                                        content: Text(
+                                                          "Out of Stock! Cannot add to bill.",
+                                                        ),
+                                                        backgroundColor:
+                                                            AppColors.red,
+                                                      ),
+                                                    );
+                                                    return;
+                                                  }
+                                                  ref
+                                                      .read(
+                                                        billingProvider
+                                                            .notifier,
+                                                      )
+                                                      .addToCart(product, 1);
+                                                },
                                                 child: Container(
                                                   height: 34,
                                                   width: 34,
                                                   decoration: BoxDecoration(
-                                                    gradient:
-                                                        AppColors.brandGradient,
+                                                    gradient: currentStock <= 0
+                                                        ? null
+                                                        : AppColors
+                                                              .brandGradient,
+                                                    color: currentStock <= 0
+                                                        ? Colors.grey.shade300
+                                                        : null,
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                           AppSizes.radiusMd,
                                                         ),
                                                   ),
-                                                  child: const Icon(
+                                                  child: Icon(
                                                     Icons.add,
-                                                    color: Colors.white,
+                                                    color: currentStock <= 0
+                                                        ? Colors.grey
+                                                        : Colors.white,
                                                     size: 19,
                                                   ),
                                                 ),
@@ -537,9 +560,15 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                               if (newQty !=
                                                                       null &&
                                                                   newQty > 0) {
+                                                                // ── FIX: Cap manual field submit ceiling values ──
+                                                                final finalTargetQty =
+                                                                    newQty >
+                                                                        currentStock
+                                                                    ? currentStock
+                                                                    : newQty;
                                                                 while (item
                                                                         .qty <
-                                                                    newQty) {
+                                                                    finalTargetQty) {
                                                                   ref
                                                                       .read(
                                                                         billingProvider
@@ -547,11 +576,12 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                                       )
                                                                       .increaseQty(
                                                                         existingIndex,
+                                                                        currentStock,
                                                                       );
                                                                 }
                                                                 while (item
                                                                         .qty >
-                                                                    newQty) {
+                                                                    finalTargetQty) {
                                                                   ref
                                                                       .read(
                                                                         billingProvider
@@ -588,14 +618,34 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                                       .radiusMd,
                                                                 ),
                                                           ),
-                                                          onTap: () => ref
-                                                              .read(
-                                                                billingProvider
-                                                                    .notifier,
-                                                              )
-                                                              .increaseQty(
-                                                                existingIndex,
-                                                              ),
+                                                          onTap: () {
+                                                            // ── FIX: Enforce ceiling check directly on layout tap ──
+                                                            if (item.qty >=
+                                                                currentStock) {
+                                                              ScaffoldMessenger.of(
+                                                                context,
+                                                              ).showSnackBar(
+                                                                SnackBar(
+                                                                  content: Text(
+                                                                    "Cannot add more! Only $currentStock items available.",
+                                                                  ),
+                                                                  backgroundColor:
+                                                                      AppColors
+                                                                          .orange,
+                                                                ),
+                                                              );
+                                                              return;
+                                                            }
+                                                            ref
+                                                                .read(
+                                                                  billingProvider
+                                                                      .notifier,
+                                                                )
+                                                                .increaseQty(
+                                                                  existingIndex,
+                                                                  currentStock,
+                                                                );
+                                                          },
                                                           child: Container(
                                                             height: 34,
                                                             decoration: const BoxDecoration(
@@ -633,7 +683,6 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                   AppSpacing.sm,
                                                 ),
                                               ),
-                                              // DELETE icon
                                               InkWell(
                                                 borderRadius:
                                                     BorderRadius.circular(

@@ -25,9 +25,13 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
   int lowStockCount = 0;
   int outOfStockCount = 0;
 
-  // 🆕 summary stats (items / units / value) for the top card
   int totalUnits = 0;
   double totalValue = 0;
+
+  String currentSort = 'name_asc';
+
+  final TextEditingController _searchCtrl = TextEditingController();
+  bool _searchOpen = false;
 
   @override
   void initState() {
@@ -35,9 +39,24 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
     loadProducts();
   }
 
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> loadProducts() async {
     final data = await DBHelper.getAllProducts();
-    products = data;
+
+    products = data.map((item) {
+      final mutableItem = Map<String, dynamic>.from(item);
+      final rawQty = mutableItem["quantity"] ?? 0;
+      if (rawQty < 0) {
+        mutableItem["quantity"] = 0;
+      }
+      return mutableItem;
+    }).toList();
+
     applyFilters();
   }
 
@@ -86,7 +105,6 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
       return qty <= 0;
     }).length;
 
-    // 🆕 total units on hand + total inventory value (qty * selling price)
     int calculatedUnits = 0;
     double calculatedValue = 0;
     for (final p in products) {
@@ -120,15 +138,33 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
       }).toList();
     }
 
-    temp.sort(
-      (a, b) => (a["name"] ?? "").toString().toLowerCase().compareTo(
-        (b["name"] ?? "").toString().toLowerCase(),
-      ),
-    );
+    // ========================================================
+    // 🔄 APPLY SORT ROUTINES
+    // ========================================================
+    if (currentSort == 'name_asc') {
+      temp.sort(
+        (a, b) => (a["name"] ?? "").toString().toLowerCase().compareTo(
+          (b["name"] ?? "").toString().toLowerCase(),
+        ),
+      );
+    } else if (currentSort == 'stock_asc') {
+      temp.sort(
+        (a, b) => ((a["quantity"] ?? 0) as int).compareTo(
+          (b["quantity"] ?? 0) as int,
+        ),
+      );
+    } else if (currentSort == 'value_desc') {
+      temp.sort((a, b) {
+        final valA =
+            ((a["quantity"] ?? 0) as int) *
+            ((a["selling_price"] as num?)?.toDouble() ?? 0.0);
+        final valB =
+            ((b["quantity"] ?? 0) as int) *
+            ((b["selling_price"] as num?)?.toDouble() ?? 0.0);
+        return valB.compareTo(valA);
+      });
+    }
 
-    // ========================================================
-    // 🔄 UPDATE UI STATE AT THE SAME TIME
-    // ========================================================
     setState(() {
       filteredProducts = temp;
       totalCount = calculatedTotal;
@@ -138,6 +174,85 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
       totalUnits = calculatedUnits;
       totalValue = calculatedValue;
     });
+  }
+
+  void _showSortSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(R.radius(context, 14)),
+        ),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: R.sp(sheetContext, 16)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Sort by',
+                style: TextStyle(
+                  fontSize: R.fs(context, 16),
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              SizedBox(height: R.sp(sheetContext, 8)),
+              ListTile(
+                title: Text(
+                  'Name (A–Z)',
+                  style: TextStyle(fontSize: R.fs(context, 14)),
+                ),
+                trailing: currentSort == 'name_asc'
+                    ? const Icon(Icons.check, color: Colors.cyan)
+                    : null,
+                onTap: () {
+                  setState(() {
+                    currentSort = 'name_asc';
+                  });
+                  applyFilters();
+                  Navigator.pop(sheetContext);
+                },
+              ),
+              ListTile(
+                title: Text(
+                  'Stock (Low → High)',
+                  style: TextStyle(fontSize: R.fs(context, 14)),
+                ),
+                trailing: currentSort == 'stock_asc'
+                    ? const Icon(Icons.check, color: Colors.cyan)
+                    : null,
+                onTap: () {
+                  setState(() {
+                    currentSort = 'stock_asc';
+                  });
+                  applyFilters();
+                  Navigator.pop(sheetContext);
+                },
+              ),
+              ListTile(
+                title: Text(
+                  'Value (High → Low)',
+                  style: TextStyle(fontSize: R.fs(context, 14)),
+                ),
+                trailing: currentSort == 'value_desc'
+                    ? const Icon(Icons.check, color: Colors.cyan)
+                    : null,
+                onTap: () {
+                  setState(() {
+                    currentSort = 'value_desc';
+                  });
+                  applyFilters();
+                  Navigator.pop(sheetContext);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   String _formatValue(double value) {
@@ -157,10 +272,8 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
     // ignore: unused_local_variable
     final searchNotifier = ref.read(searchQueryProvider.notifier);
 
-    // ── responsive values ──────────────────────────────────────
     final hPad = R.hPad(context, base: 16);
     final imgSz = R.imgSize(context, 0.16);
-    final searchHeight = R.searchH(context);
     final nameFs = R.fs(context, 14);
     final priceFs = R.fs(context, 14);
     final catFs = R.fs(context, 10);
@@ -171,33 +284,62 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
     final vGap = R.sp(context, 6);
 
     return Scaffold(
-      // 🆕 No AppBar — header content lives directly in the body now
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Column(
           children: [
-            // ── Title row + search/sort icon ──────────────────
             Padding(
               padding: hPad,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    "Products",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w500,
-                      color: Colors.black,
-                      fontSize: R.fs(context, 22),
-                    ),
+                  Expanded(
+                    child: _searchOpen
+                        ? TextField(
+                            controller: _searchCtrl,
+                            autofocus: true,
+                            style: TextStyle(
+                              fontSize: R.fs(context, 16),
+                              color: Colors.black87,
+                            ),
+                            decoration: const InputDecoration(
+                              hintText: 'Search product name...',
+                              border: InputBorder.none,
+                            ),
+                            onChanged: (v) {
+                              ref.read(searchQueryProvider.notifier).state = v;
+                              applyFilters();
+                            },
+                          )
+                        : Text(
+                            "Products",
+                            style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              color: Colors.black,
+                              fontSize: R.fs(context, 22),
+                            ),
+                          ),
                   ),
                   Row(
                     children: [
-                      _circleIconButton(icon: Icons.search, onTap: () {}),
+                      _circleIconButton(
+                        icon: _searchOpen ? Icons.close : Icons.search,
+                        onTap: () {
+                          setState(() {
+                            _searchOpen = !_searchOpen;
+                            if (!_searchOpen) {
+                              _searchCtrl.clear();
+                              ref.read(searchQueryProvider.notifier).state = '';
+                              applyFilters();
+                            }
+                          });
+                        },
+                      ),
                       SizedBox(width: R.sp(context, 8)),
                       _circleIconButton(
                         icon: Icons.swap_vert,
                         label: "Sort",
-                        onTap: () {},
+                        onTap: () => _showSortSheet(context),
                       ),
                       SizedBox(width: R.sp(context, 8)),
                       GestureDetector(
@@ -223,7 +365,6 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
 
             SizedBox(height: R.sp(context, 12)),
 
-            // ── 🆕 Summary stats card (items / units / value) ──
             Padding(
               padding: hPad,
               child: Container(
@@ -258,9 +399,6 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
 
             SizedBox(height: R.sp(context, 14)),
 
-            // =========================
-            // 🔹 FILTER ROW — gradient pill for selected (matches image)
-            // =========================
             Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: R.fluid(context, 14, 18),
@@ -280,8 +418,6 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
 
             SizedBox(height: R.sp(context, 12)),
 
-            // ================= PRODUCT LIST =================
-            // 🔹 NOTHING below this changed — same product card / image logic
             Expanded(
               child: filteredProducts.isEmpty
                   ? Center(
@@ -303,14 +439,18 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                         final bool isOutStock = qty == 0;
 
                         return GestureDetector(
-                          onTap: () {
-                            Navigator.push(
+                          // ── FIXED: Await the response and trigger real-time list refreshing ──
+                          onTap: () async {
+                            final needRefresh = await Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (_) =>
                                     ProductDetailsScreen(product: p),
                               ),
                             );
+                            if (needRefresh == true) {
+                              loadProducts();
+                            }
                           },
                           child: Container(
                             margin: EdgeInsets.symmetric(
@@ -329,7 +469,6 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // ================= IMAGE =================
                                 Container(
                                   width: imgSz,
                                   height: imgSz,
@@ -360,13 +499,11 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
 
                                 SizedBox(width: R.sp(context, 14)),
 
-                                // ================= DETAILS =================
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      // NAME + PRICE
                                       Row(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
@@ -396,7 +533,6 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
 
                                       SizedBox(height: vGap),
 
-                                      // CATEGORY
                                       Text(
                                         p["category"] ?? "",
                                         style: TextStyle(
@@ -407,7 +543,6 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
 
                                       SizedBox(height: R.sp(context, 10)),
 
-                                      // STOCK ROW
                                       Row(
                                         mainAxisAlignment:
                                             MainAxisAlignment.spaceBetween,
@@ -425,7 +560,6 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                                             ),
                                           ),
 
-                                          // BADGE
                                           Container(
                                             padding: EdgeInsets.symmetric(
                                               horizontal: R.sp(context, 5),
@@ -486,7 +620,6 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
     );
   }
 
-  // 🆕 small circular icon button used in the header row (search / sort)
   Widget _circleIconButton({
     required IconData icon,
     String? label,
@@ -523,7 +656,6 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
     );
   }
 
-  // 🆕 single stat in the summary card
   Widget _statItem({required String title, required String value}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -549,7 +681,6 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
     );
   }
 
-  // 🆕 filter pill — selected uses AppColors.brandGradient, unselected stays plain
   Widget _filterTab(String title, int count) {
     final isSelected = ref.watch(selectedFilterProvider) == title;
 
