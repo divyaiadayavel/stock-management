@@ -10,8 +10,9 @@ import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/utils/responsive_helper.dart';
 
-import '../../../../core/storage/db_helper.dart';
-import '../providers/inventory_providers.dart';
+// ✅ New imports (replace DBHelper)
+import '../providers/inventory_provider.dart';
+import '../providers/inventory_operation_provider.dart';
 
 class StockInScreen extends ConsumerStatefulWidget {
   const StockInScreen({super.key});
@@ -32,7 +33,8 @@ class _StockInScreenState extends ConsumerState<StockInScreen> {
   String _warehouse = 'Main store';
   bool _saving = false;
   DateTime? _expiryDate;
-  int get _currentQty => (_selectedProduct?['quantity'] as num?)?.toInt() ?? 0;
+
+  int get _currentQty => (_selectedProduct?['current_stock'] as num?)?.toInt() ?? 0;
   int get _enteredQty => int.tryParse(_qtyCtrl.text) ?? 0;
 
   @override
@@ -51,11 +53,8 @@ class _StockInScreenState extends ConsumerState<StockInScreen> {
       firstDate: DateTime.now(),
       lastDate: DateTime(2100),
     );
-
     if (picked != null) {
-      setState(() {
-        _expiryDate = picked;
-      });
+      setState(() => _expiryDate = picked);
     }
   }
 
@@ -66,25 +65,53 @@ class _StockInScreenState extends ConsumerState<StockInScreen> {
       );
       return;
     }
+
+    final cost = double.tryParse(_costCtrl.text);
+    if (cost == null || cost < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid unit cost')),
+      );
+      return;
+    }
+
     setState(() => _saving = true);
 
-    await DBHelper.stockInTransaction(
-      productId: _selectedProduct!['id'] as int,
-      quantity: _enteredQty,
-      unitCost: double.tryParse(_costCtrl.text) ?? 0.0,
-      reason: _tabs[_tab],
-      reference: _referenceCtrl.text.trim(),
-      warehouse: _warehouse,
-    );
+    try {
+      // ✅ Call backend via Riverpod
+      final success = await ref
+    .read(inventoryOperationProvider.notifier)
+    .stockIn(
+        productId: _selectedProduct!['id'] as int,
+        quantity: _enteredQty,
+        unitCost: cost,
+        referenceType: _tabs[_tab].toUpperCase(),
+referenceNumber:
+_referenceCtrl.text.trim(),
+        remarks: 'Warehouse: $_warehouse${_expiryDate != null ? ', Expiry: ${_expiryDate!.toIso8601String()}' : ''}',
+      );
 
-    refreshInventory(ref);
-    setState(() => _saving = false);
-    if (mounted) Navigator.pop(context);
+      if (success) {
+       
+        if (mounted) Navigator.pop(context);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Stock in failed. Please try again.')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final searchResults = ref.watch(productSearchResultsProvider);
+    // ✅ Use backend search provider
+    final searchQuery = ref.watch(inventorySearchQueryProvider);
+    final searchResults = ref.watch(inventoryProductSearchProvider(searchQuery));
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -165,11 +192,12 @@ class _StockInScreenState extends ConsumerState<StockInScreen> {
                   hintText: 'Search product · SKU',
                 ),
                 onChanged: (v) {
-                  ref.read(productSearchQueryProvider.notifier).state = v;
+                  ref.read(inventorySearchQueryProvider.notifier).state = v;
                   setState(() => _selectedProduct = null);
                 },
               ),
             ),
+            // ✅ Backend search results
             searchResults.when(
               data: (results) {
                 if (results.isEmpty || _selectedProduct != null) {
@@ -193,22 +221,26 @@ class _StockInScreenState extends ConsumerState<StockInScreen> {
                       return ListTile(
                         dense: true,
                         title: Text(
-                          '${p['name']} · SKU-${p['id']}',
+                          '${p.name} · SKU-${p.id}',
                           style: AppTextStyles.cardValue,
                         ),
                         subtitle: Text(
-                          'on-hand ${p['quantity']} · ${p['unit'] ?? ''}',
+                          'on-hand ${p.quantity} · ${p.unit ?? ''}',
                           style: AppTextStyles.small,
                         ),
                         onTap: () {
                           setState(() {
-                            _selectedProduct = p;
-                            _productCtrl.text = '${p['name']} · SKU-${p['id']}';
-                            _costCtrl.text = (p['purchase_price'] ?? '')
-                                .toString();
+                            _selectedProduct = {
+                              'id': p.id,
+                              'name': p.name,
+                              'current_stock': p.quantity,
+                              'unit': p.unit,
+                              'purchase_price': p.purchasePrice,
+                            };
+                            _productCtrl.text = '${p.name} · SKU-${p.id}';
+                            _costCtrl.text = p.purchasePrice?.toString() ?? '';
                           });
-                          ref.read(productSearchQueryProvider.notifier).state =
-                              '';
+                          ref.read(inventorySearchQueryProvider.notifier).state = '';
                         },
                       );
                     },

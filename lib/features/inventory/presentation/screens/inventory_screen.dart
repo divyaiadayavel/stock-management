@@ -8,7 +8,10 @@ import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/utils/responsive_helper.dart';
-import '../../../../core/storage/db_helper.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../providers/inventory_provider.dart';
+import '../providers/purchase_order_provider.dart';
 import 'stock_screen.dart';
 import 'stock_in_screen.dart';
 import 'stock_out_screen.dart';
@@ -16,7 +19,7 @@ import 'low_stock_screen.dart';
 import 'new_purchase_order_screen.dart';
 import 'receive_order_screen.dart';
 
-// 🆕 Accent colors used only for the Quick Action icon circles.
+// Accent colors used only for the Quick Action icon circles.
 class _Accent {
   static const blue = Color(0xFF3B82F6);
   static const green = Color(0xFF22C55E);
@@ -26,11 +29,11 @@ class _Accent {
   static const teal = Color(0xFF14B8A6);
 }
 
-class InventoryScreen extends StatelessWidget {
+class InventoryScreen extends ConsumerWidget {
   const InventoryScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final stockCards = <_InventoryCardData>[
       _InventoryCardData(
         title: 'Stock',
@@ -91,22 +94,33 @@ class InventoryScreen extends StatelessWidget {
         icon: Icons.local_shipping_rounded,
         color: _Accent.teal,
         onTap: () async {
-          final openPOs = await DBHelper.getOpenPurchaseOrders();
+          final purchaseOrders =
+              await ref.read(purchaseOrdersProvider.future);
+
+          final openPOs = purchaseOrders
+              .where((po) => po.status == "OPEN")
+              .toList();
           if (openPOs.isEmpty) {
+            // ✅ mounted check
+            if (!context.mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('No open purchase orders')),
             );
             return;
           }
           if (openPOs.length == 1) {
+            // ✅ mounted check
+            if (!context.mounted) return;
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => ReceiveOrderScreen(poId: openPOs.first['id']),
+                builder: (_) => ReceiveOrderScreen(poId: openPOs.first.id!),
               ),
             );
             return;
           }
+          // ✅ mounted check for modal bottom sheet
+          if (!context.mounted) return;
           final picked = await showModalBottomSheet<int>(
             context: context,
             builder: (ctx) => ListView(
@@ -115,15 +129,17 @@ class InventoryScreen extends StatelessWidget {
                   .map(
                     (po) => ListTile(
                       title: Text(
-                        'PO-${po['id'].toString().padLeft(4, '0')} · ${po['supplierName']}',
+                        'PO-${po.id.toString().padLeft(4, '0')} · ${po.supplierName}',
                       ),
-                      onTap: () => Navigator.pop(ctx, po['id']),
+                      onTap: () => Navigator.pop(ctx, po.id),
                     ),
                   )
                   .toList(),
             ),
           );
           if (picked != null) {
+            // ✅ mounted check
+            if (!context.mounted) return;
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -242,11 +258,8 @@ class _InventoryCard extends StatelessWidget {
       onTap: data.onTap,
       child: Container(
         padding: EdgeInsets.symmetric(
-          horizontal: R.sp(context, 8), // ⬇️ Tighter horizontal padding
-          vertical: R.sp(
-            context,
-            2,
-          ), // ⬇️ Reduced vertical padding to shrink card height
+          horizontal: R.sp(context, 8),
+          vertical: R.sp(context, 2),
         ),
         decoration: BoxDecoration(
           color: AppColors.card,
@@ -255,7 +268,6 @@ class _InventoryCard extends StatelessWidget {
           ),
           border: Border.all(color: AppColors.border),
         ),
-
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -264,7 +276,7 @@ class _InventoryCard extends StatelessWidget {
               height: R.sp(context, 36),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: data.color.withOpacity(0.12),
+                color: data.color.withValues(alpha: 0.12), // ✅ replaced withOpacity
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -322,18 +334,20 @@ class _InventoryCard extends StatelessWidget {
 }
 
 // =========================================================
-// 🆕 Hero card — Total Items / Total Value, live from DB
+// Hero card — Total Items / Total Value, live from DB
 // =========================================================
-class _InventoryHeroCard extends StatelessWidget {
+class _InventoryHeroCard extends ConsumerWidget {
   const _InventoryHeroCard();
 
   @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Map<String, dynamic>>(
-      future: DBHelper.getInventoryOverview(),
-      builder: (context, snapshot) {
-        final totalItems = snapshot.data?['totalItems'] ?? 0;
-        final totalValue = (snapshot.data?['totalValue'] ?? 0).toDouble();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final summary = ref.watch(inventorySummaryProvider);
+
+    return summary.when(
+      data: (data) {
+        // ✅ use correct fields from InventorySummary
+        final totalItems = data.totalStockUnits;
+        final totalValue = data.inventoryValue;
 
         return Container(
           padding: EdgeInsets.all(R.sp(context, AppSpacing.cardPadding)),
@@ -373,7 +387,7 @@ class _InventoryHeroCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      snapshot.hasData ? '$totalItems' : '—',
+                      '$totalItems',
                       style: AppTextStyles.cardValue.copyWith(
                         fontSize: R.fs(context, 20),
                         fontWeight: FontWeight.w700,
@@ -402,7 +416,7 @@ class _InventoryHeroCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      snapshot.hasData ? '₹${_formatAmount(totalValue)}' : '—',
+                      '₹${_formatAmount(totalValue)}',
                       style: AppTextStyles.cardValue.copyWith(
                         fontSize: R.fs(context, 18),
                         fontWeight: FontWeight.w700,
@@ -432,6 +446,10 @@ class _InventoryHeroCard extends StatelessWidget {
           ),
         );
       },
+      loading: () => const Center(
+        child: CircularProgressIndicator(),
+      ),
+      error: (error, stackTrace) => const SizedBox.shrink(),
     );
   }
 
@@ -450,7 +468,7 @@ class _InventoryHeroCard extends StatelessWidget {
 }
 
 // =========================================================
-// 🆕 Promo banner — decorative only. No onTap, no arrow.
+// Promo banner — decorative only. No onTap, no arrow.
 // =========================================================
 class _InventoryPromoBanner extends StatelessWidget {
   const _InventoryPromoBanner();

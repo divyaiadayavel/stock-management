@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
-import '../../../../core/constants/app_spacing.dart';
-import '../../../../core/constants/app_sizes.dart';
-import '../../../../core/constants/app_colors.dart';
-import '../../../../core/storage/db_helper.dart';
-import 'add_supplier_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:stock_management/core/constants/app_colors.dart';
+import 'package:stock_management/core/network/api_config.dart';
+import 'package:stock_management/core/utils/responsive_helper.dart';
+import 'package:stock_management/core/utils/notification_utils.dart';
+import '../../domain/entities/supplier.dart';
 import '../providers/supplier_provider.dart';
-// import '../../../../core/constants/app_curve.dart';
+import '../providers/add_supplier_provider.dart';
+import 'add_supplier_screen.dart';
 import 'supplier_details_screen.dart';
-import '../../../../core/utils/responsive_helper.dart';
-import 'package:url_launcher/url_launcher.dart'; // ← add url_launcher to pubspec.yaml
 
 class SuppliersScreen extends ConsumerStatefulWidget {
   const SuppliersScreen({super.key});
@@ -21,61 +21,14 @@ class SuppliersScreen extends ConsumerStatefulWidget {
 class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
   String selectedCategoryFilter = "All";
 
-  final List<String> categoryFilters = [
-    "All",
-    "Electronics",
-    "Mobile",
-    "Accessories",
-    "Fashion",
-    "Grocery",
-    "Stationery",
-    "Food",
-    "Beauty",
-    "Furniture",
-    "Medical",
-    "Sports",
-    "Hardware",
-    "Home Appliances",
-    "Books",
-    "Toys",
-    "Footwear",
-  ];
-
   @override
   void initState() {
     super.initState();
-    loadSuppliers();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(suppliersNotifierProvider.notifier).fetchAllSuppliers(refresh: true);
+    });
   }
 
-  Future<void> loadSuppliers() async {
-    final data = await DBHelper.getSuppliers();
-    final supplierCount = await DBHelper.getSupplierCount();
-    final productCount = await DBHelper.getProductCount();
-    final categories = data.map((e) => e["category"]).toSet().length;
-    final purchaseAmount = await DBHelper.getTotalPurchaseAmount();
-
-    ref.read(suppliersProvider.notifier).state = data;
-    ref.read(totalSuppliersProvider.notifier).state = supplierCount;
-    ref.read(totalCategoriesProvider.notifier).state = categories;
-    ref.read(totalProductsProvider.notifier).state = productCount;
-    ref.read(totalPurchasesProvider.notifier).state = purchaseAmount;
-
-    applyCategoryFilter();
-  }
-
-  void applyCategoryFilter() async {
-    final data = await DBHelper.getSuppliers();
-    if (selectedCategoryFilter == "All") {
-      ref.read(suppliersProvider.notifier).state = data;
-    } else {
-      ref.read(suppliersProvider.notifier).state = data.where((s) {
-        final cats = (s["category"] as String?)?.split(",") ?? [];
-        return cats.any((c) => c.trim() == selectedCategoryFilter);
-      }).toList();
-    }
-  }
-
-  // ── Launch phone dialer ──────────────────────────────────────
   Future<void> _makeCall(String contactNumber) async {
     final cleaned = contactNumber.replaceAll(RegExp(r'\s+'), '');
     final uri = Uri(scheme: 'tel', path: cleaned);
@@ -83,70 +36,99 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
       await launchUrl(uri);
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Could not launch dialer for $contactNumber"),
-            behavior: SnackBarBehavior.floating,
-          ),
+        showCustomNotification(
+          context,
+          "Could not launch dialer for $contactNumber",
+          isError: true,
         );
       }
     }
   }
 
-  // ── Stat card (top row) ──────────────────────────────────────
-  Widget _statCard(String label, String value, {Color? valueColor}) {
+  Widget _statCard(String label, String value, IconData icon, {Color? valueColor}) {
     return Expanded(
       child: Container(
         padding: EdgeInsets.symmetric(
-          horizontal: R.sp(context, 14),
-          vertical: R.sp(context, 12),
+          horizontal: R.sp(context, 16),
+          vertical: R.sp(context, 14),
         ),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(R.radius(context, 12)),
-          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(R.radius(context, 16)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            )
+          ],
+          border: Border.all(color: AppColors.border.withValues(alpha: 0.6)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: R.fs(context, 11),
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w500,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: R.fs(context, 11),
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  SizedBox(height: R.sp(context, 6)),
+                  Text(
+                    value,
+                    style: TextStyle(
+                      fontSize: R.fs(context, 22),
+                      fontWeight: FontWeight.bold,
+                      color: valueColor ?? AppColors.textPrimaryDark,
+                    ),
+                  ),
+                ],
               ),
             ),
-            SizedBox(height: R.sp(context, 4)),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: R.fs(context, 20),
-                fontWeight: FontWeight.w500,
-                color: valueColor ?? AppColors.textPrimaryDark,
+            Container(
+              padding: EdgeInsets.all(R.sp(context, 8)),
+              decoration: BoxDecoration(
+                color: (valueColor ?? AppColors.primary).withValues(alpha: 0.08),
+                shape: BoxShape.circle,
               ),
-            ),
+              child: Icon(
+                icon,
+                size: R.icon(context, 20),
+                color: valueColor ?? AppColors.primary,
+              ),
+            )
           ],
         ),
       ),
     );
   }
 
-  // ── Supplier row card ────────────────────────────────────────
-  Widget _supplierCard(Map<String, dynamic> supplier) {
-    final name = supplier["supplierName"] ?? "";
-    final category = supplier["category"] ?? "";
-    final contact = (supplier["contactNumber"] as String?) ?? "";
-    final double dueAmount = (supplier["dueAmount"] as num?)?.toDouble() ?? 0.0;
-    final int leadDays = (supplier["leadDays"] as num?)?.toInt() ?? 0;
-    final bool hasDue = dueAmount > 0;
+  bool _hasValidImage(String? image) {
+    return image != null && image.isNotEmpty && (image.contains('/') || image.contains('.'));
+  }
+
+Widget _supplierCard(Supplier supplier) {
+    final name = supplier.supplierName;
+    final contact = supplier.phone ?? "";
+    final category = (supplier.country != null && supplier.country!.isNotEmpty)
+        ? supplier.country!
+        : "General";
+    final double dueAmount = supplier.currentBalance;
 
     final parts = name.trim().split(" ");
     final initials = parts.length >= 2
         ? "${parts[0][0]}${parts[1][0]}".toUpperCase()
         : name.isNotEmpty
-        ? name[0].toUpperCase()
-        : "?";
+            ? name[0].toUpperCase()
+            : "?";
+
+    final bool hasValidImage = _hasValidImage(supplier.image);
 
     return GestureDetector(
       onTap: () async {
@@ -156,112 +138,139 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
             builder: (_) => SupplierDetailsScreen(supplier: supplier),
           ),
         );
-        if (result == true) loadSuppliers();
+        if (result == true && mounted) {
+          ref.read(suppliersNotifierProvider.notifier).fetchAllSuppliers(refresh: true);
+        }
       },
       child: Container(
-        margin: EdgeInsets.only(bottom: R.sp(context, 10)),
+        margin: EdgeInsets.only(bottom: R.sp(context, 8)), // Reduced from 12 to 8
         padding: EdgeInsets.symmetric(
-          horizontal: R.sp(context, 14),
-          vertical: R.sp(context, 12),
+          horizontal: R.sp(context, 12), // Reduced from 16 to 12
+          vertical: R.sp(context, 10),   // Reduced from 14 to 10 for smaller card height
         ),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(R.radius(context, 12)),
-          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(R.radius(context, 12)), // Reduced from 16 to 12
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.015), // Softened shadow
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            )
+          ],
+          border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
         ),
         child: Row(
           children: [
-            // Avatar
             Container(
-              width: R.fluid(context, 44, 56),
-              height: R.fluid(context, 44, 56),
+              width: R.fluid(context, 38, 44),  // Reduced size from (48, 56) to (38, 44)
+              height: R.fluid(context, 38, 44), // Reduced size from (48, 56) to (38, 44)
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: AppColors.brandGradient,
+                gradient: !hasValidImage ? AppColors.brandGradient : null,
+                image: hasValidImage
+                    ? DecorationImage(
+                        image: NetworkImage('${ApiConfig.baseUrl}/${supplier.image}'),
+                        fit: BoxFit.cover,
+                      )
+                    : null,
               ),
-              child: Center(
-                child: Text(
-                  initials,
-                  style: TextStyle(
-                    fontSize: R.fs(context, 13),
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
+              alignment: Alignment.center,
+              child: !hasValidImage
+                  ? Text(
+                      initials,
+                      style: TextStyle(
+                        fontSize: R.fs(context, 12), // Reduced from 14 to 12
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    )
+                  : null,
             ),
-
-            SizedBox(width: R.sp(context, 12)),
-
-            // Name + subtitle
+            SizedBox(width: R.sp(context, 12)), // Compressed spacing
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min, // Forces column down to absolute content height
                 children: [
                   Text(
                     name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: R.fs(context, 14),
-                      fontWeight: FontWeight.w500,
+                      fontSize: R.fs(context, 14), // Balanced down from 15 to 14
+                      fontWeight: FontWeight.w600,
                       color: AppColors.textPrimaryDark,
                     ),
                   ),
                   SizedBox(height: R.sp(context, 2)),
-                  Text(
-                    leadDays > 0
-                        ? "$category · lead $leadDays day${leadDays == 1 ? '' : 's'}"
-                        : category,
-                    style: TextStyle(
-                      fontSize: R.fs(context, 11),
-                      color: AppColors.textSecondary,
-                    ),
+                  Row(
+                    children: [
+                      Icon(Icons.layers_outlined, size: 12, color: AppColors.textSecondary.withValues(alpha: 0.6)),
+                      SizedBox(width: R.sp(context, 4)),
+                      Expanded(
+                        child: Text(
+                          category,
+                          style: TextStyle(
+                            fontSize: R.fs(context, 11), // Clean micro-typography
+                            color: AppColors.textSecondary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-
-            // Right: due / settled + Call button
+            SizedBox(width: R.sp(context, 8)),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  hasDue ? "due ₹${_formatAmount(dueAmount)}" : "settled",
-                  style: TextStyle(
-                    fontSize: R.fs(context, 12),
-                    fontWeight: FontWeight.w600,
-                    color: hasDue ? AppColors.orange : AppColors.green,
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: R.sp(context, 8), vertical: R.sp(context, 3)), // Slim padding bounds
+                  decoration: BoxDecoration(
+                    color: dueAmount > 0 ? AppColors.orange.withValues(alpha: 0.08) : AppColors.green.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    dueAmount > 0 ? "Due ₹${_formatAmount(dueAmount)}" : "Settled",
+                    style: TextStyle(
+                      fontSize: R.fs(context, 11), // Compact micro alignment
+                      fontWeight: FontWeight.bold,
+                      color: dueAmount > 0 ? AppColors.orange : AppColors.green,
+                    ),
                   ),
                 ),
-                SizedBox(height: R.sp(context, 6)),
-
-                // ── Call button with phone icon ──────────────
+                SizedBox(height: R.sp(context, 4)), // Reduced vertical column gap
                 GestureDetector(
                   onTap: () => _makeCall(contact),
                   child: Container(
                     padding: EdgeInsets.symmetric(
                       horizontal: R.sp(context, 10),
-                      vertical: R.sp(context, 5),
+                      vertical: R.sp(context, 4), // Slimmer action button padding
                     ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppColors.border),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
                           Icons.phone,
-                          size: R.icon(context, 12),
-                          color: AppColors.textPrimaryDark,
+                          size: R.icon(context, 10), // Scaled down phone icon metric
+                          color: AppColors.primary,
                         ),
                         SizedBox(width: R.sp(context, 4)),
                         Text(
                           "Call",
                           style: TextStyle(
                             fontSize: R.fs(context, 11),
-                            color: AppColors.textPrimaryDark,
-                            fontWeight: FontWeight.w500,
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ],
@@ -284,17 +293,23 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final suppliers = ref.watch(filteredSuppliersProvider);
-    final totalSuppliers = ref.watch(totalSuppliersProvider);
-    final totalPurchases = ref.watch(totalPurchasesProvider);
     final hPad = R.hPad(context, base: 16);
+    final providerState = ref.watch(suppliersNotifierProvider);
+    final asyncCategories = ref.watch(dbCategoriesProvider);
+
+    final List<String> categoryFilters = ["All", ...(asyncCategories.value ?? [])];
+
+    final displayList = selectedCategoryFilter == "All"
+        ? providerState.suppliers
+        : providerState.suppliers
+            .where((s) => (s.country ?? "").contains(selectedCategoryFilter))
+            .toList();
 
     return Scaffold(
       backgroundColor: AppColors.background,
-
       body: SingleChildScrollView(
         padding: hPad.copyWith(
-          top: R.sp(context, 30),
+          top: R.sp(context, 40),
           bottom: R.sp(context, 24),
         ),
         child: Column(
@@ -302,114 +317,128 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
           children: [
             Row(
               children: [
+                // ✅ UI/UX Optimization: Added absolute back button icon matching navigation contracts
+IconButton(
+  onPressed: () => Navigator.pop(context),
+  icon: Icon(
+    Icons.arrow_back,
+    color: AppColors.textPrimaryDark,
+    size: R.icon(context, 22),
+  ),
+),
+                SizedBox(width: R.sp(context, 12)),
                 Expanded(
                   child: Text(
                     "Suppliers",
                     style: TextStyle(
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.bold,
                       color: AppColors.textPrimaryDark,
-                      fontSize: R.fs(context, 18),
+                      fontSize: R.fs(context, 22),
                     ),
                   ),
                 ),
-
                 IconButton(
                   onPressed: () {
                     showSearch(
                       context: context,
-                      delegate: _SupplierSearchDelegate(suppliers),
+                      delegate: _SupplierSearchDelegate(providerState.suppliers, ref),
                     );
                   },
+                  style: IconButton.styleFrom(backgroundColor: Colors.white, elevation: 1),
                   icon: Icon(
                     Icons.search,
                     color: AppColors.textSecondary,
-                    size: R.icon(context, 22),
+                    size: R.icon(context, 20),
                   ),
                 ),
-
-                IconButton(
-                  onPressed: () async {
+                SizedBox(width: R.sp(context, 4)),
+                GestureDetector(
+                  onTap: () async {
                     final result = await Navigator.push(
                       context,
-                      MaterialPageRoute(
-                        builder: (_) => const AddSupplierScreen(),
-                      ),
+                      MaterialPageRoute(builder: (_) => const AddSupplierScreen()),
                     );
-                    if (result == true) loadSuppliers();
+                    if (result == true && mounted) {
+                      ref.read(suppliersNotifierProvider.notifier).fetchAllSuppliers(refresh: true);
+                    }
                   },
-                  icon: Container(
-                    width: R.fluid(context, 28, 32),
-                    height: R.fluid(context, 28, 32),
+                  child: Container(
+                    width: R.fluid(context, 36, 40),
+                    height: R.fluid(context, 36, 40),
                     decoration: BoxDecoration(
                       gradient: AppColors.brandGradient,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.2),
+                          blurRadius: 6,
+                          offset: const Offset(0, 3),
+                        )
+                      ],
                     ),
                     child: Icon(
                       Icons.add,
                       color: Colors.white,
-                      size: R.icon(context, 18),
+                      size: R.icon(context, 20),
                     ),
                   ),
                 ),
               ],
             ),
-
-            SizedBox(height: R.sp(context, 20)),
-
-            // ── Stat cards ───────────────────────────────────
+            SizedBox(height: R.sp(context, 24)),
             Row(
               children: [
-                _statCard("Suppliers", "$totalSuppliers"),
+                _statCard("Active suppliers", "${providerState.suppliers.length}", Icons.people_outline),
                 SizedBox(width: R.sp(context, 12)),
                 _statCard(
-                  "Payable",
-                  "₹${_formatAmount(totalPurchases)}",
+                  "Total Payable",
+                  "₹${_formatAmount(providerState.suppliers.fold(0.0, (sum, s) => sum + s.currentBalance))}",
+                  Icons.account_balance_wallet_outlined,
                   valueColor: AppColors.primary,
                 ),
               ],
             ),
-
-            SizedBox(height: R.sp(context, 20)),
-
-            // ── Category filter chips ─────────────────────────
+            SizedBox(height: R.sp(context, 24)),
             SizedBox(
-              height: R.fluid(context, 34, 40),
+              height: R.fluid(context, 36, 42),
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: categoryFilters.length,
-                separatorBuilder: (_, __) => SizedBox(width: R.sp(context, 8)),
+                separatorBuilder: (context, _) => SizedBox(width: R.sp(context, 8)),
                 itemBuilder: (context, index) {
                   final cat = categoryFilters[index];
                   final selected = cat == selectedCategoryFilter;
                   return GestureDetector(
-                    onTap: () {
-                      setState(() => selectedCategoryFilter = cat);
-                      applyCategoryFilter();
-                    },
+                    onTap: () => setState(() => selectedCategoryFilter = cat),
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
+                      duration: const Duration(milliseconds: 150),
                       padding: EdgeInsets.symmetric(
-                        horizontal: R.sp(context, 14),
-                        vertical: R.sp(context, 6),
+                        horizontal: R.sp(context, 16),
+                        vertical: R.sp(context, 8),
                       ),
                       decoration: BoxDecoration(
                         gradient: selected ? AppColors.brandGradient : null,
                         color: selected ? null : Colors.white,
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(24),
                         border: Border.all(
-                          color: selected
-                              ? Colors.transparent
-                              : AppColors.border,
+                          color: selected ? Colors.transparent : AppColors.border.withValues(alpha: 0.6),
                         ),
+                        boxShadow: selected ? [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.2),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          )
+                        ] : null,
                       ),
-                      child: Text(
-                        cat,
-                        style: TextStyle(
-                          fontSize: R.fs(context, 12),
-                          fontWeight: FontWeight.normal,
-                          color: selected
-                              ? Colors.white
-                              : AppColors.textSecondary,
+                      child: Center(
+                        child: Text(
+                          cat,
+                          style: TextStyle(
+                            fontSize: R.fs(context, 13),
+                            fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+                            color: selected ? Colors.white : AppColors.textSecondary,
+                          ),
                         ),
                       ),
                     ),
@@ -417,41 +446,51 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
                 },
               ),
             ),
-
-            SizedBox(height: R.sp(context, 10)),
-
-            // ── Supplier list ─────────────────────────────────
-            suppliers.isEmpty
-                ? SizedBox(
-                    height: R.fluid(context, 200, 300),
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.people_outline,
-                            size: R.icon(context, 48),
-                            color: AppColors.textSecondary.withOpacity(0.4),
-                          ),
-                          SizedBox(height: R.sp(context, 12)),
-                          Text(
-                            "No suppliers added yet",
-                            style: TextStyle(
-                              fontSize: R.fs(context, 14),
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
+            SizedBox(height: R.sp(context, 16)),
+            if (providerState.isLoading && displayList.isEmpty)
+              const Padding(
+                padding: EdgeInsets.only(top: 100),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (displayList.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 80),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: AppColors.textSecondary.withValues(alpha: 0.05),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.supervised_user_circle_outlined,
+                          size: R.icon(context, 64),
+                          color: AppColors.textSecondary.withValues(alpha: 0.3),
+                        ),
                       ),
-                    ),
-                  )
-                : ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: suppliers.length,
-                    itemBuilder: (context, index) =>
-                        _supplierCard(suppliers[index]),
+                      SizedBox(height: R.sp(context, 16)),
+                      Text(
+                        "No suppliers in this category",
+                        style: TextStyle(
+                          fontSize: R.fs(context, 15),
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+              )
+            else
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: displayList.length,
+                itemBuilder: (context, index) => _supplierCard(displayList[index]),
+              ),
           ],
         ),
       ),
@@ -459,86 +498,66 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
   }
 }
 
-// ── Simple search delegate ────────────────────────────────────────
-class _SupplierSearchDelegate extends SearchDelegate<Map<String, dynamic>?> {
-  final List<Map<String, dynamic>> suppliers;
-  _SupplierSearchDelegate(this.suppliers);
+class _SupplierSearchDelegate extends SearchDelegate<Supplier?> {
+  final List<Supplier> suppliers;
+  final WidgetRef ref;
+  _SupplierSearchDelegate(this.suppliers, this.ref);
+
   @override
   ThemeData appBarTheme(BuildContext context) {
     return Theme.of(context).copyWith(
       scaffoldBackgroundColor: AppColors.background,
-
-      appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.transparent,
-      ),
-
+      appBarTheme: const AppBarTheme(backgroundColor: AppColors.background, elevation: 0),
       dividerColor: AppColors.border,
-
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 10,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Colors.grey, width: 1.5),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
       ),
-
       iconTheme: const IconThemeData(color: AppColors.textPrimaryDark),
-
-      textTheme: Theme.of(context).textTheme.copyWith(
-        titleLarge: const TextStyle(
-          color: AppColors.textPrimaryDark,
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
     );
   }
 
   @override
   List<Widget> buildActions(BuildContext context) => [
-    IconButton(icon: const Icon(Icons.clear), onPressed: () => query = ""),
-  ];
+        IconButton(
+          icon: const Icon(Icons.clear),
+          onPressed: () => query = "",
+        ),
+      ];
 
   @override
   Widget buildLeading(BuildContext context) => IconButton(
-    icon: const Icon(Icons.arrow_back),
-    onPressed: () => close(context, null),
-  );
+        icon: const Icon(Icons.arrow_back_ios_new),
+        onPressed: () => close(context, null),
+      );
 
   @override
-  Widget buildResults(BuildContext context) => _buildList();
+  Widget buildResults(BuildContext context) => _buildList(context);
 
   @override
-  Widget buildSuggestions(BuildContext context) => _buildList();
+  Widget buildSuggestions(BuildContext context) => _buildList(context);
 
-  Widget _buildList() {
-    final results = suppliers
-        .where(
-          (s) =>
-              (s["supplierName"] ?? "").toString().toLowerCase().contains(
-                query.toLowerCase(),
-              ) ||
-              (s["category"] ?? "").toString().toLowerCase().contains(
-                query.toLowerCase(),
-              ),
-        )
-        .toList();
+  bool _hasValidImage(String? image) {
+    return image != null && image.isNotEmpty && (image.contains('/') || image.contains('.'));
+  }
+
+  Widget _buildList(BuildContext context) {
+    final results = suppliers.where((s) =>
+        s.supplierName.toLowerCase().contains(query.toLowerCase()) ||
+        (s.country ?? "").toLowerCase().contains(query.toLowerCase())).toList();
 
     if (results.isEmpty) {
       return Container(
@@ -559,58 +578,69 @@ class _SupplierSearchDelegate extends SearchDelegate<Map<String, dynamic>?> {
         itemCount: results.length,
         itemBuilder: (context, index) {
           final s = results[index];
+          final bool hasValidImage = _hasValidImage(s.image);
+          final name = s.supplierName;
+          final initials = name.isNotEmpty ? name[0].toUpperCase() : "?";
           return Card(
             color: Colors.white,
             elevation: 0,
             margin: const EdgeInsets.only(bottom: 10),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
               side: const BorderSide(color: AppColors.border),
             ),
             child: ListTile(
               leading: Container(
                 width: 44,
                 height: 44,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: AppColors.brandGradient,
+                  gradient: !hasValidImage ? AppColors.brandGradient : null,
+                  image: hasValidImage
+                      ? DecorationImage(
+                          image: NetworkImage('${ApiConfig.baseUrl}/${s.image}'),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
                 ),
                 alignment: Alignment.center,
-                child: Text(
-                  (s["supplierName"] ?? "?")[0].toUpperCase(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                child: !hasValidImage
+                    ? Text(
+                        initials,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      )
+                    : null,
               ),
               title: Text(
-                s["supplierName"] ?? "",
+                s.supplierName,
                 style: const TextStyle(
                   fontWeight: FontWeight.w600,
                   color: AppColors.textPrimaryDark,
                 ),
               ),
               subtitle: Text(
-                s["category"] ?? "",
+                s.country ?? "General",
                 style: const TextStyle(color: AppColors.textSecondary),
               ),
               trailing: const Icon(
                 Icons.arrow_forward_ios,
-                size: 16,
+                size: 14,
                 color: AppColors.textSecondary,
               ),
               onTap: () async {
                 close(context, null);
-
                 await Future.delayed(const Duration(milliseconds: 150));
-
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => SupplierDetailsScreen(supplier: s),
-                  ),
-                );
+                if (context.mounted) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => SupplierDetailsScreen(supplier: s)),
+                  ).then((_) {
+                    ref.read(suppliersNotifierProvider.notifier).fetchAllSuppliers(refresh: true);
+                  });
+                }
               },
             ),
           );

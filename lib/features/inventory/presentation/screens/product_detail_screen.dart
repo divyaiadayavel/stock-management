@@ -9,27 +9,37 @@ import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/utils/responsive_helper.dart';
-import '../../../../core/storage/db_helper.dart';
 
-import '../providers/inventory_providers.dart';
+// ✅ Correct providers
+import '../providers/inventory_provider.dart'; // contains repository provider, summary, refresh, etc.
+import '../../../products/data/models/product_model.dart';
+import '../../domain/entities/stock_movement.dart'; // ✅ StockMovement entity
 import 'stock_in_screen.dart';
 import 'stock_out_screen.dart';
+import '../providers/inventory_filter_provider.dart';
+// ── Providers (can be moved to inventory_provider.dart later) ──
 
-// ── One-off provider: movements for a given productId ──────────────────────
-final _movementsProvider = FutureProvider.family
-    .autoDispose<List<Map<String, dynamic>>, int>((ref, productId) async {
-      return DBHelper.getProductMovements(productId);
-    });
+/// Fetches a product by ID using the repository.
+final productDetailProvider = FutureProvider.family.autoDispose<Product?, int>(
+  (ref, productId) async {
+    final repo = ref.watch(inventoryRepositoryProvider);
+    return repo.getProductById(productId);
+  },
+);
 
-// ── One-off provider: fresh product data (after adjust/reorder actions) ────
-final _productDetailProvider = FutureProvider.family
-    .autoDispose<Map<String, dynamic>?, int>((ref, productId) async {
-      ref.watch(productsRefreshProvider); // re-runs when inventory is refreshed
-      return DBHelper.getProductById(productId);
-    });
+/// Fetches stock movements for a given product.
+final movementsProvider = FutureProvider.family.autoDispose<
+    List<StockMovement>, int>(
+  (ref, productId) async {
+    final repo = ref.watch(inventoryRepositoryProvider);
+    return repo.getStockMovements(productId: productId);
+  },
+);
+
+// ─── Screen ─────────────────────────────────────────────────
 
 class ProductDetailScreen extends ConsumerStatefulWidget {
-  final Map<String, dynamic> product;
+  final Product product; // ✅ Uses existing Product model
 
   const ProductDetailScreen({super.key, required this.product});
 
@@ -54,22 +64,20 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
     super.dispose();
   }
 
-  int get _productId => widget.product['id'] as int;
+  // ✅ Handle nullable id
+  int get _productId => widget.product.id ?? 0;
 
   @override
   Widget build(BuildContext context) {
     // Use fresh product data if available, else fall back to what was passed in
-    final freshAsync = ref.watch(_productDetailProvider(_productId));
+    final freshAsync = ref.watch(productDetailProvider(_productId));
     final product = freshAsync.asData?.value ?? widget.product;
 
-    final qty = (product['quantity'] as num?)?.toInt() ?? 0;
-    final price = (product['selling_price'] as num?)?.toDouble() ?? 0.0;
-    final purchasePrice =
-        (product['purchase_price'] as num?)?.toDouble() ?? 0.0;
-    final lsl = (product['lsl'] as num?)?.toInt() ?? 0;
+    final qty = product.quantity;
+    final purchasePrice = product.purchasePrice; // non‑nullable
+
 
     // "Committed" = qty reserved for open orders — we use lsl as a proxy
-    // since there is no open-orders table yet; replace with real data when ready
     final committed = 0;
     final available = qty - committed;
     final value = qty * purchasePrice;
@@ -88,11 +96,10 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          product['name']?.toString() ?? '',
+          product.name,
           style: AppTextStyles.heading.copyWith(fontSize: R.fs(context, 18)),
         ),
         actions: [
-          // Edit pencil icon (hook up to your edit product screen)
           IconButton(
             icon: Icon(
               Icons.edit_outlined,
@@ -100,7 +107,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
               size: R.icon(context, AppSizes.iconMd),
             ),
             onPressed: () {
-              // TODO: navigate to AddProductScreen(product: product)
+              // TODO: navigate to EditProductScreen(product: product)
             },
           ),
           SizedBox(width: R.sp(context, AppSpacing.xs)),
@@ -108,7 +115,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
       ),
       body: Column(
         children: [
-          // ── Stats card (On-hand / Committed / Available / Value) ──────────
+          // ── Stats card ──────────────────────────────────────────
           Padding(
             padding: EdgeInsets.fromLTRB(
               R.sp(context, AppSpacing.screenPadding),
@@ -160,7 +167,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
 
           SizedBox(height: R.sp(context, AppSpacing.md)),
 
-          // ── Tab bar ───────────────────────────────────────────────────────
+          // ── Tab bar ─────────────────────────────────────────────
           Padding(
             padding: EdgeInsets.symmetric(
               horizontal: R.sp(context, AppSpacing.screenPadding),
@@ -210,21 +217,21 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
 
           SizedBox(height: R.sp(context, AppSpacing.sm)),
 
-          // ── Tab views ────────────────────────────────────────────────────
+          // ── Tab views ──────────────────────────────────────────
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
                 _DetailsTab(product: product),
                 _MovementsTab(productId: _productId),
-                _StatsTab(product: product),
+                _StatsTab(product: product, productId: _productId),
               ],
             ),
           ),
         ],
       ),
 
-      // ── Bottom buttons ────────────────────────────────────────────────────
+      // ── Bottom buttons ──────────────────────────────────────
       bottomNavigationBar: SafeArea(
         child: Container(
           padding: EdgeInsets.symmetric(
@@ -237,7 +244,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
           ),
           child: Row(
             children: [
-              // Adjust stock — outlined plain button
+              // Adjust stock
               Expanded(
                 child: SizedBox(
                   height: R.sp(context, AppSizes.buttonHeight),
@@ -249,9 +256,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
                           builder: (_) => const StockOutScreen(),
                         ),
                       );
-                      refreshInventory(ref);
-                      ref.invalidate(_productDetailProvider(_productId));
-                      ref.invalidate(_movementsProvider(_productId));
+                      _refreshAfterAction();
                     },
                     style: OutlinedButton.styleFrom(
                       side: BorderSide(color: AppColors.border),
@@ -271,7 +276,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
                 ),
               ),
               SizedBox(width: R.sp(context, AppSpacing.sm)),
-              // Reorder — gradient button
+              // Reorder
               Expanded(
                 flex: 2,
                 child: Container(
@@ -295,9 +300,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
                             builder: (_) => const StockInScreen(),
                           ),
                         );
-                        refreshInventory(ref);
-                        ref.invalidate(_productDetailProvider(_productId));
-                        ref.invalidate(_movementsProvider(_productId));
+                        _refreshAfterAction();
                       },
                       child: Center(
                         child: Text(
@@ -318,6 +321,13 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
     );
   }
 
+void _refreshAfterAction() {
+  ref.read(inventoryRefreshProvider.notifier).state++;
+
+  ref.invalidate(productDetailProvider(_productId));
+  ref.invalidate(movementsProvider(_productId));
+}
+
   Widget _vDivider() {
     return Container(
       height: R.sp(context, 32),
@@ -334,9 +344,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Stat cell inside the top card
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────
+
 class _StatCell extends StatelessWidget {
   final String label;
   final String value;
@@ -373,60 +382,51 @@ class _StatCell extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────
 // TAB 1: Details
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────
+
 class _DetailsTab extends StatelessWidget {
-  final Map<String, dynamic> product;
+  final Product product;
   const _DetailsTab({required this.product});
 
   @override
   Widget build(BuildContext context) {
     final rows = <_DetailRow>[
-      _DetailRow('SKU', 'SKU-${product['id']}'),
-      _DetailRow('Category', product['category']?.toString() ?? '—'),
-      _DetailRow('Unit', product['unit']?.toString() ?? '—'),
-      _DetailRow('Barcode', product['barcode']?.toString() ?? '—'),
-      _DetailRow('Supplier', product['supplier']?.toString() ?? '—'),
+      _DetailRow('SKU', 'SKU-${product.id}'),
+      _DetailRow('Category', product.category),
+      _DetailRow('Unit', product.unit),
+      _DetailRow('Barcode', product.barcode.isEmpty ? '—' : product.barcode),
+      _DetailRow('Supplier', product.supplier.isEmpty ? '—' : product.supplier),
       _DetailRow(
         'Expiry date',
-        product['expiry_date']?.toString().isNotEmpty == true
-            ? product['expiry_date'].toString()
-            : '—',
+        product.expiryDate.isEmpty ? '—' : product.expiryDate,
       ),
       _DetailRow(
         'Purchase price',
-        '₹${(product['purchase_price'] as num?)?.toDouble().toStringAsFixed(2) ?? '0.00'}',
+        '₹${product.purchasePrice.toStringAsFixed(2)}',
       ),
       _DetailRow(
         'Selling price',
-        '₹${(product['selling_price'] as num?)?.toDouble().toStringAsFixed(2) ?? '0.00'}',
+        '₹${product.sellingPrice.toStringAsFixed(2)}',
       ),
       _DetailRow(
         'Discount',
-        product['discount'] != null && product['discount'] != 0
-            ? '${product['discount']}%'
-            : '—',
+        product.discount != 0 ? '${product.discount}%' : '—',
       ),
       _DetailRow(
         'SGST',
-        product['sgst'] != null && product['sgst'] != 0
-            ? '${product['sgst']}%'
-            : '—',
+        product.sgst != 0 ? '${product.sgst}%' : '—',
       ),
       _DetailRow(
         'CGST',
-        product['cgst'] != null && product['cgst'] != 0
-            ? '${product['cgst']}%'
-            : '—',
+        product.cgst != 0 ? '${product.cgst}%' : '—',
       ),
-      _DetailRow('HSN Code', product['hsn_code']?.toString() ?? '—'),
-      _DetailRow('Reorder level', '${product['lsl'] ?? '—'}'),
+      _DetailRow('HSN Code', product.hsnCode.isEmpty ? '—' : product.hsnCode),
+      _DetailRow('Reorder level', '${product.lsl}'),
       _DetailRow(
         'Description',
-        product['description']?.toString().isNotEmpty == true
-            ? product['description'].toString()
-            : '—',
+        product.description.isNotEmpty ? product.description : '—',
       ),
     ];
 
@@ -495,16 +495,17 @@ class _DetailRow {
   const _DetailRow(this.label, this.value);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TAB 2: Movements  (reads stock_transactions via _movementsProvider)
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────
+// TAB 2: Movements
+// ────────────────────────────────────────────────────────────
+
 class _MovementsTab extends ConsumerWidget {
   final int productId;
   const _MovementsTab({required this.productId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final movementsAsync = ref.watch(_movementsProvider(productId));
+    final movementsAsync = ref.watch(movementsProvider(productId));
 
     return movementsAsync.when(
       data: (movements) {
@@ -532,45 +533,42 @@ class _MovementsTab extends ConsumerWidget {
 }
 
 class _MovementTile extends StatelessWidget {
-  final Map<String, dynamic> movement;
+  final StockMovement movement;
   const _MovementTile({required this.movement});
 
   @override
   Widget build(BuildContext context) {
-    final type = movement['type']?.toString() ?? '';
-    final reason = movement['reason']?.toString() ?? '';
-    final qty = (movement['quantity'] as num?)?.toInt() ?? 0;
-    final reference = movement['reference']?.toString() ?? '';
-    final note = movement['note']?.toString() ?? '';
-    final dateRaw = movement['date']?.toString() ?? '';
+    final type = movement.movementType; // 'IN' or 'OUT'
+    final reason = movement.referenceType;
+    final qty = movement.quantity;
+    final reference = movement.referenceNumber;
+    final note = movement.remarks;
+    final date = movement.createdAt;
 
-    // Parse "running balance" stored in the movement row (if present)
-    final balance = movement['running_balance'];
-
-    // Determine icon colour and label from type
     Color dot;
     String typeLabel;
     String qtyDisplay;
 
-    if (type == 'in') {
-      dot = AppColors.green;
-      typeLabel = reason.isEmpty ? 'Stock In' : reason;
-      qtyDisplay = '+$qty';
-    } else if (type == 'sale') {
-      dot = AppColors.primary;
-      typeLabel = 'Sale';
-      qtyDisplay = '−$qty';
-    } else {
-      // out / adjust / damage etc.
-      dot = AppColors.orange;
-      typeLabel = reason.isEmpty ? 'Adjustment' : reason;
-      qtyDisplay = '−$qty';
-    }
+if (type == 'STOCK_IN' || type == 'PURCHASE') {
+  dot = AppColors.green;
+  typeLabel = reason.isEmpty ? 'Stock In' : reason;
+  qtyDisplay = '+$qty';
+} else if (type == 'STOCK_OUT' ||
+    type == 'SALE' ||
+    type == 'DAMAGE') {
+  dot = AppColors.red;
+  typeLabel = reason.isEmpty ? 'Stock Out' : reason;
+  qtyDisplay = '-$qty';
+} else {
+  dot = AppColors.orange;
+  typeLabel = reason.isEmpty ? 'Adjustment' : reason;
+  qtyDisplay = '$qty';
+}
 
     final subParts = <String>[];
     if (reference.isNotEmpty) subParts.add(reference);
     if (note.isNotEmpty) subParts.add(note);
-    subParts.add(_friendlyDate(dateRaw));
+    subParts.add(_friendlyDate(date));
 
     return Container(
       padding: EdgeInsets.all(R.sp(context, AppSpacing.cardPadding)),
@@ -584,7 +582,6 @@ class _MovementTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Coloured dot
           Padding(
             padding: EdgeInsets.only(top: R.sp(context, 4)),
             child: Container(
@@ -594,8 +591,6 @@ class _MovementTile extends StatelessWidget {
             ),
           ),
           SizedBox(width: R.sp(context, AppSpacing.md)),
-
-          // Type + sub-line
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -611,7 +606,13 @@ class _MovementTile extends StatelessWidget {
                         text: '  $qtyDisplay',
                         style: AppTextStyles.cardValue.copyWith(
                           fontSize: R.fs(context, 13),
-                          color: type == 'in' ? AppColors.green : AppColors.red,
+                          color: (type == 'STOCK_IN' || type == 'PURCHASE')
+    ? AppColors.green
+    : (type == 'STOCK_OUT' ||
+            type == 'SALE' ||
+            type == 'DAMAGE')
+        ? AppColors.red
+        : AppColors.orange,
                         ),
                       ),
                     ],
@@ -622,79 +623,64 @@ class _MovementTile extends StatelessWidget {
               ],
             ),
           ),
-
-          // Running balance
-          if (balance != null)
-            Text(
-              '→ $balance',
-              style: AppTextStyles.small.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
         ],
       ),
     );
   }
 
-  String _friendlyDate(String raw) {
-    try {
-      final dt = DateTime.parse(raw);
-      final months = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
-      ];
-      return '${dt.day} ${months[dt.month - 1]}';
-    } catch (_) {
-      return raw;
-    }
+  String _friendlyDate(DateTime date) {
+    final months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
+    return '${date.day} ${months[date.month - 1]}';
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────
 // TAB 3: Stats
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────
+
 class _StatsTab extends ConsumerWidget {
-  final Map<String, dynamic> product;
-  const _StatsTab({required this.product});
+  final Product product;
+  final int productId;
+  const _StatsTab({required this.product, required this.productId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final productId = product['id'] as int;
-    final movementsAsync = ref.watch(_movementsProvider(productId));
+    final movementsAsync = ref.watch(movementsProvider(productId));
 
     return movementsAsync.when(
       data: (movements) {
-        // Compute aggregates from transaction history
         int totalIn = 0;
         int totalOut = 0;
-        double totalCostIn = 0;
 
         for (final m in movements) {
-          final qty = (m['quantity'] as num?)?.toInt() ?? 0;
-          if (m['type'] == 'in') {
+          final qty = m.quantity;
+          if (m.movementType == 'STOCK_IN' ||
+    m.movementType == 'PURCHASE') {
             totalIn += qty;
-            totalCostIn += qty * ((m['unitCost'] as num?)?.toDouble() ?? 0.0);
-          } else {
+          } else if (m.movementType == 'STOCK_OUT' ||
+         m.movementType == 'SALE' ||
+         m.movementType == 'DAMAGE') {
             totalOut += qty;
           }
         }
 
-        final qty = (product['quantity'] as num?)?.toInt() ?? 0;
-        final purchasePrice =
-            (product['purchase_price'] as num?)?.toDouble() ?? 0.0;
-        final sellingPrice =
-            (product['selling_price'] as num?)?.toDouble() ?? 0.0;
-        final lsl = (product['lsl'] as num?)?.toInt() ?? 0;
+        final qty = product.quantity;
+        final purchasePrice = product.purchasePrice;
+        final sellingPrice = product.sellingPrice;
+        final lsl = product.lsl;
         final inventoryValue = qty * purchasePrice;
         final potentialRevenue = qty * sellingPrice;
         final profit = sellingPrice > 0 && purchasePrice > 0

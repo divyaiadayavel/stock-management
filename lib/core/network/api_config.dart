@@ -32,22 +32,37 @@
   static const String deleteStaff  = '$baseUrl/api/staff/delete_staff.php';
   static const String updateStatus = '$baseUrl/api/staff/update_status.php';
  
-  // ── Products ──────────────────────────────────────────────
-  static const String getProducts    = '$baseUrl/api/products/get_products.php';
-  static const String addProduct     = '$baseUrl/api/products/add_product.php';
-  static const String updateProduct  = '$baseUrl/api/products/update_product.php';
-  static const String deleteProduct  = '$baseUrl/api/products/delete_product.php';
-  static const String updateStock    = '$baseUrl/api/products/update_stock.php';
- 
-  // ── Suppliers ─────────────────────────────────────────────
-  static const String getSuppliers    = '$baseUrl/api/suppliers/get_suppliers.php';
-  static const String addSupplier     = '$baseUrl/api/suppliers/add_supplier.php';
-  static const String updateSupplier  = '$baseUrl/api/suppliers/update_supplier.php';
-  static const String deleteSupplier  = '$baseUrl/api/suppliers/delete_supplier.php';
+
+// ── Products (Consolidated CRUD Route) ────────────────────
+  static const String getProducts    = '$baseUrl/api/products/products.php';
+  static const String addProduct     = '$baseUrl/api/products/products.php';
+  static const String updateProduct  = '$baseUrl/api/products/products.php';
+  static const String deleteProduct  = '$baseUrl/api/products/products.php'; 
+  static const String updateStock    = '$baseUrl/api/products/products.php';
+  
+  // Keep image upload separate as planned
+  static const String uploadImage    = '$baseUrl/api/products/upload_image.php';
+
+// ── Suppliers (Consolidated CRUD Route) ───────────────────
+  static const String getSuppliers       = '$baseUrl/api/suppliers/suppliers.php';
+  static const String addSupplier        = '$baseUrl/api/suppliers/suppliers.php';
+  static const String updateSupplier     = '$baseUrl/api/suppliers/suppliers.php';
+  static const String deleteSupplier     = '$baseUrl/api/suppliers/suppliers.php';
+  
+  // Dedicated Image Upload Route for Suppliers
+ static String get uploadSupplierImage => '$baseUrl/api/suppliers/upload_image.php';
+
+ // 🟢 CUSTOMERS ENDPOINT ROUTES
+static const String getCustomers = '$baseUrl/api/customers/customers.php';
+  static const String addCustomer = '$baseUrl/api/customers/customers.php';
+  static const String updateCustomer = '$baseUrl/api/customers/customers.php';
+  static const String deleteCustomer = '$baseUrl/api/customers/customers.php';
  
   // ── Sales & Invoices ──────────────────────────────────────
-  static const String createInvoice = '$baseUrl/api/sales/create_invoice.php';
-  static const String getSalesStats = '$baseUrl/api/sales/get_sales_stats.php';
+static const String createSale = "$baseUrl/api/sales/create_sale.php";
+static const String getInvoice = "$baseUrl/api/sales/get_invoice.php";
+
+static const String inventory = "$baseUrl/api/inventory/inventory.php";
  
   // ── Printers & Hardware ───────────────────────────────────
   static const String getSavedPrinters    = '$baseUrl/api/settings/printers_hardware/get_saved_printers.php';

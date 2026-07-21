@@ -15,7 +15,7 @@ import '../../../settings/presentation/screens/settings_screen.dart';
 import '../providers/dashboard_provider.dart';
 import '../../../../core/utils/responsive_helper.dart';
 import '../../../customers/presentation/screens/customer_screen.dart';
-import '../../../settings/presentation/screens/operations/hardware/printers_hardware_screen.dart';
+import 'package:stock_management/features/settings/presentation/screens/operations/printers_hardware/printer_management/printers_hardware_screen.dart';
 import '../../../inventory/presentation/screens/new_purchase_order_screen.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {

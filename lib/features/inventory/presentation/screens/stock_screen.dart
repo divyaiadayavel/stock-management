@@ -3,12 +3,21 @@
 // =========================================================
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/utils/responsive_helper.dart';
-import '../providers/inventory_providers.dart';
+
+// ✅ New providers (replacing inventory_providers.dart)
+import '../providers/inventory_provider.dart';
+import '../providers/inventory_filter_provider.dart';
+
+// ✅ Product entity (from Product module)
+import '../../../products/data/models/product_model.dart';
+
+// ✅ ProductDetailScreen now accepts Product
 import 'product_detail_screen.dart';
 
 class StockScreen extends ConsumerStatefulWidget {
@@ -31,7 +40,7 @@ class _StockScreenState extends ConsumerState<StockScreen> {
   @override
   Widget build(BuildContext context) {
     final summaryAsync = ref.watch(inventorySummaryProvider);
-    final productsAsync = ref.watch(productsListProvider);
+    final productsAsync = ref.watch(inventoryProductsProvider);
     final activeFilter = ref.watch(inventoryFilterProvider);
 
     return Scaffold(
@@ -97,22 +106,22 @@ class _StockScreenState extends ConsumerState<StockScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _FilterChip(
-                    label: 'All ${summary['all']}',
+                    label: 'All ${summary.totalProducts}',
                     value: 'all',
                     selected: activeFilter == 'all',
                   ),
                   _FilterChip(
-                    label: 'Low ${summary['low']}',
+                    label: 'Low ${summary.lowStockProducts}', 
                     value: 'low',
                     selected: activeFilter == 'low',
                   ),
                   _FilterChip(
-                    label: 'Out ${summary['out']}',
+                    label: 'Out ${summary.outOfStockProducts}',
                     value: 'out',
                     selected: activeFilter == 'out',
                   ),
                   _FilterChip(
-                    label: 'Expiring ${summary['expiring']}',
+                    label: 'Expiring ${summary.expiringProducts}',
                     value: 'expiring',
                     selected: activeFilter == 'expiring',
                   ),
@@ -143,7 +152,9 @@ class _StockScreenState extends ConsumerState<StockScreen> {
                   );
                 }
                 return RefreshIndicator(
-                  onRefresh: () async => refreshInventory(ref),
+                  onRefresh: () async {
+  ref.read(inventoryRefreshProvider.notifier).state++;
+},
                   child: ListView.separated(
                     padding: EdgeInsets.fromLTRB(
                       R.sp(context, AppSpacing.screenPadding),
@@ -170,7 +181,7 @@ class _StockScreenState extends ConsumerState<StockScreen> {
   }
 
   void _showSortSheet(BuildContext context) {
-    final currentSort = this.ref.read(inventorySortProvider);
+    final currentSort = ref.read(inventorySortProvider);
 
     showModalBottomSheet(
       context: context,
@@ -196,9 +207,8 @@ class _StockScreenState extends ConsumerState<StockScreen> {
                     ? const Icon(Icons.check, color: AppColors.primary)
                     : null,
                 onTap: () {
-                  this.ref.read(inventorySortProvider.notifier).state =
-                      'name_asc';
-                  this.ref.invalidate(productsListProvider);
+                  ref.read(inventorySortProvider.notifier).state = 'name_asc';
+                  ref.invalidate(inventoryProductsProvider);
                   Navigator.pop(sheetContext);
                 },
               ),
@@ -211,9 +221,8 @@ class _StockScreenState extends ConsumerState<StockScreen> {
                     ? const Icon(Icons.check, color: AppColors.primary)
                     : null,
                 onTap: () {
-                  this.ref.read(inventorySortProvider.notifier).state =
-                      'stock_asc';
-                  this.ref.invalidate(productsListProvider);
+                  ref.read(inventorySortProvider.notifier).state = 'stock_asc';
+                  ref.invalidate(inventoryProductsProvider);
                   Navigator.pop(sheetContext);
                 },
               ),
@@ -226,9 +235,8 @@ class _StockScreenState extends ConsumerState<StockScreen> {
                     ? const Icon(Icons.check, color: AppColors.primary)
                     : null,
                 onTap: () {
-                  this.ref.read(inventorySortProvider.notifier).state =
-                      'value_desc';
-                  this.ref.invalidate(productsListProvider);
+                  ref.read(inventorySortProvider.notifier).state = 'value_desc';
+                  ref.invalidate(inventoryProductsProvider);
                   Navigator.pop(sheetContext);
                 },
               ),
@@ -282,21 +290,25 @@ class _FilterChip extends ConsumerWidget {
   }
 }
 
+// ============================================================
+// _ProductTile now uses Product (non‑nullable fields)
+// ============================================================
 class _ProductTile extends ConsumerWidget {
-  final Map<String, dynamic> product;
+  final Product product; // from ProductModel (extends Product)
   const _ProductTile({required this.product});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final qty = (product['quantity'] as num?)?.toInt() ?? 0;
-    final lsl = (product['lsl'] as num?)?.toInt() ?? 0;
-    final unit = product['unit']?.toString() ?? '';
-    final price = (product['selling_price'] as num?)?.toDouble() ?? 0.0;
+    // All fields are non‑nullable – no fallbacks needed.
+    final qty = product.quantity;
+    final lsl = product.lsl;
+    final unit = product.unit;
+    final price = product.sellingPrice;
 
     Color stockColor = AppColors.green;
     if (qty <= 0) {
       stockColor = AppColors.red;
-    } else if (qty <= lsl) {
+    } else if (lsl > 0 && qty <= lsl) {
       stockColor = AppColors.orange;
     }
 
@@ -308,7 +320,7 @@ class _ProductTile extends ConsumerWidget {
             builder: (_) => ProductDetailScreen(product: product),
           ),
         );
-        refreshInventory(ref);
+        ref.read(inventoryRefreshProvider.notifier).state++;
       },
       child: Container(
         padding: EdgeInsets.symmetric(
@@ -331,7 +343,7 @@ class _ProductTile extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    product['name']?.toString() ?? '',
+                    product.name,
                     style: AppTextStyles.cardValue.copyWith(
                       fontSize: R.fs(context, AppSizes.iconSm),
                     ),
@@ -339,7 +351,7 @@ class _ProductTile extends ConsumerWidget {
                   ),
                   SizedBox(height: R.sp(context, AppSpacing.xs)),
                   Text(
-                    'SKU-${product['id']} · $unit',
+                    'SKU-${product.id} · $unit',
                     style: AppTextStyles.small,
                   ),
                 ],

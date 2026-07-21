@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'dart:io';
 
 import 'scanner_bill_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_text_styles.dart';
-import '../../../../core/storage/db_helper.dart';
 import '../providers/billing_provider.dart';
 import 'current_bill_screen.dart';
 import '../../../../core/utils/responsive_helper.dart';
+import '../../../products/presentation/providers/product_provider.dart';
 
 final searchProductProvider = StateProvider<String>((ref) => "");
 
@@ -23,8 +22,6 @@ class AddProductBillScreen extends ConsumerStatefulWidget {
 }
 
 class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
-  List<Map<String, dynamic>> products = [];
-  bool isLoading = true;
   bool isAscending = true;
   String selectedCategory = "All";
 
@@ -50,16 +47,19 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
   @override
   void initState() {
     super.initState();
-    loadProducts();
+    Future.microtask(() {
+      ref.read(productListProvider.notifier).loadProducts();
+    });
   }
 
-  Future<void> loadProducts() async {
-    final data = await DBHelper.getAllProducts();
-
-    setState(() {
-      products = data;
-      isLoading = false;
-    });
+  void _showSnackBar(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? AppColors.red : AppColors.primary,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   @override
@@ -67,35 +67,34 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
     final billingState = ref.watch(billingProvider);
     final search = ref.watch(searchProductProvider);
 
-    final filteredProducts = products.where((product) {
-      final searchMatch = product["name"].toString().toLowerCase().contains(
-        search.toLowerCase(),
-      );
-      final categoryMatch =
-          selectedCategory == "All" ||
-          (product["category"] ?? "").toString() == selectedCategory;
+    final productState = ref.watch(productListProvider);
+    final products = productState.items;
+    final isLoading = productState.isInitialLoading;
 
+    final filteredProducts = products.where((product) {
+      final searchLower = search.toLowerCase();
+      final searchMatch =
+          product.name.toLowerCase().contains(searchLower) ||
+          (product.barcode?.toLowerCase().contains(searchLower) ?? false);
+      final categoryMatch =
+          selectedCategory == "All" || product.category == selectedCategory;
       return searchMatch && categoryMatch;
     }).toList();
 
-    filteredProducts.sort(
-      (a, b) => (a["name"] ?? "").toString().toLowerCase().compareTo(
-        (b["name"] ?? "").toString().toLowerCase(),
-      ),
-    );
-
     filteredProducts.sort((a, b) {
-      final nameA = a["name"].toString();
-      final nameB = b["name"].toString();
+      final nameA = a.name;
+      final nameB = b.name;
       return isAscending ? nameA.compareTo(nameB) : nameB.compareTo(nameA);
     });
+
+    final showLoading = isLoading && products.isEmpty;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
           children: [
-            // ── Clean Custom Header (No AppBar Widget) ──
+            // ── Header ──
             Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: R.sp(context, AppSpacing.screenPadding / 2),
@@ -117,9 +116,8 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
               ),
             ),
 
-            // ── Main Content ──
             Expanded(
-              child: isLoading
+              child: showLoading
                   ? const Center(child: CircularProgressIndicator())
                   : SingleChildScrollView(
                       padding: EdgeInsets.all(
@@ -128,7 +126,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // SEARCH + FILTER
+                          // ── Search & Scanner ──
                           Row(
                             children: [
                               Expanded(
@@ -137,11 +135,8 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                   child: TextField(
                                     onChanged: (value) {
                                       ref
-                                              .read(
-                                                searchProductProvider.notifier,
-                                              )
-                                              .state =
-                                          value;
+                                          .read(searchProductProvider.notifier)
+                                          .state = value;
                                     },
                                     decoration: InputDecoration(
                                       hintText: "Search product / barcode",
@@ -223,7 +218,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                             height: R.sp(context, AppSpacing.sectionGap),
                           ),
 
-                          // CATEGORY CHIPS
+                          // ── Category Chips ──
                           SizedBox(
                             height: R.searchH(context) - 8,
                             child: ListView.builder(
@@ -267,12 +262,16 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
 
                           SizedBox(height: R.sp(context, AppSpacing.md)),
 
+                          // ── Product List ──
                           ListView.builder(
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
                             itemCount: filteredProducts.length,
                             itemBuilder: (context, index) {
                               final product = filteredProducts[index];
+                              if (product.id == null) return const SizedBox.shrink();
+
+                              final isOutOfStock = product.quantity <= 0;
 
                               return Container(
                                 margin: EdgeInsets.only(
@@ -287,12 +286,16 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                   borderRadius: BorderRadius.circular(
                                     AppSizes.radiusLg,
                                   ),
-                                  border: Border.all(color: AppColors.border),
+                                  border: Border.all(
+                                    color: isOutOfStock
+                                        ? AppColors.red.withOpacity(0.3)
+                                        : AppColors.border,
+                                  ),
                                 ),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
-                                    // ── LEFT: product info ──
+                                    // ── Left: Product Info ──
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment:
@@ -300,12 +303,15 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Text(
-                                            product["name"] ?? "",
+                                            product.name,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: AppTextStyles.cardValue
                                                 .copyWith(
                                                   fontSize: R.fs(context, 13.5),
+                                                  color: isOutOfStock
+                                                      ? AppColors.textSecondary
+                                                      : AppColors.textPrimaryDark,
                                                 ),
                                           ),
                                           SizedBox(
@@ -320,7 +326,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                 context: context,
                                                 label: "Price",
                                                 value:
-                                                    "₹${product["selling_price"]}",
+                                                    "₹${product.sellingPrice}",
                                                 valueColor:
                                                     AppColors.textPrimaryDark,
                                               ),
@@ -333,8 +339,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                               _metaChip(
                                                 context: context,
                                                 label: "Disc",
-                                                value:
-                                                    "${product["discount"] ?? 0}%",
+                                                value: "${product.discount}%",
                                                 valueColor: AppColors.green,
                                               ),
                                               SizedBox(
@@ -346,16 +351,34 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                               _metaChip(
                                                 context: context,
                                                 label: "Stock",
-                                                value: "${product["quantity"]}",
-                                                valueColor: AppColors.cyanDim,
+                                                value: "${product.quantity}",
+                                                valueColor: isOutOfStock
+                                                    ? AppColors.red
+                                                    : AppColors.cyanDim,
                                               ),
                                             ],
                                           ),
+                                          if (isOutOfStock) ...[
+                                            SizedBox(
+                                              height: R.sp(
+                                                context,
+                                                AppSpacing.xs,
+                                              ),
+                                            ),
+                                            Text(
+                                              "⚠️ Out of Stock",
+                                              style: AppTextStyles.small
+                                                  .copyWith(
+                                                    color: AppColors.red,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                            ),
+                                          ],
                                         ],
                                       ),
                                     ),
 
-                                    // ── RIGHT: Add / Cart Adjuster ──
+                                    // ── Right: Add / Qty Controls ──
                                     SizedBox(
                                       width: R.isDesktop(context)
                                           ? 180
@@ -372,10 +395,10 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                               .indexWhere(
                                                 (e) =>
                                                     e.productId ==
-                                                    product["id"],
+                                                    product.id,
                                               );
 
-                                          // NOT IN CART
+                                          // ── Not in cart ──
                                           if (existingIndex == -1) {
                                             return Align(
                                               alignment: Alignment.centerRight,
@@ -384,25 +407,44 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                     BorderRadius.circular(
                                                       AppSizes.radiusMd,
                                                     ),
-                                                onTap: () => ref
-                                                    .read(
-                                                      billingProvider.notifier,
-                                                    )
-                                                    .addToCart(product, 1),
+                                                onTap: isOutOfStock
+                                                    ? null
+                                                    : () {
+                                                        ref
+                                                            .read(
+                                                              billingProvider
+                                                                  .notifier,
+                                                            )
+                                                            .addProduct(product);
+                                                      },
                                                 child: Container(
                                                   height: 34,
                                                   width: 34,
                                                   decoration: BoxDecoration(
-                                                    gradient:
-                                                        AppColors.brandGradient,
+                                                    gradient: isOutOfStock
+                                                        ? null
+                                                        : AppColors
+                                                            .brandGradient,
+                                                    color: isOutOfStock
+                                                        ? AppColors.surface2
+                                                        : null,
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                           AppSizes.radiusMd,
                                                         ),
+                                                    border: isOutOfStock
+                                                        ? Border.all(
+                                                            color: AppColors
+                                                                .border,
+                                                          )
+                                                        : null,
                                                   ),
-                                                  child: const Icon(
+                                                  child: Icon(
                                                     Icons.add,
-                                                    color: Colors.white,
+                                                    color: isOutOfStock
+                                                        ? AppColors
+                                                            .textSecondary
+                                                        : Colors.white,
                                                     size: 19,
                                                   ),
                                                 ),
@@ -410,9 +452,11 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                             );
                                           }
 
-                                          // IN CART
+                                          // ── Already in cart ──
                                           final item =
                                               billingState.cart[existingIndex];
+                                          final availableStock = product.quantity;
+
                                           return Row(
                                             mainAxisAlignment:
                                                 MainAxisAlignment.end,
@@ -449,16 +493,14 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                                 ),
                                                           ),
                                                           onTap: () {
-                                                            if (item.qty > 1) {
-                                                              ref
-                                                                  .read(
-                                                                    billingProvider
-                                                                        .notifier,
-                                                                  )
-                                                                  .decreaseQty(
-                                                                    existingIndex,
-                                                                  );
-                                                            }
+                                                            ref
+                                                                .read(
+                                                                  billingProvider
+                                                                      .notifier,
+                                                                )
+                                                                .decreaseQty(
+                                                                  product.id!,
+                                                                );
                                                           },
                                                           child: Container(
                                                             height: 34,
@@ -530,38 +572,33 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                                   ),
                                                             ),
                                                             onFieldSubmitted: (value) {
-                                                              final newQty =
+                                                              int? newQty =
                                                                   int.tryParse(
                                                                     value,
                                                                   );
-                                                              if (newQty !=
-                                                                      null &&
-                                                                  newQty > 0) {
-                                                                while (item
-                                                                        .qty <
-                                                                    newQty) {
-                                                                  ref
-                                                                      .read(
-                                                                        billingProvider
-                                                                            .notifier,
-                                                                      )
-                                                                      .increaseQty(
-                                                                        existingIndex,
-                                                                      );
-                                                                }
-                                                                while (item
-                                                                        .qty >
-                                                                    newQty) {
-                                                                  ref
-                                                                      .read(
-                                                                        billingProvider
-                                                                            .notifier,
-                                                                      )
-                                                                      .decreaseQty(
-                                                                        existingIndex,
-                                                                      );
-                                                                }
+                                                              if (newQty ==
+                                                                      null ||
+                                                                  newQty <= 0) {
+                                                                return;
                                                               }
+                                                              if (newQty >
+                                                                  availableStock) {
+                                                                newQty =
+                                                                    availableStock;
+                                                                _showSnackBar(
+                                                                  'Only $availableStock items available',
+                                                                  isError: true,
+                                                                );
+                                                              }
+                                                              ref
+                                                                  .read(
+                                                                    billingProvider
+                                                                        .notifier,
+                                                                  )
+                                                                  .updateQty(
+                                                                    product.id!,
+                                                                    newQty,
+                                                                  );
                                                             },
                                                           ),
                                                         ),
@@ -588,14 +625,24 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                                       .radiusMd,
                                                                 ),
                                                           ),
-                                                          onTap: () => ref
-                                                              .read(
-                                                                billingProvider
-                                                                    .notifier,
-                                                              )
-                                                              .increaseQty(
-                                                                existingIndex,
-                                                              ),
+                                                          onTap: () {
+                                                            if (item.qty >=
+                                                                availableStock) {
+                                                              _showSnackBar(
+                                                                'Only $availableStock items available',
+                                                                isError: true,
+                                                              );
+                                                              return;
+                                                            }
+                                                            ref
+                                                                .read(
+                                                                  billingProvider
+                                                                      .notifier,
+                                                                )
+                                                                .increaseQty(
+                                                                  product.id!,
+                                                                );
+                                                          },
                                                           child: Container(
                                                             height: 34,
                                                             decoration: const BoxDecoration(
@@ -633,7 +680,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                   AppSpacing.sm,
                                                 ),
                                               ),
-                                              // DELETE icon
+                                              // DELETE
                                               InkWell(
                                                 borderRadius:
                                                     BorderRadius.circular(
@@ -705,8 +752,8 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                           billingProvider
                                                               .notifier,
                                                         )
-                                                        .removeItem(
-                                                          existingIndex,
+                                                        .removeProduct(
+                                                          product.id!,
                                                         );
                                                   }
                                                 },
@@ -791,7 +838,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                       ),
                     ),
                     Text(
-                      "₹ ${billingState.total.toStringAsFixed(2)}",
+                      "₹ ${billingState.grandTotal.toStringAsFixed(2)}",
                       style: AppTextStyles.cardValue.copyWith(
                         color: Colors.white,
                         fontSize: R.fs(context, 20),
@@ -813,6 +860,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                       ),
                     ),
                     onPressed: () {
+                      if (billingState.cart.isEmpty) return;
                       Navigator.push(
                         context,
                         MaterialPageRoute(

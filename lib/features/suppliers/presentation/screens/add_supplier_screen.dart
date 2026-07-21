@@ -1,9 +1,15 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import '../../../../core/constants/app_colors.dart';
-import '../../../../core/storage/db_helper.dart';
-import '../../../../core/utils/responsive_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-// import '../../../../core/constants/app_curve.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:stock_management/core/constants/app_colors.dart';
+import 'package:stock_management/core/constants/app_sizes.dart';
+import 'package:stock_management/core/constants/app_spacing.dart';
+import 'package:stock_management/core/utils/responsive_helper.dart';
+import 'package:stock_management/core/utils/notification_utils.dart';
+import '../../domain/entities/supplier.dart';
+import '../providers/add_supplier_provider.dart';
+import '../providers/supplier_provider.dart';
 
 class AddSupplierScreen extends ConsumerStatefulWidget {
   const AddSupplierScreen({super.key});
@@ -16,32 +22,17 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
   final companyCtrl = TextEditingController();
   final contactCtrl = TextEditingController();
   final phoneCtrl = TextEditingController();
+  final altPhoneCtrl = TextEditingController();
+  final emailCtrl = TextEditingController();
   final gstCtrl = TextEditingController();
+  final panCtrl = TextEditingController();
   final addressCtrl = TextEditingController();
+  final cityCtrl = TextEditingController();
+  final stateCtrl = TextEditingController();
+  final postalCtrl = TextEditingController();
 
-  // Multi-select categories
-  final List<String> _allCategories = [
-    "Electronics",
-    "Mobile",
-    "Accessories",
-    "Fashion",
-    "Grocery",
-    "Stationery",
-    "Food",
-    "Beauty",
-    "Furniture",
-    "Medical",
-    "Sports",
-    "Hardware",
-    "Home Appliances",
-    "Books",
-    "Toys",
-    "Footwear",
-    "FMCG",
-    "Dairy",
-    "Beverages",
-    "Lighting",
-  ];
+  final Set<String> _selectedCategories = {};
+  String? _selectedPaymentTerm;
 
   final List<String> _paymentTerms = [
     "Immediate",
@@ -53,10 +44,105 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
     "Net 90",
   ];
 
-  Set<String> _selectedCategories = {};
-  String? _selectedPaymentTerm;
+  String _contactError = '';
+  String _phoneError = '';
 
-  // ── Text field builder ───────────────────────────────────────
+  @override
+  void dispose() {
+    companyCtrl.dispose();
+    contactCtrl.dispose();
+    phoneCtrl.dispose();
+    altPhoneCtrl.dispose();
+    emailCtrl.dispose();
+    gstCtrl.dispose();
+    panCtrl.dispose();
+    addressCtrl.dispose();
+    cityCtrl.dispose();
+    stateCtrl.dispose();
+    postalCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickAvatarImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
+    if (pickedFile != null) {
+      ref.read(addSupplierNotifierProvider.notifier).setImage(File(pickedFile.path));
+    }
+  }
+
+  // ── Section header used inside a card ──
+  Widget _sectionHeader(String title, IconData icon) {
+    return Row(
+      children: [
+        Container(
+          padding: EdgeInsets.all(R.sp(context, AppSpacing.xs + 2)),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusSm + 4)),
+          ),
+          child: Icon(icon, size: R.icon(context, AppSizes.iconSm), color: AppColors.primary),
+        ),
+        SizedBox(width: R.sp(context, AppSpacing.sm + 2)),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: R.fs(context, 13),
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimaryDark,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Card wrapper that groups related fields with consistent spacing ──
+  Widget _sectionCard({required String title, required IconData icon, required List<Widget> children}) {
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(bottom: R.sp(context, AppSpacing.lg)),
+      padding: EdgeInsets.all(R.sp(context, AppSpacing.cardPadding)),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusLg)),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionHeader(title, icon),
+          SizedBox(height: R.sp(context, AppSpacing.md)),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _gapV([double size = AppSpacing.md]) => SizedBox(height: R.sp(context, size));
+
+  // Consistent two-column row with even spacing
+  Widget _fieldRow(Widget left, Widget right) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: left),
+        SizedBox(width: R.sp(context, AppSpacing.md)),
+        Expanded(child: right),
+      ],
+    );
+  }
+
   Widget _field({
     required String label,
     required String hint,
@@ -65,12 +151,13 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
     bool required = false,
     TextInputType keyboard = TextInputType.text,
     int maxLines = 1,
+    String? errorText,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _label(label, required: required),
-        SizedBox(height: R.sp(context, 6)),
+        SizedBox(height: R.sp(context, AppSpacing.xs + 2)),
         TextField(
           controller: controller,
           keyboardType: keyboard,
@@ -79,42 +166,48 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
             fontSize: R.fs(context, 14),
             color: AppColors.textPrimaryDark,
           ),
-          decoration: _inputDeco(hint: hint, icon: icon),
+          decoration: _inputDeco(hint: hint, icon: icon, errorText: errorText),
         ),
       ],
     );
   }
 
-  InputDecoration _inputDeco({required String hint, IconData? icon}) {
+  InputDecoration _inputDeco({
+    required String hint,
+    IconData? icon,
+    String? errorText,
+  }) {
     return InputDecoration(
       hintText: hint,
       hintStyle: TextStyle(
         fontSize: R.fs(context, 13),
-        color: AppColors.textSecondary,
+        color: AppColors.textSecondary.withValues(alpha: 0.7),
       ),
       prefixIcon: icon != null
           ? Icon(
               icon,
-              size: R.icon(context, 18),
+              size: R.icon(context, AppSizes.iconSm + 2),
               color: AppColors.textSecondary,
             )
           : null,
       filled: true,
-      fillColor: Colors.white,
+      fillColor: AppColors.card,
+      errorText: errorText != null && errorText.isNotEmpty ? errorText : null,
+      errorStyle: TextStyle(fontSize: R.fs(context, 11), color: AppColors.red),
       contentPadding: EdgeInsets.symmetric(
-        horizontal: R.sp(context, 14),
-        vertical: R.sp(context, 13),
+        horizontal: R.sp(context, AppSpacing.md + 2),
+        vertical: R.sp(context, AppSpacing.md),
       ),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(R.radius(context, 10)),
+        borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
         borderSide: const BorderSide(color: AppColors.border),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(R.radius(context, 10)),
+        borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
         borderSide: const BorderSide(color: AppColors.border),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(R.radius(context, 10)),
+        borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
         borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
       ),
     );
@@ -126,8 +219,8 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
         text: text,
         style: TextStyle(
           fontSize: R.fs(context, 12),
-          fontWeight: FontWeight.w500,
-          color: AppColors.textSecondary,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimaryDark.withValues(alpha: 0.8),
         ),
         children: required
             ? const [
@@ -141,24 +234,23 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
     );
   }
 
-  // ── Multi-select category picker ─────────────────────────────
-  void _showCategoryPicker() {
+  void _showCategoryPicker(List<String> categories) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      backgroundColor: AppColors.card,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppSizes.radiusXl)),
       ),
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setModal) {
             return Padding(
               padding: EdgeInsets.only(
-                top: 20,
-                left: 20,
-                right: 20,
-                bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+                top: AppSpacing.xl,
+                left: AppSpacing.xl,
+                right: AppSpacing.xl,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + AppSpacing.xl,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -167,10 +259,10 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
                   Row(
                     children: [
                       Text(
-                        "Select Categories",
+                        "Select Dynamic Categories",
                         style: TextStyle(
                           fontSize: R.fs(context, 16),
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                           color: AppColors.textPrimaryDark,
                         ),
                       ),
@@ -182,24 +274,26 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
                         },
                         child: const Text(
                           "Done",
-                          style: TextStyle(color: AppColors.primary),
+                          style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
                         ),
                       ),
                     ],
                   ),
-                  const Divider(),
+                  SizedBox(height: R.sp(context, AppSpacing.sm)),
+                  const Divider(color: AppColors.border, height: 1),
                   SizedBox(
-                    height: 300,
+                    height: 250,
                     child: ListView(
-                      children: _allCategories.map((cat) {
+                      children: categories.map((cat) {
                         final selected = _selectedCategories.contains(cat);
                         return CheckboxListTile(
                           value: selected,
                           activeColor: AppColors.primary,
                           dense: true,
+                          contentPadding: EdgeInsets.zero,
                           title: Text(
                             cat,
-                            style: TextStyle(fontSize: R.fs(context, 14)),
+                            style: TextStyle(fontSize: R.fs(context, 14), fontWeight: FontWeight.w500),
                           ),
                           onChanged: (val) {
                             setModal(() {
@@ -224,52 +318,50 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
     );
   }
 
-  Widget _categoryField() {
-    final display = _selectedCategories.isEmpty
-        ? null
-        : _selectedCategories.join(", ");
+  Widget _categoryField(List<String> categories) {
+    final display = _selectedCategories.isEmpty ? null : _selectedCategories.join(", ");
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _label("Categories"),
-        SizedBox(height: R.sp(context, 6)),
+        SizedBox(height: R.sp(context, AppSpacing.xs + 2)),
         GestureDetector(
-          onTap: _showCategoryPicker,
+          onTap: () => _showCategoryPicker(categories),
           child: Container(
             width: double.infinity,
             padding: EdgeInsets.symmetric(
-              horizontal: R.sp(context, 14),
-              vertical: R.sp(context, 13),
+              horizontal: R.sp(context, AppSpacing.md + 2),
+              vertical: R.sp(context, AppSpacing.md),
             ),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(R.radius(context, 10)),
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
               border: Border.all(color: AppColors.border),
             ),
             child: Row(
               children: [
                 Icon(
                   Icons.category_outlined,
-                  size: R.icon(context, 18),
+                  size: R.icon(context, AppSizes.iconSm + 2),
                   color: AppColors.textSecondary,
                 ),
-                SizedBox(width: R.sp(context, 8)),
+                SizedBox(width: R.sp(context, AppSpacing.sm)),
                 Expanded(
                   child: Text(
-                    display ?? "Select categories",
+                    display ?? "Select operational categories",
                     style: TextStyle(
                       fontSize: R.fs(context, 13),
                       color: display != null
                           ? AppColors.textPrimaryDark
-                          : AppColors.textSecondary,
+                          : AppColors.textSecondary.withValues(alpha: 0.7),
                     ),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                   ),
                 ),
                 Icon(
-                  Icons.keyboard_arrow_down,
+                  Icons.keyboard_arrow_down_rounded,
                   size: R.icon(context, 18),
                   color: AppColors.textSecondary,
                 ),
@@ -277,25 +369,27 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
             ),
           ),
         ),
-        // Selected chips
         if (_selectedCategories.isNotEmpty) ...[
-          SizedBox(height: R.sp(context, 8)),
+          SizedBox(height: R.sp(context, AppSpacing.sm)),
           Wrap(
-            spacing: R.sp(context, 6),
-            runSpacing: R.sp(context, 6),
+            spacing: R.sp(context, AppSpacing.sm - 2),
+            runSpacing: R.sp(context, AppSpacing.sm - 2),
             children: _selectedCategories.map((cat) {
               return Chip(
-                label: Text(cat, style: TextStyle(fontSize: R.fs(context, 11))),
+                label: Text(
+                  cat,
+                  style: TextStyle(fontSize: R.fs(context, 11), fontWeight: FontWeight.w500),
+                ),
                 deleteIcon: const Icon(Icons.close, size: 14),
                 onDeleted: () {
                   setState(() => _selectedCategories.remove(cat));
                 },
-                backgroundColor: AppColors.primary.withOpacity(0.08),
+                backgroundColor: AppColors.primary.withValues(alpha: 0.06),
                 labelStyle: const TextStyle(color: AppColors.primary),
                 deleteIconColor: AppColors.primary,
                 side: const BorderSide(color: Colors.transparent),
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                padding: EdgeInsets.symmetric(horizontal: R.sp(context, 4)),
+                padding: EdgeInsets.symmetric(horizontal: R.sp(context, AppSpacing.xs)),
               );
             }).toList(),
           ),
@@ -308,14 +402,14 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _label("Payment terms"),
-        SizedBox(height: R.sp(context, 6)),
+        _label("Payment Terms"),
+        SizedBox(height: R.sp(context, AppSpacing.xs + 2)),
         DropdownButtonFormField<String>(
-          value: _selectedPaymentTerm,
+          // ✅ FIX: Changed deprecated 'value' inside form dropdown fields to use 'initialValue'
+          initialValue: _selectedPaymentTerm,
           isExpanded: true,
-          menuMaxHeight: 250,
-          dropdownColor: Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          dropdownColor: AppColors.card,
+          borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
           style: TextStyle(
             fontSize: R.fs(context, 13),
             color: AppColors.textPrimaryDark,
@@ -328,7 +422,10 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
               .map(
                 (t) => DropdownMenuItem(
                   value: t,
-                  child: Text(t, style: TextStyle(fontSize: R.fs(context, 13))),
+                  child: Text(
+                    t,
+                    style: TextStyle(fontSize: R.fs(context, 13), fontWeight: FontWeight.w500),
+                  ),
                 ),
               )
               .toList(),
@@ -339,233 +436,366 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
   }
 
   Future<void> _save() async {
-    final phoneText = phoneCtrl.text.trim();
     final contactText = contactCtrl.text.trim();
+    final phoneText = phoneCtrl.text.trim();
 
-    // 1. Separate message for missing Contact Name
-    if (contactText.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Contact name is required")));
+    setState(() {
+      _contactError = contactText.isEmpty ? "Contact name is required" : "";
+      _phoneError = phoneText.isEmpty
+          ? "Phone number is required"
+          : (!RegExp(r'^\d{10}$').hasMatch(phoneText)
+              ? "Enter a valid 10-digit phone number"
+              : "");
+    });
+
+    if (_contactError.isNotEmpty || _phoneError.isNotEmpty) {
+      showCustomNotification(context, "Please clear highlighted form errors first", isError: true);
       return;
     }
 
-    // 2. Separate message for missing Phone Number
-    if (phoneText.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Phone number is required")));
-      return;
-    }
-
-    // 3. Separate message for invalid 10-digit Phone Format
-    if (!RegExp(r'^\d{10}$').hasMatch(phoneText)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Enter a valid 10-digit phone number")),
-      );
-      return;
-    }
-
-    await DBHelper.addSupplier(
+    final supplier = Supplier(
+      id: 0,
+      supplierCode: 'SUP-${DateTime.now().millisecondsSinceEpoch}',
       supplierName: contactText,
-      companyName: companyCtrl.text.trim().isNotEmpty
-          ? companyCtrl.text.trim()
-          : contactText,
-      contactNumber: phoneText,
-      email: "",
-      category: _selectedCategories.join(", "),
-      gst: gstCtrl.text.trim(),
-      address: addressCtrl.text.trim(),
+      companyName: companyCtrl.text.trim().isNotEmpty ? companyCtrl.text.trim() : contactText,
+      contactPerson: contactText,
+      phone: phoneText,
+      alternatePhone: altPhoneCtrl.text.trim().isNotEmpty ? altPhoneCtrl.text.trim() : null,
+      email: emailCtrl.text.trim().isNotEmpty ? emailCtrl.text.trim() : null,
+      gstNumber: gstCtrl.text.trim().isNotEmpty ? gstCtrl.text.trim() : null,
+      panNumber: panCtrl.text.trim().isNotEmpty ? panCtrl.text.trim() : null,
+      address: addressCtrl.text.trim().isNotEmpty ? addressCtrl.text.trim() : null,
+      city: cityCtrl.text.trim().isNotEmpty ? cityCtrl.text.trim() : null,
+      state: stateCtrl.text.trim().isNotEmpty ? stateCtrl.text.trim() : null,
+      country: _selectedCategories.isNotEmpty ? _selectedCategories.join(", ") : 'General',
+      postalCode: postalCtrl.text.trim().isNotEmpty ? postalCtrl.text.trim() : null,
+      openingBalance: 0.00,
+      currentBalance: 0.00,
+      creditLimit: 0.00,
+      notes: _selectedPaymentTerm ?? '',
+      status: 'ACTIVE',
     );
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Supplier added successfully")),
-      );
+    final success = await ref.read(addSupplierNotifierProvider.notifier).saveSupplier(supplier);
+
+    if (success && mounted) {
+      showCustomNotification(context, "Supplier registered successfully");
+      ref.read(suppliersNotifierProvider.notifier).fetchAllSuppliers(refresh: true);
       Navigator.pop(context, true);
+    } else if (mounted) {
+      final error = ref.read(addSupplierNotifierProvider).errorMessage;
+      showCustomNotification(
+        context,
+        error.isNotEmpty ? error : "Failed to record transaction parameters",
+        isError: true,
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final asyncCategories = ref.watch(dbCategoriesProvider);
+    final availableCategories = asyncCategories.value ?? ["Electronics", "Mobile", "Accessories", "Grocery"];
+    final addState = ref.watch(addSupplierNotifierProvider);
+
     return Scaffold(
       backgroundColor: AppColors.background,
-
-      body: SingleChildScrollView(
-        padding: R
-            .hPad(context, base: 18)
-            .copyWith(top: R.sp(context, 40), bottom: R.sp(context, 120)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: Icon(
-                    Icons.arrow_back,
-                    color: AppColors.textPrimaryDark,
-                    size: R.icon(context, 22),
-                  ),
-                ),
-
-                Expanded(
-                  child: Text(
-                    "Add supplier",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w500,
+      body: IgnorePointer(
+        ignoring: addState.isSaving,
+        child: SingleChildScrollView(
+          padding: R.hPad(context, base: AppSpacing.screenPadding).copyWith(
+            top: R.sp(context, AppSpacing.xl + 16),
+            bottom: R.sp(context, 120),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Top bar ──
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(
+                      Icons.arrow_back,
                       color: AppColors.textPrimaryDark,
-                      fontSize: R.fs(context, 18),
+                      size: R.icon(context, 22),
                     ),
                   ),
+                  SizedBox(width: R.sp(context, AppSpacing.sm)),
+                  Expanded(
+                    child: Text(
+                      "Create Supplier Profile",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimaryDark,
+                        fontSize: R.fs(context, 18),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: R.sp(context, AppSpacing.xl)),
+
+              // ── Avatar ──
+              Center(
+                child: Stack(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          )
+                        ],
+                      ),
+                      child: CircleAvatar(
+                        radius: R.sp(context, 44),
+                        backgroundColor: AppColors.card,
+                        backgroundImage: addState.selectedImage != null
+                            ? FileImage(addState.selectedImage!)
+                            : null,
+                        child: addState.selectedImage == null
+                            ? Icon(
+                                Icons.add_a_photo_outlined,
+                                size: R.icon(context, 26),
+                                color: AppColors.primary,
+                              )
+                            : null,
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 2,
+                      right: 2,
+                      child: GestureDetector(
+                        onTap: addState.isSaving ? null : _pickAvatarImage,
+                        child: Container(
+                          width: R.sp(context, 28),
+                          height: R.sp(context, 28),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
+                          ),
+                          child: Icon(
+                            Icons.camera_alt,
+                            size: R.icon(context, 13),
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              SizedBox(height: R.sp(context, AppSpacing.xl)),
 
-            SizedBox(height: R.sp(context, 20)),
-            // Company name (full width)
-            _field(
-              label: "Company name",
-              hint: "Enter the Company Name",
-              icon: Icons.business_outlined,
-              controller: companyCtrl,
-            ),
+              // ── Corporate Identity ──
+              _sectionCard(
+                title: "Corporate Identity",
+                icon: Icons.business_rounded,
+                children: [
+                  _field(
+                    label: "Company Name",
+                    hint: "Enter registered legal trade entity name",
+                    icon: Icons.business_outlined,
+                    controller: companyCtrl,
+                  ),
+                ],
+              ),
 
-            SizedBox(height: R.sp(context, 16)),
-
-            // Contact + Phone (side by side)
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: _field(
-                    label: "Contact",
-                    hint: "Supplier Name",
+              // ── Primary Contact Links (stacked full-width so long values stay visible) ──
+              _sectionCard(
+                title: "Primary Contact Links",
+                icon: Icons.contact_phone_rounded,
+                children: [
+                  _field(
+                    label: "Contact Name",
+                    hint: "Full operational name",
                     icon: Icons.person_outline,
                     controller: contactCtrl,
                     required: true,
+                    errorText: _contactError,
                   ),
-                ),
-                SizedBox(width: R.sp(context, 12)),
-                Expanded(
-                  child: _field(
-                    label: "Phone",
-                    hint: "98xxxxxx21",
+                  _gapV(AppSpacing.md + 2),
+                  _field(
+                    label: "Mobile Line",
+                    hint: "10-digit number",
                     icon: Icons.phone_outlined,
                     controller: phoneCtrl,
                     required: true,
                     keyboard: TextInputType.phone,
+                    errorText: _phoneError,
                   ),
-                ),
-              ],
-            ),
-
-            SizedBox(height: R.sp(context, 16)),
-
-            // GSTIN
-            _field(
-              label: "GSTIN",
-              hint: "33ABCDE1234F1Z5",
-              icon: Icons.percent,
-              controller: gstCtrl,
-            ),
-
-            SizedBox(height: R.sp(context, 16)),
-
-            // Categories + Payment terms (side by side)
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: _categoryField()),
-                SizedBox(width: R.sp(context, 12)),
-                Expanded(child: _paymentTermsField()),
-              ],
-            ),
-
-            SizedBox(height: R.sp(context, 16)),
-
-            // Address
-            _field(
-              label: "Address",
-              hint: "Street, city, PIN",
-              icon: Icons.location_on_outlined,
-              controller: addressCtrl,
-              maxLines: 3,
-            ),
-          ],
-        ),
-      ),
-
-      // ── Bottom buttons ─────────────────────────────────────
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: R
-              .hPad(context, base: 18)
-              .copyWith(top: R.sp(context, 12), bottom: R.sp(context, 12)),
-          child: Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: R.btnH(context),
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(
-                          R.radius(context, 10),
-                        ),
-                      ),
-                      side: const BorderSide(color: AppColors.border),
-                    ),
-                    child: Text(
-                      "Cancel",
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w500,
-                        fontSize: R.fs(context, 14),
-                      ),
-                    ),
+                  _gapV(AppSpacing.md + 2),
+                  _field(
+                    label: "Secondary Line",
+                    hint: "Alternate contact",
+                    icon: Icons.phone_android_outlined,
+                    controller: altPhoneCtrl,
+                    keyboard: TextInputType.phone,
                   ),
-                ),
+                  _gapV(AppSpacing.md + 2),
+                  _field(
+                    label: "Email Address",
+                    hint: "office@domain.com",
+                    icon: Icons.email_outlined,
+                    controller: emailCtrl,
+                    keyboard: TextInputType.emailAddress,
+                  ),
+                ],
               ),
-              SizedBox(width: R.sp(context, 12)),
-              Expanded(
-                flex: 2,
-                child: SizedBox(
-                  height: R.btnH(context),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: AppColors.brandGradient,
-                      borderRadius: BorderRadius.circular(
-                        R.radius(context, 10),
-                      ),
+
+              // ── Tax, Financial & Terms ──
+              _sectionCard(
+                title: "Tax & Financial Terms",
+                icon: Icons.credit_card_rounded,
+                children: [
+                  _fieldRow(
+                    _field(
+                      label: "GSTIN",
+                      hint: "Unassigned / 15-char ID",
+                      icon: Icons.percent,
+                      controller: gstCtrl,
                     ),
-                    child: ElevatedButton(
-                      onPressed: _save,
-                      style: ElevatedButton.styleFrom(
-                        elevation: 0,
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(
-                            R.radius(context, 10),
-                          ),
-                        ),
-                      ),
-                      child: Text(
-                        "Save supplier",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: R.fs(context, 14),
-                        ),
-                      ),
+                    _field(
+                      label: "PAN",
+                      hint: "10-character code",
+                      icon: Icons.credit_card_outlined,
+                      controller: panCtrl,
                     ),
                   ),
-                ),
+                  _gapV(AppSpacing.md + 2),
+                  _paymentTermsField(),
+                ],
+              ),
+
+              // ── Address ──
+              _sectionCard(
+                title: "Geographic Logistics",
+                icon: Icons.pin_drop_rounded,
+                children: [
+                  _field(
+                    label: "Corporate Address",
+                    hint: "Street info, warehousing node location",
+                    icon: Icons.location_on_outlined,
+                    controller: addressCtrl,
+                    maxLines: 2,
+                  ),
+                  _gapV(AppSpacing.md + 2),
+                  _fieldRow(
+                    _field(
+                      label: "City",
+                      hint: "City context",
+                      icon: Icons.location_city_outlined,
+                      controller: cityCtrl,
+                    ),
+                    _field(
+                      label: "State / Region",
+                      hint: "State region",
+                      icon: Icons.map_outlined,
+                      controller: stateCtrl,
+                    ),
+                  ),
+                  _gapV(AppSpacing.md + 2),
+                  _field(
+                    label: "ZIP / Postal Code",
+                    hint: "6-digit routing code",
+                    icon: Icons.local_post_office_outlined,
+                    controller: postalCtrl,
+                    keyboard: TextInputType.number,
+                  ),
+                ],
+              ),
+
+              // ── Categories ──
+              _sectionCard(
+                title: "Categories",
+                icon: Icons.category_rounded,
+                children: [_categoryField(availableCategories)],
               ),
             ],
           ),
+        ),
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          border: Border(top: BorderSide(color: AppColors.border.withValues(alpha: 0.5))),
+        ),
+        padding: EdgeInsets.only(
+          left: R.sp(context, AppSpacing.screenPadding + 2),
+          right: R.sp(context, AppSpacing.screenPadding + 2),
+          top: R.sp(context, AppSpacing.md),
+          // ✅ FIX: use the actual safe-area bottom inset instead of the
+          // previous inline Provider/viewInsets hack, which recreated a
+          // Provider on every build and mixed up keyboard vs safe-area insets.
+          bottom: R.sp(context, AppSpacing.md) + MediaQuery.of(context).padding.bottom,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: R.btnH(context),
+                child: OutlinedButton(
+                  onPressed: addState.isSaving ? null : () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd + 2))),
+                    side: const BorderSide(color: AppColors.border),
+                  ),
+                  child: Text(
+                    "Cancel",
+                    style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600, fontSize: R.fs(context, 14)),
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(width: R.sp(context, AppSpacing.md)),
+            Expanded(
+              flex: 2,
+              child: SizedBox(
+                height: R.btnH(context),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: addState.isSaving ? null : AppColors.brandGradient,
+                    color: addState.isSaving ? AppColors.border : null,
+                    borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd + 2)),
+                    boxShadow: addState.isSaving
+                        ? null
+                        : [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.25),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            )
+                          ],
+                  ),
+                  child: ElevatedButton(
+                    onPressed: addState.isSaving ? null : _save,
+                    style: ElevatedButton.styleFrom(
+                      elevation: 0,
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd + 2))),
+                    ),
+                    child: addState.isSaving
+                        ? SizedBox(
+                            width: R.sp(context, 20),
+                            height: R.sp(context, 20),
+                            child: const CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2.5),
+                          )
+                        : Text(
+                            "Save Supplier Record",
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: R.fs(context, 14)),
+                          ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
