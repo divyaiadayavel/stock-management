@@ -6,10 +6,12 @@ import '../../../../core/network/api_config.dart';
 import '../models/business_profile_model.dart';
 import '../models/settings_bundle_model.dart';
 import '../models/staff_user_model.dart';
+import '../models/backup_sync/backup_status_model.dart';
+import '../models/backup_sync/backup_history_entry_model.dart';
 
 class SettingsRemoteDatasource {
   SettingsRemoteDatasource({http.Client? client})
-      : _client = client ?? http.Client();
+    : _client = client ?? http.Client();
 
   static const int defaultUserId = 1;
 
@@ -20,8 +22,9 @@ class SettingsRemoteDatasource {
   Future<SettingsBundleModel> getSettingsBundle({
     int userId = defaultUserId,
   }) async {
-    final uri = Uri.parse(ApiConfig.getSettings)
-        .replace(queryParameters: {'user_id': userId.toString()});
+    final uri = Uri.parse(
+      ApiConfig.getSettings,
+    ).replace(queryParameters: {'user_id': userId.toString()});
 
     final response = await _client.get(uri, headers: ApiConfig.jsonHeaders);
     final json = _decodeResponse(response);
@@ -60,8 +63,9 @@ class SettingsRemoteDatasource {
   Future<List<StaffUserModel>> getStaffUsers({
     int userId = defaultUserId,
   }) async {
-    final uri = Uri.parse(ApiConfig.getStaff)
-        .replace(queryParameters: {'user_id': userId.toString()});
+    final uri = Uri.parse(
+      ApiConfig.getStaff,
+    ).replace(queryParameters: {'user_id': userId.toString()});
 
     final response = await _client.get(uri, headers: ApiConfig.jsonHeaders);
     final json = _decodeResponse(response);
@@ -117,6 +121,70 @@ class SettingsRemoteDatasource {
       'user_id': userId,
       'id': staffUserId,
       'isActive': isActive,
+    });
+    return _readSuccess(json);
+  }
+
+  // ── Backup & Sync Status ─────────────────────────────────────────────────────
+
+  Future<BackupStatusModel> getBackupStatus({
+    int userId = defaultUserId,
+  }) async {
+    final uri = Uri.parse(
+      ApiConfig.getBackupStatus,
+    ).replace(queryParameters: {'user_id': userId.toString()});
+
+    final response = await _client.get(uri, headers: ApiConfig.jsonHeaders);
+    final json = _decodeResponse(response);
+    final data = _readData(json);
+    return BackupStatusModel.fromJson(data);
+  }
+
+  Future<void> saveBackupStatus(
+    BackupStatusModel status, {
+    int userId = defaultUserId,
+  }) async {
+    await _post(ApiConfig.saveBackupStatus, {
+      'user_id': userId,
+      ...status.toJson(),
+    });
+  }
+
+  // ── Backup & Sync History ────────────────────────────────────────────────────
+
+  Future<List<BackupHistoryEntryModel>> getBackupHistory({
+    int userId = defaultUserId,
+  }) async {
+    final uri = Uri.parse(
+      ApiConfig.getBackupHistory,
+    ).replace(queryParameters: {'user_id': userId.toString()});
+
+    final response = await _client.get(uri, headers: ApiConfig.jsonHeaders);
+    final json = _decodeResponse(response);
+    final data = _readData(json);
+
+    final list = data['history'];
+    if (list is! List) return [];
+    return list
+        .whereType<Map>()
+        .map(
+          (e) => BackupHistoryEntryModel.fromJson(Map<String, dynamic>.from(e)),
+        )
+        .toList();
+  }
+
+  Future<bool> recordBackupEvent({
+    required String fileName,
+    required int sizeBytes,
+    required String location,
+    int userId = defaultUserId,
+  }) async {
+    final json = await _post(ApiConfig.recordBackupEvent, {
+      'user_id': userId,
+      'fileName': fileName,
+      'sizeBytes': sizeBytes,
+      'location': location,
+      'createdAt': DateTime.now().toIso8601String(),
     });
     return _readSuccess(json);
   }
