@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:intl/intl.dart';
 import 'package:image/image.dart' as img;
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 
@@ -7,350 +6,206 @@ import '../../../models/printers_hardware/receipt/receipt_model.dart';
 import '../../../models/printers_hardware/printer/printer_capability_model.dart';
 import 'esc_pos_service.dart';
 
-// ============================================================================
-// 1. Receipt Style (fixed widths, single divider style)
-// ============================================================================
-class ReceiptStyle {
-  final int charWidth;
-  final int itemWidth;
-  final int qtyWidth;
-  final int priceWidth;
-  final int amountWidth;
-  final String divider;
-
-  const ReceiptStyle._({
-    required this.charWidth,
-    required this.itemWidth,
-    required this.qtyWidth,
-    required this.priceWidth,
-    required this.amountWidth,
-    required this.divider,
-  });
-
-  factory ReceiptStyle.forPaper(PaperSize paper) {
-    final width = paper == PaperSize.mm58 ? 32 : 48;
-    return ReceiptStyle._(
-      charWidth: width,
-      itemWidth: paper == PaperSize.mm58 ? 11 : 23,
-      qtyWidth: paper == PaperSize.mm58 ? 3 : 4,
-      priceWidth: paper == PaperSize.mm58 ? 8 : 10,
-      amountWidth: paper == PaperSize.mm58 ? 10 : 11,
-      divider: '-' * width, // single line of dashes
-    );
-  }
-}
-
-// ============================================================================
-// 2. Currency Formatter (with thousands separator, always 2 decimals)
-// ============================================================================
-String formatCurrency(double value) {
-  final formatter = NumberFormat('#,##0.00', 'en_US');
-  return formatter.format(value);
-}
-
-// ============================================================================
-// 3. Word Wrap (handles long words)
-// ============================================================================
-List<String> wrapText(String text, int width) {
-  if (text.isEmpty) return [];
-  final words = text.split(RegExp(r'\s+'));
-  List<String> lines = [];
-  String current = '';
-
-  for (final word in words) {
-    if (word.length > width) {
-      if (current.isNotEmpty) {
-        lines.add(current);
-        current = '';
-      }
-      int index = 0;
-      while (index < word.length) {
-        final end = (index + width < word.length) ? index + width : word.length;
-        lines.add(word.substring(index, end));
-        index = end;
-      }
-      continue;
-    }
-
-    if (current.isEmpty) {
-      current = word;
-    } else if ((current.length + word.length + 1) <= width) {
-      current += ' $word';
-    } else {
-      lines.add(current);
-      current = word;
-    }
-  }
-
-  if (current.isNotEmpty) lines.add(current);
-  return lines;
-}
-
-// ============================================================================
-// 4. Main Receipt Builder (modular)
-// ============================================================================
+/// Professional Thermal Receipt Builder with bulletproof 4-column compact item alignment.
 class ReceiptBuilder {
   final EscPosService _escPos;
 
   ReceiptBuilder({required EscPosService escPos}) : _escPos = escPos;
 
-  // --------------------------------------------------------------------------
-  // Public entry point
-  // --------------------------------------------------------------------------
+  int _charWidth(PaperSize paperSize) =>
+      paperSize == PaperSize.mm58 ? 32 : 48;
+
   Future<List<int>> buildReceiptBytes(
     ReceiptModel receipt,
     PrinterCapabilityModel capabilities,
   ) async {
-    final paper = capabilities.paperWidthMm == 58 ? PaperSize.mm58 : PaperSize.mm80;
-    final style = ReceiptStyle.forPaper(paper);
-    final generator = await _escPos.createGenerator(paperSize: paper);
-
+    final paperSize =
+        capabilities.paperWidthMm == 58 ? PaperSize.mm58 : PaperSize.mm80;
+    final width = _charWidth(paperSize);
     List<int> bytes = [];
 
-    // Hardware reset
+    // --- Hardware Reset ---
     bytes += const [0x1B, 0x40];
     bytes += const [0x1D, 0x21, 0x00];
 
-    // Build sections
-    bytes += await _buildLogo(receipt.logoPath, generator, paper);
-    bytes += await _buildStoreInfo(receipt, style, paper);
-    bytes += await _buildInvoiceInfo(receipt, style, paper);
-    bytes += await _buildItems(receipt.items, style, paper);
-    bytes += await _buildSummary(receipt, style, paper);
-    bytes += await _buildFooter(receipt, style, paper);
-
-    // Cut
-    bytes += await _escPos.feed(paperSize: paper, lines: 3);
-    bytes += await _escPos.cut(paperSize: paper);
-
-    return bytes;
-  }
-
-  // --------------------------------------------------------------------------
-  // Section builders
-  // --------------------------------------------------------------------------
-
-  Future<List<int>> _buildLogo(
-    String? logoPath,
-    Generator generator,
-    PaperSize paper,
-  ) async {
-    if (logoPath == null || logoPath.isEmpty) return [];
-    try {
-      final file = File(logoPath);
-      if (!await file.exists()) return [];
-      final imageBytes = await file.readAsBytes();
-      final decoded = img.decodeImage(imageBytes);
-      if (decoded == null) return [];
-
-      final maxWidth = paper == PaperSize.mm58 ? 140 : 220;
-      img.Image image = decoded;
-      if (image.width > maxWidth) {
-        final scale = maxWidth / image.width;
-        image = img.copyResize(
-          image,
-          width: maxWidth,
-          height: (image.height * scale).round(),
-        );
-      }
-      return generator.image(image, align: PosAlign.center);
-    } catch (_) {
-      return [];
+    // --- 1. Logo Block ---
+    final logoPath = receipt.logoPath?.trim();
+    if (logoPath != null && logoPath.isNotEmpty) {
+      final logoBytes = await _buildLogoBytes(logoPath, paperSize);
+      if (logoBytes != null) bytes += logoBytes;
     }
-  }
 
-  Future<List<int>> _buildStoreInfo(
-    ReceiptModel receipt,
-    ReceiptStyle style,
-    PaperSize paper,
-  ) async {
-    List<int> bytes = [];
-
-    // Store name centered (e.g., "vignesh")
+    // --- 2. Store Header ---
     if (receipt.storeName?.trim().isNotEmpty ?? false) {
       bytes += await _escPos.text(
         receipt.storeName!.trim(),
         styles: const PosStyles(align: PosAlign.center, bold: true),
-        paperSize: paper,
+        paperSize: paperSize,
       );
     }
 
     if (receipt.storeAddress?.trim().isNotEmpty ?? false) {
       final address = receipt.storeAddress!.trim().replaceAll('\n', ', ');
-      bytes += await _escPos.center(address, paperSize: paper);
+      bytes += await _escPos.center(address, paperSize: paperSize);
     }
 
     if (receipt.storePhone?.trim().isNotEmpty ?? false) {
-      bytes += await _escPos.center('Ph - ${receipt.storePhone!.trim()}', paperSize: paper);
+      bytes += await _escPos.center('Ph - ${receipt.storePhone!.trim()}', paperSize: paperSize);
     }
-
+    
     if (receipt.gstNumber?.trim().isNotEmpty ?? false) {
-      bytes += await _escPos.center('GSTIN: ${receipt.gstNumber!.trim()}', paperSize: paper);
+      bytes += await _escPos.center('GSTIN: ${receipt.gstNumber!.trim()}', paperSize: paperSize);
     }
 
-    bytes += await _escPos.left(style.divider, paperSize: paper);
-    return bytes;
-  }
+    bytes += await _escPos.left('-' * width, paperSize: paperSize);
 
-  Future<List<int>> _buildInvoiceInfo(
-    ReceiptModel receipt,
-    ReceiptStyle style,
-    PaperSize paper,
-  ) async {
-    List<int> bytes = [];
+    // --- 3. Meta Information ---
+    bytes += await _escPos.left('INV : #${receipt.receiptId}', paperSize: paperSize);
+    
+    final dateStr = _formatDate(receipt.timestamp);
+    final timeStr = _formatTime(receipt.timestamp);
+    bytes += await _escPos.left(_arrangeTwoColumns(dateStr, timeStr, width), paperSize: paperSize);
+    
+    bytes += await _escPos.left('-' * width, paperSize: paperSize);
 
-    bytes += await _escPos.left('Invoice : ${receipt.receiptId}', paperSize: paper);
-    bytes += await _escPos.left('Date    : ${_formatDate(receipt.timestamp)}', paperSize: paper);
-    bytes += await _escPos.left('Time    : ${_formatTime(receipt.timestamp)}', paperSize: paper);
-    bytes += await _escPos.left(style.divider, paperSize: paper);
+    // --- 4. Micro-Managed 4-Column Layout Spacing ---
+    // Total Chars Allocation for 58mm (32 Total): Item(13), Qty(4), Price(7), Amount(8)
+    // Total Chars Allocation for 80mm (48 Total): Item(23), Qty(5), Price(10), Amount(10)
+    final int qtyWidth = paperSize == PaperSize.mm58 ? 4 : 5;
+    final int priceWidth = paperSize == PaperSize.mm58 ? 7 : 10;
+    final int amountWidth = paperSize == PaperSize.mm58 ? 8 : 10;
+    final int itemWidth = width - qtyWidth - priceWidth - amountWidth;
 
-    return bytes;
-  }
+    final tableHeader = 'Item'.padRight(itemWidth) +
+        'Qty.'.padLeft(qtyWidth) + 
+        'Price'.padLeft(priceWidth) + 
+        'Amount'.padLeft(amountWidth);
+    bytes += await _escPos.left(tableHeader, paperSize: paperSize);
+    bytes += await _escPos.left('-' * width, paperSize: paperSize);
 
-  Future<List<int>> _buildItems(
-    List<dynamic> items,
-    ReceiptStyle style,
-    PaperSize paper,
-  ) async {
-    List<int> bytes = [];
+    // --- 5. Product Rows with Dynamic Word Wrapping & Zero Row Gaps ---
+    for (final item in receipt.items) {
+      final qtyText = '${item.quantity}'.padLeft(qtyWidth);
+      final priceText = item.unitPrice.toStringAsFixed(2).padLeft(priceWidth);
+      final amountText = item.totalAmount.toStringAsFixed(2).padLeft(amountWidth);
+      String itemName = item.itemName.trim();
 
-    // Table header (exact spacing: Item, Qty, Price, Amount)
-    final header = 'Item'.padRight(style.itemWidth) +
-        'Qty'.padLeft(style.qtyWidth) +
-        'Price'.padLeft(style.priceWidth) +
-        'Amount'.padLeft(style.amountWidth);
-    bytes += await _escPos.text(
-      header,
-      styles: const PosStyles(bold: true),
-      paperSize: paper,
-    );
-    bytes += await _escPos.left(style.divider, paperSize: paper);
+      if (itemName.length <= itemWidth) {
+        // Fits perfectly on one line
+        final row = itemName.padRight(itemWidth) + qtyText + priceText + amountText;
+        bytes += await _escPos.left(row, paperSize: paperSize);
+      } else {
+        // Break name up cleanly without causing empty layout shifts
+        final String firstLineChunk = itemName.substring(0, itemWidth);
+        itemName = itemName.substring(itemWidth);
 
-    // Items
-    for (final item in items) {
-      final lines = wrapText(item.itemName.trim(), style.itemWidth);
-      final qtyText = item.quantity.toString().padLeft(style.qtyWidth);
-      final priceText = formatCurrency(item.unitPrice).padLeft(style.priceWidth);
-      final amountText = formatCurrency(item.totalAmount).padLeft(style.amountWidth);
+        final firstRow = firstLineChunk + qtyText + priceText + amountText;
+        bytes += await _escPos.left(firstRow, paperSize: paperSize);
 
-      for (int i = 0; i < lines.length; i++) {
-        if (i == 0) {
-          final row = lines[i].padRight(style.itemWidth) +
-              qtyText +
-              priceText +
-              amountText;
-          bytes += await _escPos.left(row, paperSize: paper);
-        } else {
-          // Continuation lines: only item name (indented)
-          bytes += await _escPos.left(
-            lines[i].padRight(style.itemWidth),
-            paperSize: paper,
-          );
+        // Keep wrapping trailing item descriptions directly under column 1 (tight coupling)
+        while (itemName.isNotEmpty) {
+          final int lengthToTake = itemName.length > itemWidth ? itemWidth : itemName.length;
+          final String trailingChunk = itemName.substring(0, lengthToTake);
+          itemName = itemName.substring(lengthToTake);
+
+          // Render remaining name snippet padded cleanly out away from values
+          bytes += await _escPos.left(trailingChunk.padRight(width), paperSize: paperSize);
         }
       }
     }
 
-    bytes += await _escPos.left(style.divider, paperSize: paper);
-    return bytes;
-  }
+    bytes += await _escPos.left('-' * width, paperSize: paperSize);
 
-  Future<List<int>> _buildSummary(
-    ReceiptModel receipt,
-    ReceiptStyle style,
-    PaperSize paper,
-  ) async {
-    List<int> bytes = [];
+    // --- 6. Financial Summary Block ---
+    final subTotalValue = receipt.subTotal.toStringAsFixed(2);
+    bytes += await _escPos.left(_arrangeTwoColumns('Subtotal', subTotalValue, width), paperSize: paperSize);
 
-    final subTotal = formatCurrency(receipt.subTotal);
-    final cgst = formatCurrency(receipt.taxAmount / 2);
-    final sgst = formatCurrency(receipt.taxAmount / 2);
-    final grandTotal = formatCurrency(receipt.grandTotal);
+    final halfTax = receipt.taxAmount / 2;
+    bytes += await _escPos.left(_arrangeTwoColumns('CGST 0.00', halfTax.toStringAsFixed(2), width), paperSize: paperSize);
+    bytes += await _escPos.left(_arrangeTwoColumns('SGST 0.00', halfTax.toStringAsFixed(2), width), paperSize: paperSize);
+    
+    bytes += await _escPos.left('-' * width, paperSize: paperSize);
 
-    bytes += await _escPos.left(
-      _twoColumns('Subtotal', subTotal, style.charWidth),
-      paperSize: paper,
-    );
-    bytes += await _escPos.left(
-      _twoColumns('CGST', cgst, style.charWidth),
-      paperSize: paper,
-    );
-    bytes += await _escPos.left(
-      _twoColumns('SGST', sgst, style.charWidth),
-      paperSize: paper,
-    );
-
-    bytes += await _escPos.left(style.divider, paperSize: paper);
-
-    // Total (bold)
-    final totalLine = _twoColumns('TOTAL', grandTotal, style.charWidth);
+    final grandTotalValue = receipt.grandTotal.toStringAsFixed(2);
+    final totalRow = 'TOTAL'.padRight(width - grandTotalValue.length) + grandTotalValue;
     bytes += await _escPos.text(
-      totalLine,
+      totalRow,
       styles: const PosStyles(bold: true),
-      paperSize: paper,
+      paperSize: paperSize,
     );
 
-    bytes += await _escPos.left(style.divider, paperSize: paper);
-    return bytes;
-  }
+    bytes += await _escPos.left('-' * width, paperSize: paperSize);
 
-  Future<List<int>> _buildFooter(
-    ReceiptModel receipt,
-    ReceiptStyle style,
-    PaperSize paper,
-  ) async {
-    List<int> bytes = [];
-
-    // Items count (with spacing: "Items    : 3")
-    bytes += await _escPos.left(
-      'Items    : ${receipt.items.length}',
-      paperSize: paper,
-    );
-
-    // Payment (with spacing: "Payment : CASH")
+    // --- 7. Footer Meta Area ---
     final payment = (receipt.paymentMode?.trim().isNotEmpty ?? false)
         ? receipt.paymentMode!.trim().toUpperCase()
         : 'CASH';
-    bytes += await _escPos.left(
-      'Payment : $payment',
-      paperSize: paper,
+        
+    bytes += await _escPos.center('Payment : $payment', paperSize: paperSize);
+    
+    bytes += await _escPos.text(
+      'THANK YOU! VISIT AGAIN',
+      styles: const PosStyles(align: PosAlign.center, bold: true),
+      paperSize: paperSize,
     );
+    
+    bytes += await _escPos.center(receipt.receiptId, paperSize: paperSize);
 
-    // Thank you messages (centered)
-    bytes += await _escPos.text(
-      'Thank You!',
-      styles: const PosStyles(align: PosAlign.center, bold: true),
-      paperSize: paper,
-    );
-    bytes += await _escPos.text(
-      'Visit Again',
-      styles: const PosStyles(align: PosAlign.center, bold: true),
-      paperSize: paper,
-    );
-    bytes += await _escPos.center(receipt.receiptId, paperSize: paper);
+    // Cut routine
+    bytes += await _escPos.feed(paperSize: paperSize, lines: 3);
+    bytes += await _escPos.cut(paperSize: paperSize);
 
     return bytes;
   }
 
-  // --------------------------------------------------------------------------
-  // Helpers
-  // --------------------------------------------------------------------------
+  Future<List<int>?> _buildLogoBytes(String logoPath, PaperSize paperSize) async {
+    try {
+      final file = File(logoPath);
+      if (!await file.exists()) return null;
+      final imageBytes = await file.readAsBytes();
+      final decoded = img.decodeImage(imageBytes);
+      if (decoded == null) return null;
 
-  String _twoColumns(String left, String right, int width) {
-    final spaces = width - left.length - right.length;
-    return left + (spaces > 0 ? ' ' * spaces : ' ') + right;
+      final maxWidth = paperSize == PaperSize.mm58 ? 140 : 220;
+      if (decoded.width > maxWidth) {
+        final scale = maxWidth / decoded.width;
+        final resized = img.copyResize(
+          decoded, 
+          width: maxWidth, 
+          height: (decoded.height * scale).round(),
+        );
+        final generator = await _escPos.createGenerator(paperSize: paperSize);
+        return generator.image(resized, align: PosAlign.center);
+      }
+
+      final generator = await _escPos.createGenerator(paperSize: paperSize);
+      return generator.image(decoded, align: PosAlign.center);
+    } catch (_) {
+      return null;
+    }
   }
 
-  String _formatDate(DateTime d) {
-    final day = d.day.toString().padLeft(2, '0');
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return '$day-${months[d.month - 1]}-${d.year}';
+  String _arrangeTwoColumns(String left, String right, int width) {
+    final spacesCount = width - left.length - right.length;
+    if (spacesCount > 0) {
+      return left + (' ' * spacesCount) + right;
+    }
+    return '$left $right';
   }
 
-  String _formatTime(DateTime d) {
-    final hour = d.hour % 12 == 0 ? 12 : d.hour % 12;
-    final period = d.hour >= 12 ? 'PM' : 'AM';
-    final minute = d.minute.toString().padLeft(2, '0');
-    return '${hour.toString().padLeft(2, '0')}:$minute $period';
+  String _formatDate(DateTime value) {
+    final day = value.day.toString().padLeft(2, '0');
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '$day-${months[value.month - 1]}-${value.year}';
+  }
+
+  String _formatTime(DateTime value) {
+    final hour12 = value.hour % 12 == 0 ? 12 : value.hour % 12;
+    final period = value.hour >= 12 ? 'PM' : 'AM';
+    final minute = value.minute.toString().padLeft(2, '0');
+    return '${hour12.toString().padLeft(2, '0')}:$minute $period';
   }
 }

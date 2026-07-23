@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "909703717826",
+    "project_id": "stock-management-1b0e8",
+    "storage_bucket": "stock-management-1b0e8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:909703717826:android:31b134205dc319fb7dac5b",
+        "android_client_info": {
+          "package_name": "com.example.stock_management"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBY3xrjYOxEuyJJF4F4Piw_nwl8rvZ2mq0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

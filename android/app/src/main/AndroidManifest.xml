@@ -26,7 +26,7 @@
     <application
         android:label="stock_management"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@mipmap/launcher_icon"
         android:hardwareAccelerated="true"
         android:requestLegacyExternalStorage="true">
 

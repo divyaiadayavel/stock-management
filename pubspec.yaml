@@ -61,7 +61,15 @@ dependencies:
   collection: ^1.19.1
   url_launcher: ^6.3.0
   intl: ^0.19.0 
-  
+  google_sign_in: ^6.2.1
+  googleapis: ^13.2.0
+  extension_google_sign_in_as_googleapis_auth: ^2.0.1
+  csv: ^6.0.0
+  workmanager: ^0.6.0
+  file_picker: ^11.0.2
+  firebase_core: ^4.0.0
+  firebase_messaging: ^16.0.0
+  flutter_local_notifications: ^19.4.0
 
 dev_dependencies:
   flutter_test:
@@ -69,9 +77,21 @@ dev_dependencies:
 
   flutter_lints: ^6.0.0
 
+  # Moved flutter_launcher_icons here as a development dependency
+  flutter_launcher_icons: ^0.14.3 
+
+# ─── ADD THIS SPECIFIC LAUNCHER ICONS CONFIGURATION BLOCK ───
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/app_logo.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/app_logo.png"
+
 flutter:
   uses-material-design: true
   assets:
     - assets/image.png
     - assets/inventory.png
     - assets/sounds/scanner_beep.mp3
+   

@@ -1,11 +1,15 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../../../core/constants/app_colors.dart';
 import '../../../../../../core/constants/app_sizes.dart';
 import '../../../../../../core/constants/app_spacing.dart';
 import '../../../../../../core/constants/app_text_styles.dart';
 import '../../../providers/settings_provider.dart';
+import '../../../providers/backup_sync/backup_sync_provider.dart';
+import '../../../../../../core/services/notification_service.dart';
 
 class BackupSyncScreen extends ConsumerStatefulWidget {
   const BackupSyncScreen({super.key});
@@ -45,6 +49,9 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
     await ref
         .read(settingsRepositoryProvider)
         .saveSetting(key, value.toString());
+    await ref.read(backupSyncRepositoryProvider).saveBackupSettings(
+          settings: {key: value.toString()},
+        );
     setState(() {
       if (key == "googleDriveBackup") googleDrive = value;
       if (key == "autoBackup") autoBackup = value;
@@ -53,6 +60,9 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final backupState = ref.watch(backupSyncControllerProvider);
+    final backupController = ref.read(backupSyncControllerProvider.notifier);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -85,10 +95,23 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
                   _toggleCard(
                     icon: Icons.cloud_queue,
                     iconColor: AppColors.green,
-                    title: "Google Drive Backup",
-                    subtitle: "Last backup: 20 May 2024, 10:30 AM",
-                    value: googleDrive,
-                    dbKey: "googleDriveBackup",
+                    title: backupState.account != null
+                        ? "Google Drive (${backupState.account!.email})"
+                        : "Google Drive Backup",
+                    subtitle: backupState.account == null
+                        ? "Not connected"
+                        : (backupState.lastSync != null
+                              ? "Last backup: ${DateFormat('dd MMM yyyy, hh:mm a').format(backupState.lastSync!)}"
+                              : "Connected (Ready to sync)"),
+                    value: backupState.account != null,
+                    onChanged: (val) async {
+                      if (val) {
+                        await backupController.connectDrive();
+                      } else {
+                        await backupController.disconnectDrive();
+                      }
+                      await backupController.refreshStatus();
+                    },
                   ),
                   _toggleCard(
                     icon: Icons.autorenew,
@@ -96,37 +119,24 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
                     title: "Auto Backup",
                     subtitle: "Daily at 10:00 PM",
                     value: autoBackup,
-                    dbKey: "autoBackup",
+                    onChanged: (newValue) =>
+                        _updateToggle("autoBackup", newValue),
                   ),
-                  _actionCard(
-                    icon: Icons.save_alt,
-                    iconColor: AppColors.primary,
-                    title: "Local Backup",
-                    subtitle: "Create backup on this device",
-                    onTap: () {},
-                  ),
-                  _actionCard(
-                    icon: Icons.file_upload_outlined,
-                    iconColor: AppColors.orange,
-                    title: "Export Data",
-                    subtitle: "Export data in Excel/CSV",
-                    onTap: () {},
-                  ),
-                  
                   const SizedBox(height: AppSpacing.lg),
                   _sectionHeader("Restore"),
                   _actionCard(
                     icon: Icons.restore,
                     iconColor: AppColors.red,
                     title: "Restore from Backup",
-                    subtitle: "Restore your previous backup",
-                    onTap: () {},
+                    subtitle: "Restore data from Google Drive backup",
+                    onTap: () => _showRestoreDialog(backupController),
                   ),
-
                   const SizedBox(height: AppSpacing.xxl),
                   Center(
                     child: Text(
-                      "Last synced: 20 May 2024, 10:30 AM",
+                      backupState.lastSync != null
+                          ? "Last synced: ${DateFormat('dd MMM yyyy, hh:mm a').format(backupState.lastSync!)}"
+                          : "Last synced: Never",
                       style: AppTextStyles.small.copyWith(
                         color: AppColors.textSecondary,
                         fontSize: 13,
@@ -134,7 +144,6 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),
-                  
                   SizedBox(
                     width: double.infinity,
                     height: 52,
@@ -145,10 +154,22 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
                           borderRadius: BorderRadius.circular(AppSizes.radiusMd),
                         ),
                       ),
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Syncing...")),
-                        );
+                      onPressed: () async {
+                        final info = await backupController.backupNow();
+                        if (mounted) {
+                          if (info != null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Google Drive backup completed successfully."),
+                              ),
+                            );
+                            await NotificationService.showBackupNotification();
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("Sync failed / not connected")),
+                            );
+                          }
+                        }
                       },
                       child: Text(
                         "Sync Now",
@@ -166,9 +187,103 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
     );
   }
 
+  // ── Helper: Show restore dialog with history ─────────────────────
+  Future<void> _showRestoreDialog(BackupSyncController controller) async {
+    // Use a local variable to avoid using context after it's disposed.
+    if (!mounted) return;
+    final history = await controller.fetchHistory();
+    if (!mounted) return;
+    if (history.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No backups found')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Restore from Backup'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 300,
+          child: ListView.builder(
+            itemCount: history.length,
+            itemBuilder: (_, index) {
+              final entry = history[index];
+              return ListTile(
+                title: Text(entry.backupName),
+                subtitle: Text(
+                  '${entry.fileName} - ${DateFormat('dd MMM yyyy HH:mm').format(entry.createdAt)}',
+                ),
+                trailing: Text(
+                  '${(entry.fileSize / 1024).toStringAsFixed(1)} KB',
+                ),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  // Confirm dialog
+final confirm = await showDialog<bool>(
+  context: ctx,
+  builder: (dialogContext) => AlertDialog(
+    title: const Text('Confirm Restore'),
+    content: Text(
+      'Restore backup from ${entry.backupName}? '
+      'This will replace all current data.',
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(dialogContext, false),
+        child: const Text('Cancel'),
+      ),
+      TextButton(
+        onPressed: () => Navigator.pop(dialogContext, true),
+        child: const Text('Restore'),
+      ),
+    ],
+  ),
+);
+                  if (confirm == true) {
+                    try {
+                      await controller.restoreFromDrive(entry.driveFileId!);
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Restore completed successfully!'),
+                          ),
+                        );
+                        await controller.refreshStatus();
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Restore failed: $e')),
+                        );
+                      }
+                    }
+                  }
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _sectionHeader(String title) {
     return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: AppSpacing.sm, top: AppSpacing.sm),
+      padding: const EdgeInsets.only(
+        left: 4,
+        bottom: AppSpacing.sm,
+        top: AppSpacing.sm,
+      ),
       child: Text(
         title,
         style: AppTextStyles.cardValue.copyWith(
@@ -187,7 +302,7 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
     required String title,
     required String subtitle,
     required bool value,
-    required String dbKey,
+    required ValueChanged<bool> onChanged,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -242,7 +357,7 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
               activeTrackColor: AppColors.primary,
               inactiveThumbColor: AppColors.textWhite,
               inactiveTrackColor: AppColors.borderStrong,
-              onChanged: (newValue) => _updateToggle(dbKey, newValue),
+              onChanged: onChanged,
             ),
           ],
         ),
@@ -305,7 +420,11 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right, color: AppColors.textSecondary, size: 20),
+                Icon(
+                  Icons.chevron_right,
+                  color: AppColors.textSecondary,
+                  size: 20,
+                ),
               ],
             ),
           ),

@@ -1,18 +1,16 @@
+// lib/features/dashboard/presentation/screens/dashboard_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stock_management/features/reports/presentation/screens/reports_screen.dart';
-
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_text_styles.dart';
-import '../../../../core/storage/db_helper.dart';
+import '../providers/dashboard_provider.dart';
 import '../../../sales/presentation/screens/current_bill_screen.dart';
 import '../../../products/presentation/screens/add_product_screen.dart';
-import '../../../products/presentation/screens/product_screen.dart';
 import '../../../suppliers/presentation/screens/suppliers_screen.dart';
 import '../../../settings/presentation/screens/settings_screen.dart';
-import '../providers/dashboard_provider.dart';
 import '../../../../core/utils/responsive_helper.dart';
 import '../../../customers/presentation/screens/customer_screen.dart';
 import 'package:stock_management/features/settings/presentation/screens/operations/printers_hardware/printer_management/printers_hardware_screen.dart';
@@ -26,63 +24,55 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
-  int totalProducts = 0;
-  int totalSales = 0;
-  int totalSuppliers = 0;
-  int lowStock = 0;
+  // ── Currency formatter ──
+String _formatIndianCurrency(double amount) {
+  final value = amount.toStringAsFixed(2);
 
-  int pastProducts = 0;
-  int pastSales = 0;
-  int pastSuppliers = 0;
-  int pastLowStock = 0;
+  final parts = value.split('.');
+  final integer = parts[0];
+  final decimal = parts[1];
 
-  double todaySalesAmount = 0.0;
-  double receivablesAmount = 0.0;
-
-  @override
-  void initState() {
-    super.initState();
-    loadDashboardData();
+  if (integer.length <= 3) {
+    return "₹$integer.$decimal";
   }
 
-  Future<void> loadDashboardData() async {
-    final products = await DBHelper.getProductCount();
-    final sales = await DBHelper.getSalesCount();
-    final suppliers = await DBHelper.getSupplierCount();
-    final lowStocks = await DBHelper.getLowStockCount();
+  String result = integer.substring(integer.length - 3);
+  String prefix = integer.substring(0, integer.length - 3);
 
-    totalProducts = products;
-    totalSales = sales;
-    totalSuppliers = suppliers;
-    lowStock = lowStocks;
-
-    pastProducts = await DBHelper.getPastProductCount();
-    pastSales = await DBHelper.getPastSalesCount();
-    pastSuppliers = await DBHelper.getPastSupplierCount();
-    pastLowStock = await DBHelper.getPastLowStockCount();
-
-    todaySalesAmount = await DBHelper.getTodaySales();
-    receivablesAmount = await DBHelper.getReceivablesAmount();
-
-    if (mounted) {
-      setState(() {});
-    }
+  while (prefix.length > 2) {
+    result = "${prefix.substring(prefix.length - 2)},$result";
+    prefix = prefix.substring(0, prefix.length - 2);
   }
 
-  String _formatIndianCurrency(double amount) {
-    if (amount >= 100000) {
-      return "₹${(amount / 100000).toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '')}L";
-    } else if (amount >= 1000) {
-      return "₹${(amount / 1000).toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '')}k";
-    } else {
-      return "₹${amount.toStringAsFixed(0)}";
-    }
+  if (prefix.isNotEmpty) {
+    result = "$prefix,$result";
   }
+
+  return "₹$result.$decimal";
+}
 
   @override
   Widget build(BuildContext context) {
+    final dashboard = ref.watch(dashboardProvider);
     final hPad = R.hPad(context, base: AppSpacing.lg);
 
+    // ── Loading ──
+    if (dashboard.isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // ── Error ──
+    if (dashboard.error != null) {
+      return Scaffold(
+        body: Center(
+          child: Text(dashboard.error!),
+        ),
+      );
+    }
+
+    // ── Success ──
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -182,61 +172,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          "SALES VALUE",
+                          "TODAY'S SALES",
                           style: AppTextStyles.small.copyWith(
                             color: Colors.white60,
                             letterSpacing: 1.2,
                             fontSize: R.fs(context, 11),
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.green.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(
-                              AppSizes.radiusSm,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                MetricHelper.checkIsPositive(
-                                      totalSales,
-                                      pastSales,
-                                    )
-                                    ? Icons.trending_up
-                                    : Icons.trending_down,
-                                color:
-                                    MetricHelper.checkIsPositive(
-                                      totalSales,
-                                      pastSales,
-                                    )
-                                    ? AppColors.green
-                                    : AppColors.red,
-                                size: R.icon(context, 12),
-                              ),
-                              SizedBox(width: R.sp(context, 4)),
-                              Text(
-                                "${MetricHelper.calculatePercentage(totalSales, pastSales).abs().toStringAsFixed(1)}%",
-                                style: AppTextStyles.small.copyWith(
-                                  color: AppColors.green,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: R.fs(context, 11),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        const SizedBox.shrink(),
                       ],
                     ),
                     SizedBox(height: R.sp(context, AppSpacing.sm)),
                     FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Text(
-                        _formatIndianCurrency(totalSales.toDouble()),
+_formatIndianCurrency(
+  dashboard.todaySales,
+),
                         style: AppTextStyles.heading.copyWith(
                           color: Colors.white,
                           fontSize: R.fs(context, 36),
@@ -247,13 +199,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     SizedBox(height: R.sp(context, AppSpacing.sm)),
                     Row(
                       children: [
-                        Text(
-                          "$totalProducts units · $totalSales SKUs",
-                          style: AppTextStyles.small.copyWith(
-                            color: Colors.white54,
-                            fontSize: R.fs(context, 12),
-                          ),
-                        ),
+Text(
+  "${dashboard.productsSoldToday} Products Sold Today",
+  style: AppTextStyles.small.copyWith(
+    color: Colors.white54,
+    fontSize: R.fs(context, 12),
+  ),
+),
                         const Spacer(),
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.end,
@@ -282,24 +234,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
               SizedBox(height: R.sp(context, AppSpacing.sectionGap)),
 
-              // =====================================================
-              // 🔹 NEEDS ATTENTION
-              // =====================================================
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text("Needs attention", style: AppTextStyles.sectionTitle),
-                  TextButton(
-                    onPressed: () {},
-                    child: Text(
-                      "View all",
-                      style: AppTextStyles.small.copyWith(
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+// =====================================================
+// 🔹 NEEDS ATTENTION
+// =====================================================
+Align(
+  alignment: Alignment.centerLeft,
+  child: Text(
+    "Needs attention",
+    style: AppTextStyles.sectionTitle,
+  ),
+),
               SizedBox(height: R.sp(context, AppSpacing.sm)),
               Row(
                 children: [
@@ -309,16 +253,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       icon: Icons.inventory,
                       iconColor: AppColors.cyan,
                       bgColor: AppColors.cyan.withOpacity(0.08),
-                      count: "$totalProducts",
+                      count: "${dashboard.totalProducts}",
                       countColor: AppColors.cyan,
                       label: "Total Products",
                       percentage: MetricHelper.calculatePercentage(
-                        totalProducts,
-                        pastProducts,
+                        dashboard.totalProducts,
+                        dashboard.pastProducts,
                       ).abs(),
                       isPositive: MetricHelper.checkIsPositive(
-                        totalProducts,
-                        pastProducts,
+                        dashboard.totalProducts,
+                        dashboard.pastProducts,
                       ),
                     ),
                   ),
@@ -329,16 +273,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       icon: Icons.warning,
                       iconColor: AppColors.red,
                       bgColor: AppColors.red.withOpacity(0.08),
-                      count: "$lowStock",
+                      count: "${dashboard.lowStock}",
                       countColor: AppColors.red,
                       label: "Low Stock Items",
                       percentage: MetricHelper.calculatePercentage(
-                        lowStock,
-                        pastLowStock,
+                        dashboard.lowStock,
+                        dashboard.pastLowStock,
                       ).abs(),
                       isPositive: MetricHelper.checkIsPositive(
-                        lowStock,
-                        pastLowStock,
+                        dashboard.lowStock,
+                        dashboard.pastLowStock,
                       ),
                     ),
                   ),
@@ -349,16 +293,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       icon: Icons.people,
                       iconColor: AppColors.primary,
                       bgColor: AppColors.primary.withOpacity(0.08),
-                      count: "$totalSuppliers",
+                      count: "${dashboard.totalSuppliers}",
                       countColor: AppColors.primary,
                       label: "Suppliers",
                       percentage: MetricHelper.calculatePercentage(
-                        totalSuppliers,
-                        pastSuppliers,
+                        dashboard.totalSuppliers,
+                        dashboard.pastSuppliers,
                       ).abs(),
                       isPositive: MetricHelper.checkIsPositive(
-                        totalSuppliers,
-                        pastSuppliers,
+                        dashboard.totalSuppliers,
+                        dashboard.pastSuppliers,
                       ),
                     ),
                   ),
@@ -374,19 +318,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 children: [
                   Expanded(
                     child: _summaryCard(
-                      context,
-                      "Today's sales",
-                      _formatIndianCurrency(todaySalesAmount),
-                      icon: Icons.attach_money_rounded,
-                      iconColor: AppColors.green,
-                    ),
+  context,
+  "Sales Value",
+  _formatIndianCurrency(dashboard.totalSalesAmount),
+  icon: Icons.bar_chart_rounded,
+  iconColor: AppColors.green,
+),
                   ),
                   SizedBox(width: R.sp(context, AppSpacing.md)),
                   Expanded(
                     child: _summaryCard(
                       context,
                       "Receivables",
-                      _formatIndianCurrency(receivablesAmount),
+                      _formatIndianCurrency(dashboard.receivables),
                       icon: Icons.credit_card_outlined,
                       iconColor: AppColors.primary,
                     ),
@@ -405,9 +349,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 children: [
                   // ── FIRST ROW: 4 ITEMS ──
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      // 🆕 CUSTOMERS QUICK ACTION
                       _quickActionCircle(
                         context: context,
                         icon: Icons.people_outline,
@@ -419,7 +362,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               builder: (_) => const CustomersScreen(),
                             ),
                           );
-                          loadDashboardData(); // Refreshes data immediately when returning
+                          ref.read(dashboardProvider.notifier).refresh();
                         },
                       ),
                       _quickActionCircle(
@@ -433,10 +376,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               builder: (_) => const SuppliersScreen(),
                             ),
                           );
-                          loadDashboardData(); // Refreshes data immediately when returning
+                          ref.read(dashboardProvider.notifier).refresh();
                         },
                       ),
-                      // 🆕 PRINTER QUICK ACTION
                       _quickActionCircle(
                         context: context,
                         icon: Icons.print_outlined,
@@ -448,7 +390,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               builder: (_) => const PrintersHardwareScreen(),
                             ),
                           );
-                          loadDashboardData(); // Refreshes data immediately when returning
+                          ref.read(dashboardProvider.notifier).refresh();
                         },
                       ),
                       _quickActionCircle(
@@ -462,7 +404,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               builder: (_) => const AddProductScreen(),
                             ),
                           );
-                          loadDashboardData(); // Refreshes data immediately when returning
+                          ref.read(dashboardProvider.notifier).refresh();
                         },
                       ),
                     ],
@@ -470,7 +412,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
                   SizedBox(
                     height: R.sp(context, AppSpacing.lg),
-                  ), // Vertical gap between lines
+                  ), // Vertical gap
                   // ── SECOND ROW: REMAINING 3 ITEMS ──
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -486,7 +428,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               builder: (_) => const NewPurchaseOrderScreen(),
                             ),
                           );
-                          loadDashboardData(); // Refreshes data immediately when returning
+                          ref.read(dashboardProvider.notifier).refresh();
                         },
                       ),
                       _quickActionCircle(
@@ -500,7 +442,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               builder: (_) => const ReportsScreen(),
                             ),
                           );
-                          loadDashboardData(); // Refreshes data immediately when returning
+                          ref.read(dashboardProvider.notifier).refresh();
                         },
                       ),
                       _quickActionCircle(
@@ -511,13 +453,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           await Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => CurrentBillScreen(),
+                              builder: (_) => const CurrentBillScreen(),
                             ),
                           );
-                          loadDashboardData(); // Refreshes data immediately when returning
+                          ref.read(dashboardProvider.notifier).refresh();
                         },
                       ),
-                      // Empty placeholder column to align the 3 items neatly underneath the 4 items above
+                      // Empty placeholder to align the 3 items neatly underneath the 4 items above
                       const SizedBox(width: 56),
                     ],
                   ),
@@ -723,14 +665,18 @@ Widget _summaryCard(
 // =====================================================
 // 🔹 METRIC HELPER
 // =====================================================
+
+// ── MetricHelper with null safety ──
 class MetricHelper {
-  static double calculatePercentage(num current, num previous) {
-    if (previous == 0) return 0.0;
-    double change = ((current - previous) / previous) * 100;
+  static double calculatePercentage(num? current, num? previous) {
+    if (previous == null || previous == 0) return 0.0;
+    if (current == null) return 0.0;
+    final change = ((current - previous) / previous) * 100;
     return double.parse(change.toStringAsFixed(1));
   }
 
-  static bool checkIsPositive(num current, num previous) {
+  static bool checkIsPositive(num? current, num? previous) {
+    if (current == null || previous == null) return false;
     return current >= previous;
   }
 }
