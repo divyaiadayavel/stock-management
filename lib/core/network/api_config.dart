@@ -1,15 +1,6 @@
-// class ApiConfig {
-//   const ApiConfig._();
-
-//   static const String baseUrl =
-//       'https://nonredemptive-gyrational-pauletta.ngrok-free.dev/public_html';
-
-//   static const Map<String, String> jsonHeaders = {
-//     'Accept': 'application/json',
-//     'Content-Type': 'application/json',
-//     'ngrok-skip-browser-warning': 'true',
-//   };
-// }
+// =========================================================
+// lib/core/network/api_config.dart
+// =========================================================
 class ApiConfig {
   ApiConfig._();
 
@@ -33,25 +24,55 @@ class ApiConfig {
   static const String updateStatus = '$baseUrl/api/staff/update_status.php';
 
   // ── Products ──────────────────────────────────────────────
-  static const String getProducts = '$baseUrl/api/products/get_products.php';
-  static const String addProduct = '$baseUrl/api/products/add_product.php';
-  static const String updateProduct =
-      '$baseUrl/api/products/update_product.php';
-  static const String deleteProduct =
-      '$baseUrl/api/products/delete_product.php';
-  static const String updateStock = '$baseUrl/api/products/update_stock.php';
+  static const String getProducts = '$baseUrl/api/products/products.php';
+  static const String addProduct = '$baseUrl/api/products/products.php';
+  static const String updateProduct = '$baseUrl/api/products/products.php';
+  static const String deleteProduct = '$baseUrl/api/products/products.php';
+  static const String updateStock = '$baseUrl/api/products/products.php';
+  static const String uploadImage = '$baseUrl/api/products/upload_image.php';
 
   // ── Suppliers ─────────────────────────────────────────────
-  static const String getSuppliers = '$baseUrl/api/suppliers/get_suppliers.php';
-  static const String addSupplier = '$baseUrl/api/suppliers/add_supplier.php';
-  static const String updateSupplier =
-      '$baseUrl/api/suppliers/update_supplier.php';
-  static const String deleteSupplier =
-      '$baseUrl/api/suppliers/delete_supplier.php';
+  static const String getSuppliers = '$baseUrl/api/suppliers/suppliers.php';
+  static const String addSupplier = '$baseUrl/api/suppliers/suppliers.php';
+  static const String updateSupplier = '$baseUrl/api/suppliers/suppliers.php';
+  static const String deleteSupplier = '$baseUrl/api/suppliers/suppliers.php';
+  static String get uploadSupplierImage =>
+      '$baseUrl/api/suppliers/upload_image.php';
+
+  // ── Customers ─────────────────────────────────────────────
+  static const String getCustomers = '$baseUrl/api/customers/customers.php';
+  static const String addCustomer = '$baseUrl/api/customers/customers.php';
+  static const String updateCustomer = '$baseUrl/api/customers/customers.php';
+  static const String deleteCustomer = '$baseUrl/api/customers/customers.php';
 
   // ── Sales & Invoices ──────────────────────────────────────
-  static const String createInvoice = '$baseUrl/api/sales/create_invoice.php';
-  static const String getSalesStats = '$baseUrl/api/sales/get_sales_stats.php';
+  static const String createSale = '$baseUrl/api/sales/create_sale.php';
+  static const String getInvoice = '$baseUrl/api/sales/get_invoice.php';
+
+  // ── Inventory & Purchase Management Routes ────────────────
+  static const String inventory = '$baseUrl/api/inventory/inventory.php';
+  static const String purchases =
+      '$baseUrl/api/purchases/purchases.php'; // 🟢 Added Purchases Route
+
+  // ── Reports ────────────────────────────────────────────────
+  static const String reports = '$baseUrl/api/reports/reports.php'; // ✅ Added
+
+  // ── Dashboard ──────────────────────────────────────────────
+  static const String dashboard = '$baseUrl/api/dashboard/dashboard.php';
+
+  // ── Backup ──────────────────────────────────────────────────
+  static const String getBackupStatus =
+      '$baseUrl/api/backup/backup.php?action=status';
+  static const String createBackup =
+      '$baseUrl/api/backup/backup.php?action=create';
+  static const String completeBackup =
+      '$baseUrl/api/backup/backup.php?action=complete';
+  static const String getBackupHistory =
+      '$baseUrl/api/backup/backup.php?action=history';
+  static const String restoreBackup =
+      '$baseUrl/api/backup/backup.php?action=restore';
+  static const String saveBackupSettings =
+      '$baseUrl/api/backup/backup.php?action=saveSettings';
 
   // ── Printers & Hardware ───────────────────────────────────
   static const String getSavedPrinters =
@@ -65,15 +86,7 @@ class ApiConfig {
   static const String saveReceiptSettings =
       '$baseUrl/api/settings/printers_hardware/save_receipt_settings.php';
 
-  // 🔹 ADD THESE BACKUP & SYNC STRING ENDPOINTS
-  static const String getBackupStatus = "$baseUrl/api/backup/status";
-  static const String saveBackupStatus = "$baseUrl/api/backup/status/save";
-  static const String getBackupHistory = "$baseUrl/api/backup/history";
-  static const String recordBackupEvent = "$baseUrl/api/backup/event/record";
-
-  // ── Printed Bills (backup) ────────────────────────────────
-  // Dedicated MySQL table (printed_bills) — every print attempt,
-  // success or failure, is recorded here. Not on-device SQLite.
+  // ── Printed Bills ─────────────────────────────────────────
   static const String savePrintedBill =
       '$baseUrl/api/settings/printers_hardware/save_printed_bill.php';
   static const String getPrintedBills =
@@ -81,6 +94,6 @@ class ApiConfig {
 
   static const Map<String, String> jsonHeaders = {
     'Content-Type': 'application/json',
-    'ngrok-skip-browser-warning': 'true', // ✅ prevents ngrok HTML warning page
+    'ngrok-skip-browser-warning': 'true',
   };
 }

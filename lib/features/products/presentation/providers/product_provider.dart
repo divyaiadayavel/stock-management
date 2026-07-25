@@ -1,93 +1,286 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/storage/db_helper.dart';
+import 'package:http/http.dart' as http;
+import '../../data/datasources/product_remote_datasource.dart';
+import '../../data/models/product_model.dart';
 
-// 1. Create a simple provider for the raw data fetch
-final rawProductsProvider = FutureProvider<List<Map<String, dynamic>>>((
-  ref,
-) async {
-  return await DBHelper.getAllProducts();
+// ─── Dependencies ────────────────────────────────────────────
+final httpClientProvider = Provider<http.Client>((ref) => http.Client());
+
+final productRemoteSourceProvider = Provider<ProductRemoteDataSource>((ref) {
+  return ProductRemoteDataSource(client: ref.watch(httpClientProvider));
 });
 
-// 2. Create clean StateProviders for your UI filters
+// ─── UI Filter, Search & Sort States ──────────────────────
 final selectedFilterProvider = StateProvider<String>((ref) => "All");
 final searchQueryProvider = StateProvider<String>((ref) => "");
+final sortOptionProvider = StateProvider<String>((ref) => "Name (A–Z)");
 
-// 3. A combined selector provider that handles all sorting, filtering, and counting
-final filteredProductsProvider = Provider<Map<String, dynamic>>((ref) {
-  final rawAsync = ref.watch(rawProductsProvider);
-  final search = ref.watch(searchQueryProvider);
-  final filter = ref.watch(selectedFilterProvider);
+// ─── ProductListNotifier (Pagination with server‑side search) ──
+class ProductListState {
+  final List<Product> items;
+  final int page;
+  final bool isInitialLoading;
+  final bool isLoadingMore;
+  final bool isRefreshing;
+  final bool hasMore;
+  final String? error;
 
-  return rawAsync.maybeWhen(
-    data: (products) {
-      List<Map<String, dynamic>> temp = List.from(products);
+  const ProductListState({
+    this.items = const [],
+    this.page = 1,
+    this.isInitialLoading = false,
+    this.isLoadingMore = false,
+    this.isRefreshing = false,
+    this.hasMore = true,
+    this.error,
+  });
 
-      // 🔍 Apply Search logic
-      if (search.isNotEmpty) {
-        temp = temp
-            .where(
-              (p) => p["name"].toString().toLowerCase().contains(
-                search.toLowerCase(),
-              ),
-            )
-            .toList();
-      }
+  ProductListState copyWith({
+    List<Product>? items,
+    int? page,
+    bool? isInitialLoading,
+    bool? isLoadingMore,
+    bool? isRefreshing,
+    bool? hasMore,
+    String? error,
+  }) {
+    return ProductListState(
+      items: items ?? this.items,
+      page: page ?? this.page,
+      isInitialLoading: isInitialLoading ?? this.isInitialLoading,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      isRefreshing: isRefreshing ?? this.isRefreshing,
+      hasMore: hasMore ?? this.hasMore,
+      error: error ?? this.error,
+    );
+  }
+}
 
-      // 📊 Calculate Master Counts dynamically from the absolute source data
-      int total = products.length;
-      int inStock = products
-          .where((p) => (p["quantity"] ?? 0) > (p["lsl"] ?? 10))
-          .length;
-      int lowStock = products
-          .where(
-            (p) =>
-                (p["quantity"] ?? 0) > 0 &&
-                (p["quantity"] ?? 0) <= (p["lsl"] ?? 10),
-          )
-          .length;
-      int outStock = products.where((p) => (p["quantity"] ?? 0) <= 0).length;
+class ProductListNotifier extends StateNotifier<ProductListState> {
+  final Ref ref;
+  static const int _limit = 30;
 
-      // ⚙️ Apply Filter selection
-      if (filter == "In Stock") {
-        temp = temp
-            .where((p) => (p["quantity"] ?? 0) > (p["lsl"] ?? 10))
-            .toList();
-      } else if (filter == "Low Stock") {
-        temp = temp
-            .where(
-              (p) =>
-                  (p["quantity"] ?? 0) > 0 &&
-                  (p["quantity"] ?? 0) <= (p["lsl"] ?? 10),
-            )
-            .toList();
-      } else if (filter == "Out Of Stock") {
-        temp = temp.where((p) => (p["quantity"] ?? 0) <= 0).toList();
-      }
+  ProductListNotifier(this.ref) : super(const ProductListState());
 
-      // 🔀 Sort Alphabetically
-      temp.sort(
-        (a, b) => (a["name"] ?? "").toString().toLowerCase().compareTo(
-          (b["name"] ?? "").toString().toLowerCase(),
-        ),
+  // Load first page (initial or refresh) – uses current search
+  Future<void> loadProducts() async {
+    if (state.isInitialLoading) return;
+
+    state = state.copyWith(isInitialLoading: true, error: null);
+    try {
+      final search = ref.read(searchQueryProvider).trim();
+      final remoteSource = ref.read(productRemoteSourceProvider);
+      final result = await remoteSource.getProductsFromServer(
+        page: 1,
+        limit: _limit,
+        search: search,
       );
 
-      return {
-        "isLoading": false,
-        "list": temp,
-        "total": total,
-        "inStock": inStock,
-        "lowStock": lowStock,
-        "outStock": outStock,
-      };
-    },
-    // Safe fallbacks to prevent screen crashes while the database spins up
-    orElse: () => {
+      state = state.copyWith(
+        items: result.items,
+        page: 1,
+        hasMore: result.total > _limit,
+        isInitialLoading: false,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isInitialLoading: false,
+        error: e.toString(),
+      );
+    }
+  }
+
+  // Load next page – passes the same search term
+  Future<void> loadMore() async {
+    if (state.isLoadingMore || !state.hasMore || state.isInitialLoading) return;
+
+    state = state.copyWith(isLoadingMore: true, error: null);
+    try {
+      final search = ref.read(searchQueryProvider).trim();
+      final nextPage = state.page + 1;
+      final remoteSource = ref.read(productRemoteSourceProvider);
+      final result = await remoteSource.getProductsFromServer(
+        page: nextPage,
+        limit: _limit,
+        search: search,
+      );
+
+      final totalPages = (_limit > 0) ? (result.total / _limit).ceil() : 0;
+      final newItems = [...state.items, ...result.items];
+
+      state = state.copyWith(
+        items: newItems,
+        page: nextPage,
+        hasMore: nextPage < totalPages,
+        isLoadingMore: false,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isLoadingMore: false,
+        error: e.toString(),
+      );
+    }
+  }
+
+  // Pull‑to‑refresh – reloads page 1 with current search
+// ─── Pull‑to‑refresh – reloads page 1 without clearing the list ──
+Future<void> refresh() async {
+  state = state.copyWith(
+    isRefreshing: true,
+    error: null,
+    page: 1,
+    hasMore: true,
+    isLoadingMore: false,
+    // Do NOT clear items here – keep them visible
+  );
+  try {
+    final search = ref.read(searchQueryProvider).trim();
+    final remoteSource = ref.read(productRemoteSourceProvider);
+    final result = await remoteSource.getProductsFromServer(
+      page: 1,
+      limit: _limit,
+      search: search,
+    );
+    state = state.copyWith(
+      items: result.items,
+      page: 1,
+      hasMore: result.total > _limit,
+      isRefreshing: false,
+      // Keep isInitialLoading unchanged (so shimmer doesn't appear)
+    );
+  } catch (e) {
+    state = state.copyWith(isRefreshing: false, error: e.toString());
+  }
+}
+}
+
+final productListProvider = StateNotifierProvider<ProductListNotifier, ProductListState>((ref) {
+  return ProductListNotifier(ref);
+});
+final supplierListProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final remote = ref.read(productRemoteSourceProvider);
+  return remote.getSuppliersFromServer();
+});
+// ─── ProductOperations ──────────────────────────────────────
+class ProductOperations extends StateNotifier<AsyncValue<void>> {
+  final Ref ref;
+  ProductOperations(this.ref) : super(const AsyncValue.data(null));
+
+  Future<bool> addProduct(Product product) async {
+    state = const AsyncValue.loading();
+    try {
+      final newId = await ref.read(productRemoteSourceProvider).addProductToServer(product);
+      if (newId > 0) {
+        ref.read(productListProvider.notifier).refresh();
+        state = const AsyncValue.data(null);
+        return true;
+      }
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    }
+    return false;
+  }
+
+  Future<bool> modifyProduct(Product product) async {
+    state = const AsyncValue.loading();
+    try {
+      final success = await ref.read(productRemoteSourceProvider).updateProductOnServer(product);
+      if (success) {
+        ref.read(productListProvider.notifier).refresh();
+        state = const AsyncValue.data(null);
+        return true;
+      }
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    }
+    return false;
+  }
+
+  Future<bool> deleteProduct(int id) async {
+    try {
+      final success = await ref.read(productRemoteSourceProvider).deleteProductFromServer(id);
+      if (success) {
+        ref.read(productListProvider.notifier).refresh();
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+}
+
+final productOperationsProvider = StateNotifierProvider<ProductOperations, AsyncValue<void>>((ref) {
+  return ProductOperations(ref);
+});
+
+// ─── Filtered & Sorted List (client‑side) ──────────────────
+// Search is now done server‑side, so we only apply filter and sort here.
+final filteredProductsProvider = Provider<Map<String, dynamic>>((ref) {
+  final paginatedState = ref.watch(productListProvider);
+  final filter = ref.watch(selectedFilterProvider);
+  final sortOption = ref.watch(sortOptionProvider);
+
+  if (paginatedState.isInitialLoading) {
+    return {
       "isLoading": true,
-      "list": <Map<String, dynamic>>[],
+      "list": <Product>[],
       "total": 0,
       "inStock": 0,
       "lowStock": 0,
       "outStock": 0,
-    },
-  );
+      "totalUnits": 0,
+      "totalValue": 0.0,
+    };
+  }
+
+  List<Product> temp = List.from(paginatedState.items);
+
+  // ── Apply status filter ──
+  if (filter == "In Stock") {
+    temp = temp.where((p) => p.quantity > p.lsl).toList();
+  } else if (filter == "Low Stock") {
+    temp = temp.where((p) => p.quantity > 0 && p.quantity <= p.lsl).toList();
+  } else if (filter == "Out Of Stock") {
+    temp = temp.where((p) => p.quantity <= 0).toList();
+  }
+
+  // ── Apply sorting ──
+  switch (sortOption) {
+    case "Name (A–Z)":
+      temp.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      break;
+    case "Stock (Low → High)":
+      temp.sort((a, b) => a.quantity.compareTo(b.quantity));
+      break;
+    case "Value (High → Low)":
+      temp.sort((a, b) => (b.quantity * b.sellingPrice).compareTo(a.quantity * a.sellingPrice));
+      break;
+    default:
+      temp.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  }
+
+  // ── Stats (from full list) ──
+  final all = paginatedState.items;
+  int total = all.length;
+  int inStock = all.where((p) => p.quantity > p.lsl).length;
+  int lowStock = all.where((p) => p.quantity > 0 && p.quantity <= p.lsl).length;
+  int outStock = all.where((p) => p.quantity <= 0).length;
+  int totalUnits = 0;
+  double totalValue = 0.0;
+  for (var p in all) {
+    totalUnits += p.quantity;
+    totalValue += (p.quantity * p.sellingPrice);
+  }
+
+  return {
+    "isLoading": false,
+    "list": temp,
+    "total": total,
+    "inStock": inStock,
+    "lowStock": lowStock,
+    "outStock": outStock,
+    "totalUnits": totalUnits,
+    "totalValue": totalValue,
+  };
 });

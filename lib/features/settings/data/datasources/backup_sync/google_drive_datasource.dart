@@ -40,7 +40,9 @@ class GoogleDriveDatasource {
 
   Future<drive.DriveApi> _client() async {
     _account ??= await _googleSignIn.signInSilently();
-    if (_account == null) throw Exception('Not signed in to Google');
+    if (_account == null) {
+      throw Exception('Not signed in to Google');
+    }
     final authClient = await _googleSignIn.authenticatedClient();
     if (authClient == null)
       throw Exception('Could not authenticate with Google');

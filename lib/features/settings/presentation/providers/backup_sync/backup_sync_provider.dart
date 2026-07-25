@@ -1,48 +1,32 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// Data layer imports
 import '../../../data/datasources/backup_sync/google_drive_datasource.dart';
-import '../../../data/datasources/backup_sync/local_backup_datasource.dart';
-import '../../../data/datasources/settings_remote_datasource.dart'; // IMPORT FOR REMOTE DATASOURCE
+import '../../../data/datasources/settings_remote_datasource.dart';
 import '../../../data/repositories/backup_sync/backup_sync_repository_impl.dart';
-import '../../../data/services/backup_sync/data_export_service.dart';
-
-// Domain layer entities & repositories
 import '../../../domain/entities/backup_sync/backup_info.dart';
 import '../../../domain/entities/backup_sync/drive_account_info.dart';
 import '../../../domain/repositories/backup_sync/backup_sync_repository.dart';
-
-// Domain layer use cases
 import '../../../domain/usecases/backup_sync/backup_to_drive.dart';
 import '../../../domain/usecases/backup_sync/connect_google_drive.dart';
-import '../../../domain/usecases/backup_sync/create_local_backup.dart';
 import '../../../domain/usecases/backup_sync/disconnect_google_drive.dart';
-import '../../../domain/usecases/backup_sync/export_data.dart';
 import '../../../domain/usecases/backup_sync/restore_from_drive.dart';
+import '../../../data/models/backup_sync/backup_history_entry_model.dart'; // <-- ADD THIS
 import '../settings_provider.dart';
-import 'dart:io';
-import 'package:csv/csv.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:stock_management/core/storage/db_helper.dart'; // ✅ Absolute package path import
 
-// ── Remote Datasource Provider ───────────────────────────────────────────────
+// ── Remote Datasource Provider ──────────────────────────────
 final settingsRemoteDatasourceProvider = Provider<SettingsRemoteDatasource>(
   (ref) => SettingsRemoteDatasource(),
 );
 
-// ── Repository Provider (With remote datasource dependency injected) ──────────
+// ── Repository Provider ──────────────────────────────────────
 final backupSyncRepositoryProvider = Provider<BackupSyncRepository>((ref) {
   return BackupSyncRepositoryImpl(
     GoogleDriveDatasource(),
-    LocalBackupDatasource(),
-    DataExportService(),
-    ref.read(
-      settingsRemoteDatasourceProvider,
-    ), // Injected combined remote datasource
+    ref.read(settingsRemoteDatasourceProvider),
   );
 });
 
-// ── Use Case Providers ───────────────────────────────────────────────────────
+// ── Use Case Providers ───────────────────────────────────────
 final connectGoogleDriveProvider = Provider(
   (ref) => ConnectGoogleDrive(ref.read(backupSyncRepositoryProvider)),
 );
@@ -52,17 +36,11 @@ final disconnectGoogleDriveProvider = Provider(
 final backupToDriveProvider = Provider(
   (ref) => BackupToDrive(ref.read(backupSyncRepositoryProvider)),
 );
-final createLocalBackupProvider = Provider(
-  (ref) => CreateLocalBackup(ref.read(backupSyncRepositoryProvider)),
-);
 final restoreFromDriveProvider = Provider(
   (ref) => RestoreFromDrive(ref.read(backupSyncRepositoryProvider)),
 );
-final exportDataProvider = Provider(
-  (ref) => ExportData(ref.read(backupSyncRepositoryProvider)),
-);
 
-// ── State Representation ─────────────────────────────────────────────────────
+// ── State ─────────────────────────────────────────────────────
 class BackupSyncState {
   final bool isLoading;
   final DriveAccountInfo? account;
@@ -84,7 +62,6 @@ class BackupSyncState {
   }) {
     return BackupSyncState(
       isLoading: isLoading ?? this.isLoading,
-      // ✅ FIX 1: Allow account to be explicitly set to null instead of falling back to old state
       account: account,
       lastSync: lastSync ?? this.lastSync,
       statusMessage: statusMessage,
@@ -92,7 +69,7 @@ class BackupSyncState {
   }
 }
 
-// ── State Controller Provider ────────────────────────────────────────────────
+// ── Controller ───────────────────────────────────────────────
 final backupSyncControllerProvider =
     StateNotifierProvider.autoDispose<BackupSyncController, BackupSyncState>(
       (ref) => BackupSyncController(ref),
@@ -101,19 +78,30 @@ final backupSyncControllerProvider =
 class BackupSyncController extends StateNotifier<BackupSyncState> {
   final Ref ref;
   BackupSyncController(this.ref) : super(const BackupSyncState()) {
-    _loadAccount();
+    _loadStatus();
   }
 
-  Future<void> _loadAccount() async {
+  Future<void> _loadStatus() async {
     final repo = ref.read(backupSyncRepositoryProvider);
     final account = await repo.getConnectedAccount();
-    final lastSync = await repo.getLastSyncTime();
-    // Use an explicit new state initialization map configuration layout
+    final status = await repo.getBackupStatus();
     state = BackupSyncState(
       account: account,
-      lastSync: lastSync,
+      lastSync: status.lastBackupTime,
       isLoading: false,
       statusMessage: null,
+    );
+  }
+
+  Future<void> refreshStatus() async {
+    final repo = ref.read(backupSyncRepositoryProvider);
+    final account = await repo.getConnectedAccount();
+    final status = await repo.getBackupStatus();
+    state = BackupSyncState(
+      account: account,
+      lastSync: status.lastBackupTime,
+      isLoading: false,
+      statusMessage: state.statusMessage,
     );
   }
 
@@ -125,8 +113,9 @@ class BackupSyncController extends StateNotifier<BackupSyncState> {
       await ref
           .read(settingsRepositoryProvider)
           .saveSetting("googleDriveBackup", "true");
-
-      // ✅ FIX 2: Explicitly pass the fresh account layout profile
+      await ref
+          .read(backupSyncRepositoryProvider)
+          .saveBackupSettings(settings: {'googleDriveBackup': 'true'});
       state = BackupSyncState(
         account: account,
         lastSync: state.lastSync,
@@ -145,10 +134,12 @@ class BackupSyncController extends StateNotifier<BackupSyncState> {
     await ref
         .read(settingsRepositoryProvider)
         .saveSetting("googleDriveBackup", "false");
+    await ref
+        .read(backupSyncRepositoryProvider)
+        .saveBackupSettings(settings: {'googleDriveBackup': 'false'});
 
-    // ✅ FIX 3: Instantly clear out the account data object by initializing a clean model
     state = BackupSyncState(
-      account: null, // Force null parameter definition values
+      account: null,
       lastSync: state.lastSync,
       isLoading: false,
       statusMessage: 'Disconnected successfully',
@@ -175,78 +166,28 @@ class BackupSyncController extends StateNotifier<BackupSyncState> {
     }
   }
 
-  Future<BackupInfo?> localBackupNow() async {
-    state = state.copyWith(isLoading: true);
-    try {
-      final info = await ref.read(createLocalBackupProvider)();
-      state = state.copyWith(
-        isLoading: false,
-        statusMessage: 'Local backup saved',
-      );
-      return info;
-    } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        statusMessage: 'Backup failed: $e',
-      );
-      return null;
-    }
+  // Fetch backup history
+  Future<List<BackupHistoryEntryModel>> fetchHistory() async {
+    final repo = ref.read(backupSyncRepositoryProvider);
+    return await repo.getBackupHistory();
   }
 
-  Future<String?> exportNow() async {
-    state = state.copyWith(isLoading: true);
+  // Restore from Drive by file ID
+  Future<void> restoreFromDrive(String driveFileId) async {
+    state = state.copyWith(isLoading: true, statusMessage: 'Restoring...');
     try {
-      final path = await ref.read(exportDataProvider)();
+      await ref.read(restoreFromDriveProvider)(driveFileId: driveFileId);
       state = state.copyWith(
         isLoading: false,
-        statusMessage: 'Exported to $path',
+        statusMessage: 'Restore successful',
       );
-      return path;
+      await refreshStatus();
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        statusMessage: 'Export failed: $e',
+        statusMessage: 'Restore failed: $e',
       );
-      return null;
-    }
-  }
-
-  Future<int?> importCsvNow() async {
-    state = state.copyWith(isLoading: true);
-    try {
-      // 1. Fire up a picker interface targeting plain data files matching CSV format specifications
-      FilePickerResult? result = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['csv'],
-      );
-
-      if (result != null && result.files.single.path != null) {
-        final file = File(result.files.single.path!);
-
-        // 2. Read file contents and decode it as standardized text rows
-        final csvContent = await file.readAsString();
-        final List<List<dynamic>> parsedRows = CsvToListConverter().convert(
-          csvContent,
-        );
-
-        // 3. Delegate row collection array down into our SQLite transaction processor
-        final count = await DBHelper.importProductsFromCsv(parsedRows);
-
-        state = state.copyWith(
-          isLoading: false,
-          statusMessage: 'Successfully imported $count products',
-        );
-        return count;
-      }
-
-      state = state.copyWith(isLoading: false);
-      return null;
-    } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        statusMessage: 'Import mapping failed: $e',
-      );
-      return null;
+      rethrow;
     }
   }
 }

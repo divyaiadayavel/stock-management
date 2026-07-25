@@ -1,13 +1,70 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-final invoiceItemsProvider = StateProvider<List<Map<String, dynamic>>>(
-  (ref) => [],
-);
+import '../../data/models/sale_model.dart';
+import '../../domain/usecases/get_invoice.dart';
 
-final subtotalProvider = StateProvider<double>((ref) => 0);
+import 'sales_provider.dart';
 
-final discountProvider = StateProvider<double>((ref) => 0);
+final invoiceProvider =
+    StateNotifierProvider<InvoiceNotifier, InvoiceState>((ref) {
+  return InvoiceNotifier(
+    getInvoice: ref.read(getInvoiceUseCaseProvider),
+  );
+});
 
-final taxProvider = StateProvider<double>((ref) => 0);
+class InvoiceState {
+  final bool isLoading;
+  final SaleModel? invoice;
+  final String? error;
 
-final totalProvider = StateProvider<double>((ref) => 0);
+  const InvoiceState({
+    this.isLoading = false,
+    this.invoice,
+    this.error,
+  });
+
+  InvoiceState copyWith({
+    bool? isLoading,
+    SaleModel? invoice,
+    String? error,
+  }) {
+    return InvoiceState(
+      isLoading: isLoading ?? this.isLoading,
+      invoice: invoice ?? this.invoice,
+      error: error,
+    );
+  }
+}
+
+class InvoiceNotifier extends StateNotifier<InvoiceState> {
+  final GetInvoice getInvoice;
+
+  InvoiceNotifier({
+    required this.getInvoice,
+  }) : super(const InvoiceState());
+
+  Future<void> loadInvoice(int saleId) async {
+    state = state.copyWith(
+      isLoading: true,
+      error: null,
+    );
+
+    try {
+      final invoice = await getInvoice(saleId);
+
+      state = state.copyWith(
+        isLoading: false,
+        invoice: invoice,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: e.toString(),
+      );
+    }
+  }
+
+  void clearInvoice() {
+    state = const InvoiceState();
+  }
+}

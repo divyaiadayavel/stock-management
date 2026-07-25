@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'dart:io';
 
 import 'scanner_bill_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_text_styles.dart';
-import '../../../../core/storage/db_helper.dart';
 import '../providers/billing_provider.dart';
 import 'current_bill_screen.dart';
 import '../../../../core/utils/responsive_helper.dart';
+import '../../../products/presentation/providers/product_provider.dart';
 
 final searchProductProvider = StateProvider<String>((ref) => "");
 
@@ -23,8 +22,6 @@ class AddProductBillScreen extends ConsumerStatefulWidget {
 }
 
 class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
-  List<Map<String, dynamic>> products = [];
-  bool isLoading = true;
   bool isAscending = true;
   String selectedCategory = "All";
 
@@ -50,23 +47,19 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
   @override
   void initState() {
     super.initState();
-    loadProducts();
+    Future.microtask(() {
+      ref.read(productListProvider.notifier).loadProducts();
+    });
   }
 
-  Future<void> loadProducts() async {
-    final data = await DBHelper.getAllProducts();
-
-    setState(() {
-      products = data.map((item) {
-        final mutableItem = Map<String, dynamic>.from(item);
-        final rawQty = mutableItem["quantity"] ?? 0;
-        if (rawQty < 0) {
-          mutableItem["quantity"] = 0;
-        }
-        return mutableItem;
-      }).toList();
-      isLoading = false;
-    });
+  void _showSnackBar(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? AppColors.red : AppColors.primary,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   @override
@@ -74,28 +67,34 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
     final billingState = ref.watch(billingProvider);
     final search = ref.watch(searchProductProvider);
 
-    final filteredProducts = products.where((product) {
-      final searchMatch = product["name"].toString().toLowerCase().contains(
-        search.toLowerCase(),
-      );
-      final categoryMatch =
-          selectedCategory == "All" ||
-          (product["category"] ?? "").toString() == selectedCategory;
+    final productState = ref.watch(productListProvider);
+    final products = productState.items;
+    final isLoading = productState.isInitialLoading;
 
+    final filteredProducts = products.where((product) {
+      final searchLower = search.toLowerCase();
+      final searchMatch =
+          product.name.toLowerCase().contains(searchLower) ||
+          (product.barcode?.toLowerCase().contains(searchLower) ?? false);
+      final categoryMatch =
+          selectedCategory == "All" || product.category == selectedCategory;
       return searchMatch && categoryMatch;
     }).toList();
 
     filteredProducts.sort((a, b) {
-      final nameA = (a["name"] ?? "").toString().toLowerCase();
-      final nameB = (b["name"] ?? "").toString().toLowerCase();
+      final nameA = a.name;
+      final nameB = b.name;
       return isAscending ? nameA.compareTo(nameB) : nameB.compareTo(nameA);
     });
+
+    final showLoading = isLoading && products.isEmpty;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
           children: [
+            // ── Header ──
             Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: R.sp(context, AppSpacing.screenPadding / 2),
@@ -118,7 +117,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
             ),
 
             Expanded(
-              child: isLoading
+              child: showLoading
                   ? const Center(child: CircularProgressIndicator())
                   : SingleChildScrollView(
                       padding: EdgeInsets.all(
@@ -127,6 +126,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // ── Search & Scanner ──
                           Row(
                             children: [
                               Expanded(
@@ -221,6 +221,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                             height: R.sp(context, AppSpacing.sectionGap),
                           ),
 
+                          // ── Category Chips ──
                           SizedBox(
                             height: R.searchH(context) - 8,
                             child: ListView.builder(
@@ -264,14 +265,17 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
 
                           SizedBox(height: R.sp(context, AppSpacing.md)),
 
+                          // ── Product List ──
                           ListView.builder(
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
                             itemCount: filteredProducts.length,
                             itemBuilder: (context, index) {
                               final product = filteredProducts[index];
-                              final int currentStock =
-                                  (product["quantity"] ?? 0) as int;
+                              if (product.id == null)
+                                return const SizedBox.shrink();
+
+                              final isOutOfStock = product.quantity <= 0;
 
                               return Container(
                                 margin: EdgeInsets.only(
@@ -286,11 +290,16 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                   borderRadius: BorderRadius.circular(
                                     AppSizes.radiusLg,
                                   ),
-                                  border: Border.all(color: AppColors.border),
+                                  border: Border.all(
+                                    color: isOutOfStock
+                                        ? AppColors.red.withOpacity(0.3)
+                                        : AppColors.border,
+                                  ),
                                 ),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
+                                    // ── Left: Product Info ──
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment:
@@ -298,12 +307,16 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Text(
-                                            product["name"] ?? "",
+                                            product.name,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: AppTextStyles.cardValue
                                                 .copyWith(
                                                   fontSize: R.fs(context, 13.5),
+                                                  color: isOutOfStock
+                                                      ? AppColors.textSecondary
+                                                      : AppColors
+                                                            .textPrimaryDark,
                                                 ),
                                           ),
                                           SizedBox(
@@ -318,7 +331,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                 context: context,
                                                 label: "Price",
                                                 value:
-                                                    "₹${product["selling_price"]}",
+                                                    "₹${product.sellingPrice}",
                                                 valueColor:
                                                     AppColors.textPrimaryDark,
                                               ),
@@ -331,8 +344,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                               _metaChip(
                                                 context: context,
                                                 label: "Disc",
-                                                value:
-                                                    "${product["discount"] ?? 0}%",
+                                                value: "${product.discount}%",
                                                 valueColor: AppColors.green,
                                               ),
                                               SizedBox(
@@ -344,17 +356,34 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                               _metaChip(
                                                 context: context,
                                                 label: "Stock",
-                                                value: "$currentStock",
-                                                valueColor: currentStock <= 0
+                                                value: "${product.quantity}",
+                                                valueColor: isOutOfStock
                                                     ? AppColors.red
                                                     : AppColors.cyanDim,
                                               ),
                                             ],
                                           ),
+                                          if (isOutOfStock) ...[
+                                            SizedBox(
+                                              height: R.sp(
+                                                context,
+                                                AppSpacing.xs,
+                                              ),
+                                            ),
+                                            Text(
+                                              "⚠️ Out of Stock",
+                                              style: AppTextStyles.small
+                                                  .copyWith(
+                                                    color: AppColors.red,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                            ),
+                                          ],
                                         ],
                                       ),
                                     ),
 
+                                    // ── Right: Add / Qty Controls ──
                                     SizedBox(
                                       width: R.isDesktop(context)
                                           ? 180
@@ -370,11 +399,10 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                               .cart
                                               .indexWhere(
                                                 (e) =>
-                                                    e.productId ==
-                                                    product["id"],
+                                                    e.productId == product.id,
                                               );
 
-                                          // NOT IN CART
+                                          // ── Not in cart ──
                                           if (existingIndex == -1) {
                                             return Align(
                                               alignment: Alignment.centerRight,
@@ -383,48 +411,45 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                     BorderRadius.circular(
                                                       AppSizes.radiusMd,
                                                     ),
-                                                onTap: () {
-                                                  if (currentStock <= 0) {
-                                                    ScaffoldMessenger.of(
-                                                      context,
-                                                    ).showSnackBar(
-                                                      const SnackBar(
-                                                        content: Text(
-                                                          "Out of Stock! Cannot add to bill.",
-                                                        ),
-                                                        backgroundColor:
-                                                            AppColors.red,
-                                                      ),
-                                                    );
-                                                    return;
-                                                  }
-                                                  ref
-                                                      .read(
-                                                        billingProvider
-                                                            .notifier,
-                                                      )
-                                                      .addToCart(product, 1);
-                                                },
+                                                onTap: isOutOfStock
+                                                    ? null
+                                                    : () {
+                                                        ref
+                                                            .read(
+                                                              billingProvider
+                                                                  .notifier,
+                                                            )
+                                                            .addProduct(
+                                                              product,
+                                                            );
+                                                      },
                                                 child: Container(
                                                   height: 34,
                                                   width: 34,
                                                   decoration: BoxDecoration(
-                                                    gradient: currentStock <= 0
+                                                    gradient: isOutOfStock
                                                         ? null
                                                         : AppColors
                                                               .brandGradient,
-                                                    color: currentStock <= 0
-                                                        ? Colors.grey.shade300
+                                                    color: isOutOfStock
+                                                        ? AppColors.surface2
                                                         : null,
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                           AppSizes.radiusMd,
                                                         ),
+                                                    border: isOutOfStock
+                                                        ? Border.all(
+                                                            color: AppColors
+                                                                .border,
+                                                          )
+                                                        : null,
                                                   ),
                                                   child: Icon(
                                                     Icons.add,
-                                                    color: currentStock <= 0
-                                                        ? Colors.grey
+                                                    color: isOutOfStock
+                                                        ? AppColors
+                                                              .textSecondary
                                                         : Colors.white,
                                                     size: 19,
                                                   ),
@@ -433,9 +458,12 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                             );
                                           }
 
-                                          // IN CART
+                                          // ── Already in cart ──
                                           final item =
                                               billingState.cart[existingIndex];
+                                          final availableStock =
+                                              product.quantity;
+
                                           return Row(
                                             mainAxisAlignment:
                                                 MainAxisAlignment.end,
@@ -472,16 +500,14 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                                 ),
                                                           ),
                                                           onTap: () {
-                                                            if (item.qty > 1) {
-                                                              ref
-                                                                  .read(
-                                                                    billingProvider
-                                                                        .notifier,
-                                                                  )
-                                                                  .decreaseQty(
-                                                                    existingIndex,
-                                                                  );
-                                                            }
+                                                            ref
+                                                                .read(
+                                                                  billingProvider
+                                                                      .notifier,
+                                                                )
+                                                                .decreaseQty(
+                                                                  product.id!,
+                                                                );
                                                           },
                                                           child: Container(
                                                             height: 34,
@@ -553,45 +579,33 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                                   ),
                                                             ),
                                                             onFieldSubmitted: (value) {
-                                                              final newQty =
+                                                              int? newQty =
                                                                   int.tryParse(
                                                                     value,
                                                                   );
-                                                              if (newQty !=
-                                                                      null &&
-                                                                  newQty > 0) {
-                                                                // ── FIX: Cap manual field submit ceiling values ──
-                                                                final finalTargetQty =
-                                                                    newQty >
-                                                                        currentStock
-                                                                    ? currentStock
-                                                                    : newQty;
-                                                                while (item
-                                                                        .qty <
-                                                                    finalTargetQty) {
-                                                                  ref
-                                                                      .read(
-                                                                        billingProvider
-                                                                            .notifier,
-                                                                      )
-                                                                      .increaseQty(
-                                                                        existingIndex,
-                                                                        currentStock,
-                                                                      );
-                                                                }
-                                                                while (item
-                                                                        .qty >
-                                                                    finalTargetQty) {
-                                                                  ref
-                                                                      .read(
-                                                                        billingProvider
-                                                                            .notifier,
-                                                                      )
-                                                                      .decreaseQty(
-                                                                        existingIndex,
-                                                                      );
-                                                                }
+                                                              if (newQty ==
+                                                                      null ||
+                                                                  newQty <= 0) {
+                                                                return;
                                                               }
+                                                              if (newQty >
+                                                                  availableStock) {
+                                                                newQty =
+                                                                    availableStock;
+                                                                _showSnackBar(
+                                                                  'Only $availableStock items available',
+                                                                  isError: true,
+                                                                );
+                                                              }
+                                                              ref
+                                                                  .read(
+                                                                    billingProvider
+                                                                        .notifier,
+                                                                  )
+                                                                  .updateQty(
+                                                                    product.id!,
+                                                                    newQty,
+                                                                  );
                                                             },
                                                           ),
                                                         ),
@@ -619,20 +633,11 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                                 ),
                                                           ),
                                                           onTap: () {
-                                                            // ── FIX: Enforce ceiling check directly on layout tap ──
                                                             if (item.qty >=
-                                                                currentStock) {
-                                                              ScaffoldMessenger.of(
-                                                                context,
-                                                              ).showSnackBar(
-                                                                SnackBar(
-                                                                  content: Text(
-                                                                    "Cannot add more! Only $currentStock items available.",
-                                                                  ),
-                                                                  backgroundColor:
-                                                                      AppColors
-                                                                          .orange,
-                                                                ),
+                                                                availableStock) {
+                                                              _showSnackBar(
+                                                                'Only $availableStock items available',
+                                                                isError: true,
                                                               );
                                                               return;
                                                             }
@@ -642,8 +647,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                                       .notifier,
                                                                 )
                                                                 .increaseQty(
-                                                                  existingIndex,
-                                                                  currentStock,
+                                                                  product.id!,
                                                                 );
                                                           },
                                                           child: Container(
@@ -683,6 +687,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                   AppSpacing.sm,
                                                 ),
                                               ),
+                                              // DELETE
                                               InkWell(
                                                 borderRadius:
                                                     BorderRadius.circular(
@@ -754,8 +759,8 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                           billingProvider
                                                               .notifier,
                                                         )
-                                                        .removeItem(
-                                                          existingIndex,
+                                                        .removeProduct(
+                                                          product.id!,
                                                         );
                                                   }
                                                 },
@@ -840,7 +845,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                       ),
                     ),
                     Text(
-                      "₹ ${billingState.total.toStringAsFixed(2)}",
+                      "₹ ${billingState.grandTotal.toStringAsFixed(2)}",
                       style: AppTextStyles.cardValue.copyWith(
                         color: Colors.white,
                         fontSize: R.fs(context, 20),
@@ -862,6 +867,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                       ),
                     ),
                     onPressed: () {
+                      if (billingState.cart.isEmpty) return;
                       Navigator.push(
                         context,
                         MaterialPageRoute(

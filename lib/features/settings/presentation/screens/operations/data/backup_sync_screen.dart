@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../../../core/constants/app_colors.dart';
 import '../../../../../../core/constants/app_sizes.dart';
@@ -7,10 +9,6 @@ import '../../../../../../core/constants/app_spacing.dart';
 import '../../../../../../core/constants/app_text_styles.dart';
 import '../../../providers/settings_provider.dart';
 import '../../../providers/backup_sync/backup_sync_provider.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:file_picker/file_picker.dart';
-import '../../../../../../core/storage/db_helper.dart'; // Links your database helper class
-import 'package:intl/intl.dart';
 import '../../../../../../core/services/notification_service.dart';
 
 class BackupSyncScreen extends ConsumerStatefulWidget {
@@ -51,6 +49,9 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
     await ref
         .read(settingsRepositoryProvider)
         .saveSetting(key, value.toString());
+    await ref
+        .read(backupSyncRepositoryProvider)
+        .saveBackupSettings(settings: {key: value.toString()});
     setState(() {
       if (key == "googleDriveBackup") googleDrive = value;
       if (key == "autoBackup") autoBackup = value;
@@ -97,11 +98,10 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
                     title: backupState.account != null
                         ? "Google Drive (${backupState.account!.email})"
                         : "Google Drive Backup",
-                    // ✅ Updated subtitle logic: Shows "Connected" if logged in but not synced yet
                     subtitle: backupState.account == null
                         ? "Not connected"
                         : (backupState.lastSync != null
-                              ? "Last backup: ${backupState.lastSync}"
+                              ? "Last backup: ${DateFormat('dd MMM yyyy, hh:mm a').format(backupState.lastSync!)}"
                               : "Connected (Ready to sync)"),
                     value: backupState.account != null,
                     onChanged: (val) async {
@@ -110,6 +110,7 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
                       } else {
                         await backupController.disconnectDrive();
                       }
+                      await backupController.refreshStatus();
                     },
                   ),
                   _toggleCard(
@@ -121,116 +122,18 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
                     onChanged: (newValue) =>
                         _updateToggle("autoBackup", newValue),
                   ),
-                  _actionCard(
-                    icon: Icons.save_alt,
-                    iconColor: AppColors.primary,
-                    title: "Local Backup",
-                    subtitle: "Create backup on this device",
-                    onTap: () async {
-                      final info = await backupController.localBackupNow();
-                      if (info != null && mounted) {
-                        // ✅ Trigger the native system menu to save or share the database file
-                        await Share.shareXFiles(
-                          [
-                            XFile(info.id),
-                          ], // info.id contains the absolute file path
-                          text: "Stock Management Database Backup",
-                        );
-
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text("Backup complete: ${info.fileName}"),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                  _actionCard(
-                    icon: Icons.file_upload_outlined,
-                    iconColor: AppColors.orange,
-                    title: "Export Data",
-                    subtitle: "Export data in Excel/CSV",
-                    onTap: () async {
-                      final path = await backupController.exportNow();
-                      if (path != null && mounted) {
-                        // ✅ Trigger the native system menu to send or open the CSV spreadsheet file
-                        await Share.shareXFiles([
-                          XFile(path),
-                        ], text: "Stock Management Inventory Report");
-
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text("Exported successfully!")),
-                        );
-                      }
-                    },
-                  ),
-                  _actionCard(
-                    icon: Icons.file_download_outlined,
-                    iconColor: AppColors.cyan,
-                    title: "Import Data",
-                    subtitle: "Import products via Excel/CSV spreadsheet",
-                    onTap: () async {
-                      final importedCount = await backupController
-                          .importCsvNow();
-                      if (importedCount != null && mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              "Success! Bulk imported $importedCount products.",
-                            ),
-                            backgroundColor: AppColors.green,
-                          ),
-                        );
-                      }
-                    },
-                  ),
-
                   const SizedBox(height: AppSpacing.lg),
                   _sectionHeader("Restore"),
                   _actionCard(
                     icon: Icons.restore,
                     iconColor: AppColors.red,
                     title: "Restore from Backup",
-                    subtitle: "Restore your previous backup",
-                    onTap: () async {
-                      // ✅ Corrected: Direct static method call matching the latest API update
-                      FilePickerResult? result = await FilePicker.pickFiles(
-                        type: FileType.any,
-                      );
-
-                      if (result != null && result.files.single.path != null) {
-                        final filePath = result.files.single.path!;
-
-                        // Lock the database file pool safely before swapping
-                        await DBHelper.closeDb();
-
-                        // Overwrite the old database with the chosen backup file
-                        await ref
-                            .read(backupSyncControllerProvider.notifier)
-                            .ref
-                            .read(backupSyncRepositoryProvider)
-                            .restoreFromLocal(filePath);
-
-                        // Reopen the connection pool
-                        await DBHelper.reopenDb();
-
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                "Database restored successfully! Please restart the app.",
-                              ),
-                            ),
-                          );
-                        }
-                      }
-                    },
+                    subtitle: "Restore data from Google Drive backup",
+                    onTap: () => _showRestoreDialog(backupController),
                   ),
-
                   const SizedBox(height: AppSpacing.xxl),
                   Center(
                     child: Text(
-                      // ✅ Dynamically reads the lastSync timestamp state and formats it nicely
                       backupState.lastSync != null
                           ? "Last synced: ${DateFormat('dd MMM yyyy, hh:mm a').format(backupState.lastSync!)}"
                           : "Last synced: Never",
@@ -241,7 +144,6 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),
-
                   SizedBox(
                     width: double.infinity,
                     height: 52,
@@ -258,14 +160,9 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
                         ),
                       ),
                       onPressed: () async {
-                        // 1. Trigger the background backup logic
                         final info = await backupController.backupNow();
-
                         if (mounted) {
                           if (info != null) {
-                            // ✅ Success Path: The backup completed successfully!
-
-                            // Trigger the snackbar
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
@@ -273,11 +170,8 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
                                 ),
                               ),
                             );
-
-                            // Trigger your Local Notification instantly
                             await NotificationService.showBackupNotification();
                           } else {
-                            // ❌ Failure Path: Sync failed or Google Drive wasn't connected
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text("Sync failed / not connected"),
@@ -299,6 +193,96 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
                 ],
               ),
             ),
+    );
+  }
+
+  // ── Helper: Show restore dialog with history ─────────────────────
+  Future<void> _showRestoreDialog(BackupSyncController controller) async {
+    // Use a local variable to avoid using context after it's disposed.
+    if (!mounted) return;
+    final history = await controller.fetchHistory();
+    if (!mounted) return;
+    if (history.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No backups found')));
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Restore from Backup'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 300,
+          child: ListView.builder(
+            itemCount: history.length,
+            itemBuilder: (_, index) {
+              final entry = history[index];
+              return ListTile(
+                title: Text(entry.backupName),
+                subtitle: Text(
+                  '${entry.fileName} - ${DateFormat('dd MMM yyyy HH:mm').format(entry.createdAt)}',
+                ),
+                trailing: Text(
+                  '${(entry.fileSize / 1024).toStringAsFixed(1)} KB',
+                ),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  // Confirm dialog
+                  final confirm = await showDialog<bool>(
+                    context: ctx,
+                    builder: (dialogContext) => AlertDialog(
+                      title: const Text('Confirm Restore'),
+                      content: Text(
+                        'Restore backup from ${entry.backupName}? '
+                        'This will replace all current data.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogContext, false),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogContext, true),
+                          child: const Text('Restore'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm == true) {
+                    try {
+                      await controller.restoreFromDrive(entry.driveFileId!);
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Restore completed successfully!'),
+                          ),
+                        );
+                        await controller.refreshStatus();
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Restore failed: $e')),
+                        );
+                      }
+                    }
+                  }
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
     );
   }
 

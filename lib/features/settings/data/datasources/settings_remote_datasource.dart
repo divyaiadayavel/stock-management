@@ -1,5 +1,6 @@
 import 'dart:convert';
-
+import 'dart:typed_data';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../../../../core/network/api_config.dart';
@@ -14,18 +15,15 @@ class SettingsRemoteDatasource {
     : _client = client ?? http.Client();
 
   static const int defaultUserId = 1;
-
   final http.Client _client;
 
-  // ── Settings ────────────────────────────────────────────────────────────────
-
+  // ── Settings ──────────────────────────────────────────────
   Future<SettingsBundleModel> getSettingsBundle({
     int userId = defaultUserId,
   }) async {
     final uri = Uri.parse(
       ApiConfig.getSettings,
     ).replace(queryParameters: {'user_id': userId.toString()});
-
     final response = await _client.get(uri, headers: ApiConfig.jsonHeaders);
     final json = _decodeResponse(response);
     return SettingsBundleModel.fromJson(json);
@@ -39,7 +37,6 @@ class SettingsRemoteDatasource {
       'user_id': userId,
       'profile': profile.toJson(),
     });
-
     final data = _readData(json);
     return BusinessProfileModel.fromJson(
       data['profile'] is Map
@@ -58,23 +55,18 @@ class SettingsRemoteDatasource {
     });
   }
 
-  // ── Staff ────────────────────────────────────────────────────────────────────
-
+  // ── Staff ──────────────────────────────────────────────────
   Future<List<StaffUserModel>> getStaffUsers({
     int userId = defaultUserId,
   }) async {
     final uri = Uri.parse(
       ApiConfig.getStaff,
     ).replace(queryParameters: {'user_id': userId.toString()});
-
     final response = await _client.get(uri, headers: ApiConfig.jsonHeaders);
     final json = _decodeResponse(response);
     final data = _readData(json);
-
-    final list = data['staff'];
-    if (list is! List) return [];
+    final list = data['staff'] as List? ?? [];
     return list
-        .whereType<Map>()
         .map((e) => StaffUserModel.fromJson(Map<String, dynamic>.from(e)))
         .toList();
   }
@@ -125,32 +117,52 @@ class SettingsRemoteDatasource {
     return _readSuccess(json);
   }
 
-  // ── Backup & Sync Status ─────────────────────────────────────────────────────
-
+  // ── Backup ──────────────────────────────────────────────────
   Future<BackupStatusModel> getBackupStatus({
     int userId = defaultUserId,
   }) async {
     final uri = Uri.parse(
       ApiConfig.getBackupStatus,
     ).replace(queryParameters: {'user_id': userId.toString()});
-
     final response = await _client.get(uri, headers: ApiConfig.jsonHeaders);
     final json = _decodeResponse(response);
-    final data = _readData(json);
-    return BackupStatusModel.fromJson(data);
+    return BackupStatusModel.fromJson(_readData(json));
   }
 
-  Future<void> saveBackupStatus(
-    BackupStatusModel status, {
+  Future<Uint8List> createBackup({int userId = defaultUserId}) async {
+    final uri = Uri.parse(
+      ApiConfig.createBackup,
+    ).replace(queryParameters: {'user_id': userId.toString()});
+    final response = await _client.post(uri, headers: ApiConfig.jsonHeaders);
+    if (response.statusCode != 200) {
+      throw Exception('Backup creation failed: ${response.statusCode}');
+    }
+    return response.bodyBytes;
+  }
+
+  Future<void> completeBackup({
     int userId = defaultUserId,
+    required String driveFileId,
+    required String fileName,
+    int fileSize = 0,
+    String status = 'success',
   }) async {
-    await _post(ApiConfig.saveBackupStatus, {
-      'user_id': userId,
-      ...status.toJson(),
-    });
+    final body = {
+      'drive_file_id': driveFileId,
+      'file_name': fileName,
+      'file_size': fileSize,
+      'status': status,
+    };
+    final uri = Uri.parse(
+      ApiConfig.completeBackup,
+    ).replace(queryParameters: {'user_id': userId.toString()});
+    final response = await _client.post(
+      uri,
+      headers: ApiConfig.jsonHeaders,
+      body: jsonEncode(body),
+    );
+    _decodeResponse(response);
   }
-
-  // ── Backup & Sync History ────────────────────────────────────────────────────
 
   Future<List<BackupHistoryEntryModel>> getBackupHistory({
     int userId = defaultUserId,
@@ -158,39 +170,52 @@ class SettingsRemoteDatasource {
     final uri = Uri.parse(
       ApiConfig.getBackupHistory,
     ).replace(queryParameters: {'user_id': userId.toString()});
-
     final response = await _client.get(uri, headers: ApiConfig.jsonHeaders);
     final json = _decodeResponse(response);
     final data = _readData(json);
-
-    final list = data['history'];
-    if (list is! List) return [];
+    final list = data['history'] as List? ?? [];
     return list
-        .whereType<Map>()
         .map(
           (e) => BackupHistoryEntryModel.fromJson(Map<String, dynamic>.from(e)),
         )
         .toList();
   }
 
-  Future<bool> recordBackupEvent({
-    required String fileName,
-    required int sizeBytes,
-    required String location,
+  Future<void> restoreBackup({
     int userId = defaultUserId,
+    required File backupFile,
   }) async {
-    final json = await _post(ApiConfig.recordBackupEvent, {
-      'user_id': userId,
-      'fileName': fileName,
-      'sizeBytes': sizeBytes,
-      'location': location,
-      'createdAt': DateTime.now().toIso8601String(),
-    });
-    return _readSuccess(json);
+    final uri = Uri.parse(
+      ApiConfig.restoreBackup,
+    ).replace(queryParameters: {'user_id': userId.toString()});
+    final request = http.MultipartRequest('POST', uri);
+    request.files.add(
+      await http.MultipartFile.fromPath('backup_file', backupFile.path),
+    );
+    final response = await request.send();
+    final responseBody = await response.stream.bytesToString();
+    final json = jsonDecode(responseBody) as Map<String, dynamic>;
+    if (response.statusCode != 200 || json['success'] != true) {
+      throw Exception(json['message'] ?? 'Restore failed');
+    }
   }
 
-  // ── Internals ────────────────────────────────────────────────────────────────
+  Future<void> saveBackupSettings({
+    int userId = defaultUserId,
+    required Map<String, String> settings,
+  }) async {
+    final uri = Uri.parse(
+      ApiConfig.saveBackupSettings,
+    ).replace(queryParameters: {'user_id': userId.toString()});
+    final response = await _client.post(
+      uri,
+      headers: ApiConfig.jsonHeaders,
+      body: jsonEncode({'settings': settings}),
+    );
+    _decodeResponse(response);
+  }
 
+  // ── Internals ──────────────────────────────────────────────
   Future<Map<String, dynamic>> _post(
     String url,
     Map<String, dynamic> body,
@@ -206,16 +231,13 @@ class SettingsRemoteDatasource {
   Map<String, dynamic> _decodeResponse(http.Response response) {
     final decoded = jsonDecode(response.body);
     if (decoded is! Map) throw Exception('Invalid API response');
-
     final json = Map<String, dynamic>.from(decoded);
-
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(json['message'] ?? 'API request failed');
     }
     if (!_readSuccess(json)) {
       throw Exception(json['message'] ?? 'API request failed');
     }
-
     return json;
   }
 
