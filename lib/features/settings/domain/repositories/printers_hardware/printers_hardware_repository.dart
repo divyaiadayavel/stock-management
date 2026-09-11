@@ -15,6 +15,7 @@ abstract class PrintersHardwareRepository {
 
   // Storage
   Future<List<PrinterDevice>> getSavedPrinters();
+  Future<PrinterDevice?> getDefaultPrinter();
   Future<void> saveDefaultPrinter(PrinterDevice printer);
   Future<void> deletePrinter(String printerId);
 

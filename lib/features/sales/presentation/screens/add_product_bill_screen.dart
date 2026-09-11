@@ -2,14 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'scanner_bill_screen.dart';
+import 'current_bill_screen.dart';
+
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_text_styles.dart';
-import '../providers/billing_provider.dart';
-import 'current_bill_screen.dart';
 import '../../../../core/utils/responsive_helper.dart';
+
+import '../providers/billing_provider.dart';
+import '../providers/sales_provider.dart';
+
 import '../../../products/presentation/providers/product_provider.dart';
+import '../../../products/data/models/product_model.dart';
 
 final searchProductProvider = StateProvider<String>((ref) => "");
 
@@ -21,37 +26,36 @@ class AddProductBillScreen extends ConsumerStatefulWidget {
       _AddProductBillScreenState();
 }
 
-class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
+class _AddProductBillScreenState
+    extends ConsumerState<AddProductBillScreen>
+    with WidgetsBindingObserver {
   bool isAscending = true;
   String selectedCategory = "All";
 
-  final List<String> categories = [
-    "Electronics",
-    "Mobile",
-    "Accessories",
-    "Fashion",
-    "Grocery",
-    "Stationery",
-    "Food",
-    "Beauty",
-    "Furniture",
-    "Medical",
-    "Sports",
-    "Hardware",
-    "Home Appliances",
-    "Books",
-    "Toys",
-    "Footwear",
-  ];
+@override
+void initState() {
+  super.initState();
 
-  @override
-  void initState() {
-    super.initState();
-    Future.microtask(() {
-      ref.read(productListProvider.notifier).loadProducts();
-    });
+  WidgetsBinding.instance.addObserver(this);
+
+  Future.microtask(() {
+    ref.read(productListProvider.notifier).loadProducts();
+    ref.invalidate(salesCategoriesProvider);
+  });
+}
+@override
+void didChangeAppLifecycleState(AppLifecycleState state) {
+  super.didChangeAppLifecycleState(state);
+
+  if (state == AppLifecycleState.resumed) {
+    ref.invalidate(salesCategoriesProvider);
   }
-
+}
+@override
+void dispose() {
+  WidgetsBinding.instance.removeObserver(this);
+  super.dispose();
+}
   void _showSnackBar(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -62,29 +66,74 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
     );
   }
 
+  // ── Expiry check ──
+  //
+  // Mirrors the backend's own rule exactly (products.php's `for_sale=1`
+  // filter and create_sale.php's sale-time validation both use
+  // `expiry_date < CURDATE()`), so the product list here disables the
+  // same products the backend would ultimately reject — the expiry
+  // date itself is still sellable, only dates before today are not.
+  // The backend still re-validates this again when the sale is
+  // created, so this is purely a UI convenience.
+  bool _isExpired(Product product) {
+    final raw = product.expiryDate.trim();
+    if (raw.isEmpty) return false;
+
+    final expiry = DateTime.tryParse(raw);
+    if (expiry == null) return false;
+
+    final today = DateTime.now();
+    final todayOnly = DateTime(today.year, today.month, today.day);
+    final expiryOnly = DateTime(expiry.year, expiry.month, expiry.day);
+
+    return expiryOnly.isBefore(todayOnly);
+  }
+
+  static const _monthNames = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  String _formatExpiryDate(String raw) {
+    final date = DateTime.tryParse(raw.trim());
+    if (date == null) return raw;
+    return '${date.day} ${_monthNames[date.month - 1]} ${date.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final billingState = ref.watch(billingProvider);
     final search = ref.watch(searchProductProvider);
+
+    // Sales-only category provider.
+    final categoriesAsync = ref.watch(salesCategoriesProvider);
 
     final productState = ref.watch(productListProvider);
     final products = productState.items;
     final isLoading = productState.isInitialLoading;
 
     final filteredProducts = products.where((product) {
-      final searchLower = search.toLowerCase();
+      final searchLower = search.trim().toLowerCase();
+
       final searchMatch =
           product.name.toLowerCase().contains(searchLower) ||
           (product.barcode?.toLowerCase().contains(searchLower) ?? false);
+
       final categoryMatch =
-          selectedCategory == "All" || product.category == selectedCategory;
+          selectedCategory == "All" ||
+          product.category.trim().toLowerCase() ==
+              selectedCategory.trim().toLowerCase();
+
       return searchMatch && categoryMatch;
     }).toList();
 
     filteredProducts.sort((a, b) {
       final nameA = a.name;
       final nameB = b.name;
-      return isAscending ? nameA.compareTo(nameB) : nameB.compareTo(nameA);
+
+      return isAscending
+          ? nameA.compareTo(nameB)
+          : nameB.compareTo(nameA);
     });
 
     final showLoading = isLoading && products.isEmpty;
@@ -111,14 +160,19 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                     onPressed: () => Navigator.pop(context),
                   ),
                   SizedBox(width: R.sp(context, AppSpacing.xs)),
-                  Text("Add Product Bill", style: AppTextStyles.heading),
+                  Text(
+                    "Add Product Bill",
+                    style: AppTextStyles.heading,
+                  ),
                 ],
               ),
             ),
 
             Expanded(
               child: showLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(
+                      child: CircularProgressIndicator(),
+                    )
                   : SingleChildScrollView(
                       padding: EdgeInsets.all(
                         R.sp(context, AppSpacing.screenPadding),
@@ -152,8 +206,8 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                       fillColor: AppColors.card,
                                       contentPadding:
                                           const EdgeInsets.symmetric(
-                                            vertical: 0,
-                                          ),
+                                        vertical: 0,
+                                      ),
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(
                                           AppSizes.radiusLg,
@@ -185,13 +239,19 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                   ),
                                 ),
                               ),
-                              SizedBox(width: R.sp(context, AppSpacing.md)),
+                              SizedBox(
+                                width: R.sp(
+                                  context,
+                                  AppSpacing.md,
+                                ),
+                              ),
                               GestureDetector(
                                 onTap: () {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) => const ScannerBillScreen(),
+                                      builder: (_) =>
+                                          const ScannerBillScreen(),
                                     ),
                                   );
                                 },
@@ -218,32 +278,89 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                           ),
 
                           SizedBox(
-                            height: R.sp(context, AppSpacing.sectionGap),
-                          ),
-
-                          // ── Category Chips ──
-                          SizedBox(
-                            height: R.searchH(context) - 8,
-                            child: ListView.builder(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: categories.length + 1,
-                              itemBuilder: (context, index) {
-                                if (index == 0) return _categoryChip("All");
-                                return _categoryChip(categories[index - 1]);
-                              },
+                            height: R.sp(
+                              context,
+                              AppSpacing.sectionGap,
                             ),
                           ),
 
+                          // ── Category Chips ──
+                          categoriesAsync.when(
+                            loading: () {
+                              return SizedBox(
+                                height: R.searchH(context) - 8,
+                                child: const Center(
+                                  child: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                            error: (error, stack) {
+                              return SizedBox(
+                                height: R.searchH(context) - 8,
+                                child: Center(
+                                  child: Text(
+                                    "Unable to load categories",
+                                    style: AppTextStyles.small.copyWith(
+                                      color: AppColors.red,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                            data: (categories) {
+                              final categoryNames = categories
+                                  .map(
+                                    (category) =>
+                                        category["category_name"]
+                                            ?.toString()
+                                            .trim() ??
+                                        "",
+                                  )
+                                  .where(
+                                    (name) => name.isNotEmpty,
+                                  )
+                                  .toList();
+
+                              return SizedBox(
+                                height: R.searchH(context) - 8,
+                                child: ListView.builder(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: categoryNames.length + 1,
+                                  itemBuilder: (context, index) {
+                                    if (index == 0) {
+                                      return _categoryChip("All");
+                                    }
+
+                                    return _categoryChip(
+                                      categoryNames[index - 1],
+                                    );
+                                  },
+                                ),
+                              );
+                            },
+                          ),
+
                           SizedBox(
-                            height: R.sp(context, AppSpacing.sectionGap),
+                            height: R.sp(
+                              context,
+                              AppSpacing.sectionGap,
+                            ),
                           ),
 
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            mainAxisAlignment:
+                                MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
                                 "All Products",
-                                style: AppTextStyles.sectionTitle.copyWith(
+                                style:
+                                    AppTextStyles.sectionTitle.copyWith(
                                   color: AppColors.textPrimaryDark,
                                 ),
                               ),
@@ -255,7 +372,8 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                 },
                                 child: Text(
                                   isAscending ? "A-Z" : "Z-A",
-                                  style: AppTextStyles.button.copyWith(
+                                  style:
+                                      AppTextStyles.button.copyWith(
                                     color: AppColors.cyanDim,
                                   ),
                                 ),
@@ -263,61 +381,90 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                             ],
                           ),
 
-                          SizedBox(height: R.sp(context, AppSpacing.md)),
+                          SizedBox(
+                            height: R.sp(
+                              context,
+                              AppSpacing.md,
+                            ),
+                          ),
 
                           // ── Product List ──
                           ListView.builder(
                             shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
+                            physics:
+                                const NeverScrollableScrollPhysics(),
                             itemCount: filteredProducts.length,
                             itemBuilder: (context, index) {
-                              final product = filteredProducts[index];
-                              if (product.id == null)
-                                return const SizedBox.shrink();
+                              final product =
+                                  filteredProducts[index];
 
-                              final isOutOfStock = product.quantity <= 0;
+                              if (product.id == null) {
+                                return const SizedBox.shrink();
+                              }
+
+                              final isOutOfStock =
+                                  product.quantity <= 0;
+                              final isExpired = _isExpired(product);
+                              final isDisabled =
+                                  isOutOfStock || isExpired;
 
                               return Container(
                                 margin: EdgeInsets.only(
-                                  bottom: R.sp(context, AppSpacing.sm),
+                                  bottom: R.sp(
+                                    context,
+                                    AppSpacing.sm,
+                                  ),
                                 ),
                                 padding: EdgeInsets.symmetric(
-                                  horizontal: R.sp(context, AppSpacing.md),
-                                  vertical: R.sp(context, AppSpacing.md),
+                                  horizontal: R.sp(
+                                    context,
+                                    AppSpacing.md,
+                                  ),
+                                  vertical: R.sp(
+                                    context,
+                                    AppSpacing.md,
+                                  ),
                                 ),
                                 decoration: BoxDecoration(
                                   color: AppColors.card,
-                                  borderRadius: BorderRadius.circular(
+                                  borderRadius:
+                                      BorderRadius.circular(
                                     AppSizes.radiusLg,
                                   ),
                                   border: Border.all(
-                                    color: isOutOfStock
+                                    color: isDisabled
                                         ? AppColors.red.withOpacity(0.3)
                                         : AppColors.border,
                                   ),
                                 ),
                                 child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.center,
                                   children: [
                                     // ── Left: Product Info ──
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
-                                        mainAxisSize: MainAxisSize.min,
+                                        mainAxisSize:
+                                            MainAxisSize.min,
                                         children: [
                                           Text(
                                             product.name,
                                             maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: AppTextStyles.cardValue
+                                            overflow:
+                                                TextOverflow.ellipsis,
+                                            style: AppTextStyles
+                                                .cardValue
                                                 .copyWith(
-                                                  fontSize: R.fs(context, 13.5),
-                                                  color: isOutOfStock
-                                                      ? AppColors.textSecondary
-                                                      : AppColors
-                                                            .textPrimaryDark,
-                                                ),
+                                              fontSize:
+                                                  R.fs(context, 13.5),
+                                              color: isDisabled
+                                                  ? AppColors
+                                                      .textSecondary
+                                                  : AppColors
+                                                      .textPrimaryDark,
+                                            ),
                                           ),
                                           SizedBox(
                                             height: R.sp(
@@ -333,7 +480,8 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                 value:
                                                     "₹${product.sellingPrice}",
                                                 valueColor:
-                                                    AppColors.textPrimaryDark,
+                                                    AppColors
+                                                        .textPrimaryDark,
                                               ),
                                               SizedBox(
                                                 width: R.sp(
@@ -344,8 +492,10 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                               _metaChip(
                                                 context: context,
                                                 label: "Disc",
-                                                value: "${product.discount}%",
-                                                valueColor: AppColors.green,
+                                                value:
+                                                    "${product.discount}%",
+                                                valueColor:
+                                                    AppColors.green,
                                               ),
                                               SizedBox(
                                                 width: R.sp(
@@ -356,14 +506,35 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                               _metaChip(
                                                 context: context,
                                                 label: "Stock",
-                                                value: "${product.quantity}",
-                                                valueColor: isOutOfStock
-                                                    ? AppColors.red
-                                                    : AppColors.cyanDim,
+                                                value:
+                                                    "${product.quantity}",
+                                                valueColor:
+                                                    isOutOfStock
+                                                        ? AppColors.red
+                                                        : AppColors
+                                                            .cyanDim,
                                               ),
                                             ],
                                           ),
-                                          if (isOutOfStock) ...[
+                                          if (isExpired) ...[
+                                            SizedBox(
+                                              height: R.sp(
+                                                context,
+                                                AppSpacing.xs,
+                                              ),
+                                            ),
+                                            Text(
+                                              "⏰ Expired on ${_formatExpiryDate(product.expiryDate)}",
+                                              style: AppTextStyles
+                                                  .small
+                                                  .copyWith(
+                                                color:
+                                                    AppColors.red,
+                                                fontWeight:
+                                                    FontWeight.w600,
+                                              ),
+                                            ),
+                                          ] else if (isOutOfStock) ...[
                                             SizedBox(
                                               height: R.sp(
                                                 context,
@@ -372,11 +543,14 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                             ),
                                             Text(
                                               "⚠️ Out of Stock",
-                                              style: AppTextStyles.small
+                                              style: AppTextStyles
+                                                  .small
                                                   .copyWith(
-                                                    color: AppColors.red,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
+                                                color:
+                                                    AppColors.red,
+                                                fontWeight:
+                                                    FontWeight.w600,
+                                              ),
                                             ),
                                           ],
                                         ],
@@ -388,32 +562,48 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                       width: R.isDesktop(context)
                                           ? 180
                                           : R.isTablet(context)
-                                          ? 160
-                                          : 130,
+                                              ? 160
+                                              : 130,
                                       child: Consumer(
-                                        builder: (context, ref, child) {
-                                          final billingState = ref.watch(
+                                        builder:
+                                            (context, ref, child) {
+                                          final billingState =
+                                              ref.watch(
                                             billingProvider,
                                           );
-                                          final existingIndex = billingState
-                                              .cart
-                                              .indexWhere(
-                                                (e) =>
-                                                    e.productId == product.id,
-                                              );
+
+                                          final existingIndex =
+                                              billingState.cart
+                                                  .indexWhere(
+                                            (e) =>
+                                                e.productId ==
+                                                product.id,
+                                          );
 
                                           // ── Not in cart ──
                                           if (existingIndex == -1) {
                                             return Align(
-                                              alignment: Alignment.centerRight,
+                                              alignment: Alignment
+                                                  .centerRight,
                                               child: InkWell(
                                                 borderRadius:
-                                                    BorderRadius.circular(
-                                                      AppSizes.radiusMd,
-                                                    ),
-                                                onTap: isOutOfStock
+                                                    BorderRadius
+                                                        .circular(
+                                                  AppSizes.radiusMd,
+                                                ),
+                                                onTap: (isOutOfStock &&
+                                                        !isExpired)
                                                     ? null
                                                     : () {
+                                                        if (isExpired) {
+                                                          _showSnackBar(
+                                                            'This product has expired. Cannot add expired products to bill.',
+                                                            isError:
+                                                                true,
+                                                          );
+                                                          return;
+                                                        }
+
                                                         ref
                                                             .read(
                                                               billingProvider
@@ -426,30 +616,35 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                 child: Container(
                                                   height: 34,
                                                   width: 34,
-                                                  decoration: BoxDecoration(
-                                                    gradient: isOutOfStock
-                                                        ? null
-                                                        : AppColors
-                                                              .brandGradient,
-                                                    color: isOutOfStock
-                                                        ? AppColors.surface2
+                                                  decoration:
+                                                      BoxDecoration(
+                                                    gradient:
+                                                        isDisabled
+                                                            ? null
+                                                            : AppColors
+                                                                .brandGradient,
+                                                    color: isDisabled
+                                                        ? AppColors
+                                                            .surface2
                                                         : null,
                                                     borderRadius:
-                                                        BorderRadius.circular(
-                                                          AppSizes.radiusMd,
-                                                        ),
-                                                    border: isOutOfStock
+                                                        BorderRadius
+                                                            .circular(
+                                                      AppSizes.radiusMd,
+                                                    ),
+                                                    border: isDisabled
                                                         ? Border.all(
-                                                            color: AppColors
-                                                                .border,
+                                                            color:
+                                                                AppColors
+                                                                    .border,
                                                           )
                                                         : null,
                                                   ),
                                                   child: Icon(
                                                     Icons.add,
-                                                    color: isOutOfStock
+                                                    color: isDisabled
                                                         ? AppColors
-                                                              .textSecondary
+                                                            .textSecondary
                                                         : Colors.white,
                                                     size: 19,
                                                   ),
@@ -460,44 +655,58 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
 
                                           // ── Already in cart ──
                                           final item =
-                                              billingState.cart[existingIndex];
+                                              billingState.cart[
+                                                  existingIndex];
+
                                           final availableStock =
                                               product.quantity;
 
                                           return Row(
                                             mainAxisAlignment:
                                                 MainAxisAlignment.end,
-                                            mainAxisSize: MainAxisSize.max,
+                                            mainAxisSize:
+                                                MainAxisSize.max,
                                             children: [
                                               Expanded(
                                                 child: Container(
-                                                  height: R.btnH(context) - 16,
-                                                  decoration: BoxDecoration(
-                                                    border: Border.all(
-                                                      color: AppColors.cyanDim
-                                                          .withOpacity(0.4),
+                                                  height:
+                                                      R.btnH(context) -
+                                                          16,
+                                                  decoration:
+                                                      BoxDecoration(
+                                                    border:
+                                                        Border.all(
+                                                      color: AppColors
+                                                          .cyanDim
+                                                          .withOpacity(
+                                                        0.4,
+                                                      ),
                                                     ),
                                                     borderRadius:
-                                                        BorderRadius.circular(
-                                                          AppSizes.radiusMd,
-                                                        ),
+                                                        BorderRadius
+                                                            .circular(
+                                                      AppSizes.radiusMd,
+                                                    ),
                                                   ),
                                                   child: Row(
                                                     children: [
                                                       // MINUS
                                                       Expanded(
-                                                        child: InkWell(
-                                                          borderRadius: const BorderRadius.only(
+                                                        child:
+                                                            InkWell(
+                                                          borderRadius:
+                                                              const BorderRadius
+                                                                  .only(
                                                             topLeft:
                                                                 Radius.circular(
-                                                                  AppSizes
-                                                                      .radiusMd,
-                                                                ),
+                                                              AppSizes
+                                                                  .radiusMd,
+                                                            ),
                                                             bottomLeft:
                                                                 Radius.circular(
-                                                                  AppSizes
-                                                                      .radiusMd,
-                                                                ),
+                                                              AppSizes
+                                                                  .radiusMd,
+                                                            ),
                                                           ),
                                                           onTap: () {
                                                             ref
@@ -506,172 +715,257 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                                       .notifier,
                                                                 )
                                                                 .decreaseQty(
-                                                                  product.id!,
+                                                                  product
+                                                                      .id!,
                                                                 );
                                                           },
-                                                          child: Container(
+                                                          child:
+                                                              Container(
                                                             height: 34,
-                                                            decoration: const BoxDecoration(
-                                                              color: AppColors
-                                                                  .surface2,
-                                                              borderRadius: BorderRadius.only(
+                                                            decoration:
+                                                                const BoxDecoration(
+                                                              color:
+                                                                  AppColors
+                                                                      .surface2,
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .only(
                                                                 topLeft:
                                                                     Radius.circular(
-                                                                      AppSizes
-                                                                          .radiusMd,
-                                                                    ),
+                                                                  AppSizes
+                                                                      .radiusMd,
+                                                                ),
                                                                 bottomLeft:
                                                                     Radius.circular(
-                                                                      AppSizes
-                                                                          .radiusMd,
-                                                                    ),
+                                                                  AppSizes
+                                                                      .radiusMd,
+                                                                ),
                                                               ),
                                                             ),
-                                                            child: const Icon(
-                                                              Icons.remove,
-                                                              color: AppColors
-                                                                  .cyanDim,
+                                                            child:
+                                                                const Icon(
+                                                              Icons
+                                                                  .remove,
+                                                              color:
+                                                                  AppColors
+                                                                      .cyanDim,
                                                               size: 15,
                                                             ),
                                                           ),
                                                         ),
                                                       ),
+
                                                       // Divider
                                                       Container(
                                                         width: 1,
                                                         height: 34,
-                                                        color: AppColors.cyanDim
-                                                            .withOpacity(0.25),
+                                                        color: AppColors
+                                                            .cyanDim
+                                                            .withOpacity(
+                                                          0.25,
+                                                        ),
                                                       ),
+
                                                       // QTY INPUT
                                                       Expanded(
-                                                        child: SizedBox(
+                                                        child:
+                                                            SizedBox(
                                                           height: 34,
-                                                          child: TextFormField(
-                                                            key: ValueKey(
+                                                          child:
+                                                              TextFormField(
+                                                            key:
+                                                                ValueKey(
                                                               item.qty,
                                                             ),
-                                                            initialValue: item
-                                                                .qty
-                                                                .toString(),
+                                                            initialValue:
+                                                                item.qty
+                                                                    .toString(),
                                                             keyboardType:
                                                                 TextInputType
                                                                     .number,
-                                                            textAlign: TextAlign
-                                                                .center,
+                                                            textAlign:
+                                                                TextAlign
+                                                                    .center,
                                                             style: AppTextStyles
                                                                 .cardValue
                                                                 .copyWith(
-                                                                  fontSize: 13,
-                                                                  height: 1.2,
-                                                                ),
-                                                            decoration: const InputDecoration(
-                                                              filled: true,
+                                                              fontSize:
+                                                                  13,
+                                                              height: 1.2,
+                                                            ),
+                                                            decoration:
+                                                                const InputDecoration(
+                                                              filled:
+                                                                  true,
                                                               fillColor:
-                                                                  Colors.white,
+                                                                  Colors
+                                                                      .white,
                                                               border:
                                                                   InputBorder
                                                                       .none,
-                                                              isDense: true,
+                                                              isDense:
+                                                                  true,
                                                               contentPadding:
                                                                   EdgeInsets.symmetric(
-                                                                    vertical: 8,
-                                                                  ),
+                                                                vertical:
+                                                                    8,
+                                                              ),
                                                             ),
-                                                            onFieldSubmitted: (value) {
+                                                            onFieldSubmitted:
+                                                                (value) {
                                                               int? newQty =
                                                                   int.tryParse(
-                                                                    value,
-                                                                  );
+                                                                value,
+                                                              );
+
                                                               if (newQty ==
-                                                                      null ||
-                                                                  newQty <= 0) {
+                                                                  null) {
                                                                 return;
                                                               }
+
+                                                              if (newQty ==
+                                                                  0) {
+                                                                ref
+                                                                    .read(
+                                                                      billingProvider
+                                                                          .notifier,
+                                                                    )
+                                                                    .removeProduct(
+                                                                      product
+                                                                          .id!,
+                                                                    );
+                                                                return;
+                                                              }
+
+                                                              if (newQty <
+                                                                  0) {
+                                                                return;
+                                                              }
+
+                                                              if (isExpired) {
+                                                                _showSnackBar(
+                                                                  'This product has expired. Cannot add expired products to bill.',
+                                                                  isError:
+                                                                      true,
+                                                                );
+                                                                return;
+                                                              }
+
                                                               if (newQty >
                                                                   availableStock) {
                                                                 newQty =
                                                                     availableStock;
+
                                                                 _showSnackBar(
                                                                   'Only $availableStock items available',
-                                                                  isError: true,
+                                                                  isError:
+                                                                      true,
                                                                 );
                                                               }
+
                                                               ref
                                                                   .read(
                                                                     billingProvider
                                                                         .notifier,
                                                                   )
                                                                   .updateQty(
-                                                                    product.id!,
+                                                                    product
+                                                                        .id!,
                                                                     newQty,
                                                                   );
                                                             },
                                                           ),
                                                         ),
                                                       ),
+
                                                       // Divider
                                                       Container(
                                                         width: 1,
                                                         height: 34,
-                                                        color: AppColors.cyanDim
-                                                            .withOpacity(0.25),
+                                                        color: AppColors
+                                                            .cyanDim
+                                                            .withOpacity(
+                                                          0.25,
+                                                        ),
                                                       ),
+
                                                       // PLUS
                                                       Expanded(
-                                                        child: InkWell(
-                                                          borderRadius: const BorderRadius.only(
+                                                        child:
+                                                            InkWell(
+                                                          borderRadius:
+                                                              const BorderRadius
+                                                                  .only(
                                                             topRight:
                                                                 Radius.circular(
-                                                                  AppSizes
-                                                                      .radiusMd,
-                                                                ),
+                                                              AppSizes
+                                                                  .radiusMd,
+                                                            ),
                                                             bottomRight:
                                                                 Radius.circular(
-                                                                  AppSizes
-                                                                      .radiusMd,
-                                                                ),
+                                                              AppSizes
+                                                                  .radiusMd,
+                                                            ),
                                                           ),
                                                           onTap: () {
+                                                            if (isExpired) {
+                                                              _showSnackBar(
+                                                                'This product has expired. Cannot add expired products to bill.',
+                                                                isError:
+                                                                    true,
+                                                              );
+                                                              return;
+                                                            }
+
                                                             if (item.qty >=
                                                                 availableStock) {
                                                               _showSnackBar(
                                                                 'Only $availableStock items available',
-                                                                isError: true,
+                                                                isError:
+                                                                    true,
                                                               );
                                                               return;
                                                             }
+
                                                             ref
                                                                 .read(
                                                                   billingProvider
                                                                       .notifier,
                                                                 )
                                                                 .increaseQty(
-                                                                  product.id!,
+                                                                  product
+                                                                      .id!,
                                                                 );
                                                           },
-                                                          child: Container(
+                                                          child:
+                                                              Container(
                                                             height: 34,
-                                                            decoration: const BoxDecoration(
-                                                              color: AppColors
-                                                                  .surface2,
-                                                              borderRadius: BorderRadius.only(
+                                                            decoration:
+                                                                const BoxDecoration(
+                                                              color:
+                                                                  AppColors
+                                                                      .surface2,
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .only(
                                                                 topRight:
                                                                     Radius.circular(
-                                                                      AppSizes
-                                                                          .radiusMd,
-                                                                    ),
+                                                                  AppSizes
+                                                                      .radiusMd,
+                                                                ),
                                                                 bottomRight:
                                                                     Radius.circular(
-                                                                      AppSizes
-                                                                          .radiusMd,
-                                                                    ),
+                                                                  AppSizes
+                                                                      .radiusMd,
+                                                                ),
                                                               ),
                                                             ),
-                                                            child: const Icon(
+                                                            child:
+                                                                const Icon(
                                                               Icons.add,
-                                                              color: AppColors
-                                                                  .cyanDim,
+                                                              color:
+                                                                  AppColors
+                                                                      .cyanDim,
                                                               size: 15,
                                                             ),
                                                           ),
@@ -681,78 +975,94 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                                                   ),
                                                 ),
                                               ),
+
                                               SizedBox(
                                                 width: R.sp(
                                                   context,
                                                   AppSpacing.sm,
                                                 ),
                                               ),
+
                                               // DELETE
                                               InkWell(
                                                 borderRadius:
-                                                    BorderRadius.circular(
-                                                      AppSizes.radiusSm,
-                                                    ),
+                                                    BorderRadius
+                                                        .circular(
+                                                  AppSizes.radiusSm,
+                                                ),
                                                 onTap: () async {
-                                                  final confirm = await showDialog<bool>(
+                                                  final confirm =
+                                                      await showDialog<
+                                                          bool>(
                                                     context: context,
-                                                    builder: (context) => AlertDialog(
-                                                      shape: RoundedRectangleBorder(
+                                                    builder:
+                                                        (context) =>
+                                                            AlertDialog(
+                                                      shape:
+                                                          RoundedRectangleBorder(
                                                         borderRadius:
-                                                            BorderRadius.circular(
-                                                              AppSizes.radiusLg,
-                                                            ),
+                                                            BorderRadius
+                                                                .circular(
+                                                          AppSizes
+                                                              .radiusLg,
+                                                        ),
                                                       ),
                                                       title: Text(
                                                         "Delete Product",
                                                         style: AppTextStyles
                                                             .sectionTitle
                                                             .copyWith(
-                                                              color: AppColors
-                                                                  .textPrimaryDark,
-                                                            ),
+                                                          color: AppColors
+                                                              .textPrimaryDark,
+                                                        ),
                                                       ),
                                                       content: Text(
                                                         "Are you sure you want to delete this product?",
                                                         style:
-                                                            AppTextStyles.small,
+                                                            AppTextStyles
+                                                                .small,
                                                       ),
                                                       actions: [
                                                         TextButton(
                                                           onPressed: () =>
-                                                              Navigator.pop(
-                                                                context,
-                                                                false,
-                                                              ),
-                                                          child: const Text(
+                                                              Navigator
+                                                                  .pop(
+                                                            context,
+                                                            false,
+                                                          ),
+                                                          child:
+                                                              const Text(
                                                             "Cancel",
                                                           ),
                                                         ),
                                                         ElevatedButton(
                                                           style:
-                                                              ElevatedButton.styleFrom(
-                                                                backgroundColor:
-                                                                    AppColors
-                                                                        .red,
-                                                              ),
+                                                              ElevatedButton
+                                                                  .styleFrom(
+                                                            backgroundColor:
+                                                                AppColors
+                                                                    .red,
+                                                          ),
                                                           onPressed: () =>
-                                                              Navigator.pop(
-                                                                context,
-                                                                true,
-                                                              ),
+                                                              Navigator
+                                                                  .pop(
+                                                            context,
+                                                            true,
+                                                          ),
                                                           child: Text(
                                                             "Delete",
                                                             style: AppTextStyles
                                                                 .button
                                                                 .copyWith(
-                                                                  color: Colors
-                                                                      .white,
-                                                                ),
+                                                              color: Colors
+                                                                  .white,
+                                                            ),
                                                           ),
                                                         ),
                                                       ],
                                                     ),
                                                   );
+
                                                   if (confirm == true) {
                                                     ref
                                                         .read(
@@ -787,13 +1097,19 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
           ],
         ),
       ),
+
+      // ── Bottom Bill Bar ──
       bottomNavigationBar: SafeArea(
         child: Container(
-          margin: EdgeInsets.all(R.sp(context, AppSpacing.md)),
+          margin: EdgeInsets.all(
+            R.sp(context, AppSpacing.md),
+          ),
           height: R.btnH(context) + 10,
           decoration: BoxDecoration(
             gradient: AppColors.brandGradient,
-            borderRadius: BorderRadius.circular(AppSizes.radiusLg),
+            borderRadius: BorderRadius.circular(
+              AppSizes.radiusLg,
+            ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(.1),
@@ -804,7 +1120,12 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
           ),
           child: Row(
             children: [
-              SizedBox(width: R.sp(context, AppSpacing.lg)),
+              SizedBox(
+                width: R.sp(
+                  context,
+                  AppSpacing.lg,
+                ),
+              ),
               Stack(
                 children: [
                   const Icon(
@@ -832,11 +1153,18 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                   ),
                 ],
               ),
-              SizedBox(width: R.sp(context, AppSpacing.md)),
+              SizedBox(
+                width: R.sp(
+                  context,
+                  AppSpacing.md,
+                ),
+              ),
               Expanded(
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment:
+                      MainAxisAlignment.center,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
                   children: [
                     Text(
                       "${billingState.cart.length} Items",
@@ -855,29 +1183,45 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
                 ),
               ),
               Padding(
-                padding: EdgeInsets.only(right: R.sp(context, AppSpacing.md)),
+                padding: EdgeInsets.only(
+                  right: R.sp(
+                    context,
+                    AppSpacing.md,
+                  ),
+                ),
                 child: SizedBox(
                   height: R.btnH(context) - 12,
                   child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
+                    style:
+                        ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
-                      foregroundColor: AppColors.cyanDim,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+                      foregroundColor:
+                          AppColors.cyanDim,
+                      shape:
+                          RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(
+                          AppSizes.radiusMd,
+                        ),
                       ),
                     ),
                     onPressed: () {
-                      if (billingState.cart.isEmpty) return;
+                      if (billingState.cart.isEmpty) {
+                        return;
+                      }
+
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const CurrentBillScreen(),
+                          builder: (_) =>
+                              const CurrentBillScreen(),
                         ),
                       );
                     },
                     child: Text(
                       "View Bill",
-                      style: AppTextStyles.button.copyWith(
+                      style:
+                          AppTextStyles.button.copyWith(
                         color: AppColors.cyanDim,
                       ),
                     ),
@@ -901,23 +1245,38 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
         });
       },
       child: Container(
-        margin: EdgeInsets.only(right: R.sp(context, AppSpacing.sm)),
+        margin: EdgeInsets.only(
+          right: R.sp(
+            context,
+            AppSpacing.sm,
+          ),
+        ),
         padding: EdgeInsets.symmetric(
           horizontal: R.sp(context, 14),
           vertical: R.sp(context, 10),
         ),
         decoration: BoxDecoration(
-          gradient: isSelected ? AppColors.brandGradient : null,
-          color: isSelected ? null : AppColors.card,
-          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+          gradient: isSelected
+              ? AppColors.brandGradient
+              : null,
+          color: isSelected
+              ? null
+              : AppColors.card,
+          borderRadius: BorderRadius.circular(
+            AppSizes.radiusMd,
+          ),
           border: Border.all(
-            color: isSelected ? Colors.transparent : AppColors.border,
+            color: isSelected
+                ? Colors.transparent
+                : AppColors.border,
           ),
         ),
         child: Text(
           title,
           style: AppTextStyles.button.copyWith(
-            color: isSelected ? Colors.white : AppColors.textPrimaryDark,
+            color: isSelected
+                ? Colors.white
+                : AppColors.textPrimaryDark,
             fontSize: R.fs(context, 12),
           ),
         ),
@@ -932,12 +1291,15 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen> {
     required Color valueColor,
   }) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment:
+          CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           label,
-          style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 10)),
+          style: AppTextStyles.small.copyWith(
+            fontSize: R.fs(context, 10),
+          ),
         ),
         Text(
           value,

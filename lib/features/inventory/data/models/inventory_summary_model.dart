@@ -7,49 +7,81 @@ class InventorySummaryModel extends InventorySummary {
     required super.lowStockProducts,
     required super.outOfStockProducts,
     required super.expiringProducts,
+    required super.expiredProducts,
     required super.inventoryValue,
     required super.stockInValue,
     required super.stockOutValue,
   });
 
-  factory InventorySummaryModel.fromMap(Map<String, dynamic> map) {
+  factory InventorySummaryModel.fromMap(
+    Map<String, dynamic> map,
+  ) {
     return InventorySummaryModel(
       totalProducts:
-          int.tryParse(map['total_products']?.toString() ?? '0') ?? 0,
+          _toInt(map['total_products']),
 
       totalStockUnits:
-          int.tryParse(map['total_stock_units']?.toString() ?? '0') ?? 0,
+          _toInt(map['total_units']),
 
       lowStockProducts:
-          int.tryParse(map['low_stock_products']?.toString() ?? '0') ?? 0,
+          _toInt(map['low_stock_products']),
 
       outOfStockProducts:
-          int.tryParse(map['out_of_stock_products']?.toString() ?? '0') ?? 0,
+          _toInt(map['out_of_stock_products']),
 
       expiringProducts:
-          int.tryParse(map['expiring_products']?.toString() ?? '0') ?? 0,
+          _toInt(map['expiring_products']),
+
+      expiredProducts:
+          _toInt(map['expired_products']),
 
       inventoryValue:
-          double.tryParse(map['inventory_value']?.toString() ?? '0') ?? 0,
+          _toDouble(map['inventory_value']),
 
-      stockInValue:
-          double.tryParse(map['stock_in_value']?.toString() ?? '0') ?? 0,
+      /*
+       * These fields are not currently returned by the
+       * inventory summary API as monetary values.
+       *
+       * Keep them at zero rather than incorrectly mapping
+       * today's stock movement quantities into value fields.
+       */
+      stockInValue: 0.0,
 
-      stockOutValue:
-          double.tryParse(map['stock_out_value']?.toString() ?? '0') ?? 0,
+      stockOutValue: 0.0,
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'total_products': totalProducts,
-      'total_stock_units': totalStockUnits,
-      'low_stock_products': lowStockProducts,
-      'out_of_stock_products': outOfStockProducts,
-      'expiring_products': expiringProducts,
-      'inventory_value': inventoryValue,
-      'stock_in_value': stockInValue,
-      'stock_out_value': stockOutValue,
-    };
+  static int _toInt(dynamic value) {
+    if (value == null) return 0;
+
+    if (value is int) {
+      return value;
+    }
+
+    if (value is num) {
+      return value.toInt();
+    }
+
+    return int.tryParse(
+          value.toString(),
+        ) ??
+        0;
+  }
+
+  static double _toDouble(dynamic value) {
+    if (value == null) return 0.0;
+
+    if (value is double) {
+      return value;
+    }
+
+    if (value is num) {
+      return value.toDouble();
+    }
+
+    return double.tryParse(
+          value.toString(),
+        ) ??
+        0.0;
   }
 }

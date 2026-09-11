@@ -38,6 +38,6 @@ class SupplierRepositoryImpl implements SupplierRepository {
         alternatePhone: s.alternatePhone, email: s.email, gstNumber: s.gstNumber, panNumber: s.panNumber,
         address: s.address, city: s.city, state: s.state, country: s.country, postalCode: s.postalCode,
         openingBalance: s.openingBalance, currentBalance: s.currentBalance, creditLimit: s.creditLimit,
-        notes: s.notes, status: s.status,
+        notes: s.notes, status: s.status, categoryIds: s.categoryIds,
       );
 }

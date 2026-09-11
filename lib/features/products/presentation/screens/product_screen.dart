@@ -1,14 +1,19 @@
+// lib/features/products/presentation/screens/product_screen.dart
+
+import 'dart:async';
+import 'dart:io';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../../../core/network/no_internet_screen.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/network/api_config.dart';
+import '../../../../core/utils/responsive_helper.dart';
+import '../../data/models/product_model.dart';
+import '../providers/product_provider.dart';
 import 'add_product_screen.dart';
 import 'product_details_screen.dart';
-import 'dart:io';
-import '../providers/product_provider.dart';
-import '../../data/models/product_model.dart';
-import '../../../../core/utils/responsive_helper.dart';
-import 'dart:async';
 
 class ProductScreen extends ConsumerStatefulWidget {
   const ProductScreen({super.key});
@@ -33,7 +38,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen>
     super.initState();
     _shimmerController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 1000),
     )..repeat();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -63,89 +68,16 @@ class _ProductScreenState extends ConsumerState<ProductScreen>
     super.dispose();
   }
 
-  void _showSortSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(R.radius(context, 14)),
-        ),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: R.sp(sheetContext, 16)),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Sort by',
-                style: TextStyle(
-                  fontSize: R.fs(context, 16),
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                ),
-              ),
-              SizedBox(height: R.sp(sheetContext, 8)),
-              ListTile(
-                title: Text(
-                  'Name (A–Z)',
-                  style: TextStyle(fontSize: R.fs(context, 14)),
-                ),
-                trailing: currentSort == 'name_asc'
-                    ? const Icon(Icons.check, color: Colors.cyan)
-                    : null,
-                onTap: () {
-                  setState(() {
-                    currentSort = 'name_asc';
-                  });
-                  applyFilters();
-                  Navigator.pop(sheetContext);
-                },
-              ),
-              ListTile(
-                title: Text(
-                  'Stock (Low → High)',
-                  style: TextStyle(fontSize: R.fs(context, 14)),
-                ),
-                trailing: currentSort == 'stock_asc'
-                    ? const Icon(Icons.check, color: Colors.cyan)
-                    : null,
-                onTap: () {
-                  setState(() {
-                    currentSort = 'stock_asc';
-                  });
-                  applyFilters();
-                  Navigator.pop(sheetContext);
-                },
-              ),
-              ListTile(
-                title: Text(
-                  'Value (High → Low)',
-                  style: TextStyle(fontSize: R.fs(context, 14)),
-                ),
-                trailing: currentSort == 'value_desc'
-                    ? const Icon(Icons.check, color: Colors.cyan)
-                    : null,
-                onTap: () {
-                  setState(() {
-                    currentSort = 'value_desc';
-                  });
-                  applyFilters();
-                  Navigator.pop(sheetContext);
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   String _formatValue(double value) {
     if (value >= 100000) return "₹${(value / 100000).toStringAsFixed(1)}L";
     if (value >= 1000) return "₹${(value / 1000).toStringAsFixed(1)}K";
     return "₹${value.toStringAsFixed(0)}";
+  }
+
+  // Capitalize first letter helper
+  String _capitalizeFirstLetter(String text) {
+    if (text.isEmpty) return text;
+    return text[0].toUpperCase() + text.substring(1);
   }
 
   void _showSortBottomSheet() {
@@ -182,7 +114,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen>
                 ),
               ),
               const SizedBox(height: 8),
-              ...["Name (A–Z)", "Stock (Low → High)", "Value (High → Low)"].map(
+              ...["Name (A–Z)", "Stock (Low → High)", "Price (High → Low)"].map(
                 (option) {
                   final isSelected = currentSort == option;
                   return ListTile(
@@ -204,7 +136,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen>
                     },
                   );
                 },
-              ).toList(),
+              ),
               const SizedBox(height: 8),
             ],
           ),
@@ -213,7 +145,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen>
     );
   }
 
-  // ─── Shimmer Placeholder for Images ─────────────────────
+  // ─── Fast Shimmer Placeholder ─────────────────────────────
   Widget _buildShimmerImage() {
     return AnimatedBuilder(
       animation: _shimmerController,
@@ -228,10 +160,9 @@ class _ProductScreenState extends ConsumerState<ProductScreen>
                 Colors.grey.shade100,
                 Colors.grey.shade300,
               ],
-              stops: const [0.0, 0.5, 1.0],
-              begin: const Alignment(-1.0, 0.0),
-              end: const Alignment(1.0, 0.0),
-              transform: GradientRotation(_shimmerController.value * 6.2832),
+              stops: const [0.1, 0.5, 0.9],
+              begin: Alignment(-1.0 + (_shimmerController.value * 2), 0.0),
+              end: Alignment(1.0 + (_shimmerController.value * 2), 0.0),
             ),
           ),
         );
@@ -239,16 +170,102 @@ class _ProductScreenState extends ConsumerState<ProductScreen>
     );
   }
 
+  // ─── Cached Product Image Loader ──────────────────────────
+  Widget _buildProductImage(Product product, double size) {
+    String imagePath = product.imagePath.trim();
+
+    if (imagePath.isEmpty) {
+      return Icon(
+        Icons.inventory_2,
+        size: R.icon(context, 40),
+        color: Colors.grey,
+      );
+    }
+
+    // 1. Sanitize legacy URLs
+    if (imagePath.contains('ngrok-free.dev') ||
+        imagePath.contains('ngrok.io')) {
+      if (imagePath.contains('uploads/')) {
+        imagePath = 'uploads/${imagePath.split('uploads/').last}';
+      }
+    }
+
+    final cachePx = (size * MediaQuery.of(context).devicePixelRatio).round();
+
+    // 2. Full HTTP/HTTPS Network Image
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return CachedNetworkImage(
+        imageUrl: imagePath,
+        cacheKey: imagePath,
+        memCacheWidth: cachePx,
+        memCacheHeight: cachePx,
+        fit: BoxFit.cover,
+        placeholder: (_, __) => _buildShimmerImage(),
+        errorWidget: (_, __, ___) =>
+            const Icon(Icons.broken_image, color: Colors.grey),
+      );
+    }
+
+    // 3. Local File System Path
+    final localFile = File(imagePath);
+    if (localFile.existsSync()) {
+      return Image.file(
+        localFile,
+        cacheWidth: cachePx,
+        cacheHeight: cachePx,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) =>
+            const Icon(Icons.broken_image, color: Colors.grey),
+      );
+    }
+
+    // 4. Relative Path -> Prepend Base URL
+    if (imagePath.startsWith('/')) {
+      imagePath = imagePath.substring(1);
+    }
+    final fullImageUrl = '${ApiConfig.baseUrl}/$imagePath';
+
+    return CachedNetworkImage(
+      imageUrl: fullImageUrl,
+      cacheKey: fullImageUrl,
+      memCacheWidth: cachePx,
+      memCacheHeight: cachePx,
+      fit: BoxFit.cover,
+      placeholder: (_, __) => _buildShimmerImage(),
+      errorWidget: (_, __, ___) =>
+          const Icon(Icons.broken_image, color: Colors.grey),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final stateData = ref.watch(filteredProductsProvider);
-    final List<Product> filteredProducts = List<Product>.from(
-      stateData["list"] ?? [],
-    );
+    List<Product> rawProducts = List<Product>.from(stateData["list"] ?? []);
+    final searchQuery = ref.watch(searchQueryProvider).toLowerCase();
+
+    // Sub-string contact style search (matches anywhere in the product name)
+    final List<Product> filteredProducts = searchQuery.isEmpty
+        ? rawProducts
+        : rawProducts
+              .where((p) => p.name.toLowerCase().contains(searchQuery))
+              .toList();
+
     final paginatedState = ref.watch(productListProvider);
+    if (paginatedState.error != null) {
+  return Scaffold(
+    body: NoInternetScreen(
+onRetry: () {
+  ref.invalidate(productListProvider);
+
+  Future.microtask(() {
+    ref.read(productListProvider.notifier).loadProducts();
+  });
+}
+    ),
+  );
+}
     final hasMore = paginatedState.hasMore;
     final isLoadingMore = paginatedState.isLoadingMore;
-    final isRefreshing = paginatedState.isRefreshing;
 
     final int totalCount = stateData["total"] ?? 0;
     final int inStockCount = stateData["inStock"] ?? 0;
@@ -266,7 +283,6 @@ class _ProductScreenState extends ConsumerState<ProductScreen>
     final badgeFs = R.fs(context, 10);
     final cardRadius = R.radius(context, 10);
     final cardPad = R.sp(context, 10);
-    final searchQuery = ref.watch(searchQueryProvider);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -289,15 +305,12 @@ class _ProductScreenState extends ConsumerState<ProductScreen>
                                 onChanged: (value) {
                                   _searchDebounce?.cancel();
                                   _searchDebounce = Timer(
-                                    const Duration(milliseconds: 400),
+                                    const Duration(milliseconds: 300),
                                     () {
                                       ref
                                           .read(searchQueryProvider.notifier)
                                           .state = value
                                           .trim();
-                                      ref
-                                          .read(productListProvider.notifier)
-                                          .refresh();
                                     },
                                   );
                                 },
@@ -322,9 +335,6 @@ class _ProductScreenState extends ConsumerState<ProductScreen>
                                               )
                                               .state =
                                           '';
-                                      ref
-                                          .read(productListProvider.notifier)
-                                          .refresh();
                                       setState(() => _isSearching = false);
                                     },
                                   ),
@@ -355,13 +365,22 @@ class _ProductScreenState extends ConsumerState<ProductScreen>
                             const SizedBox(width: 8),
                             GestureDetector(
                               onTap: () async {
-                                final result = await Navigator.push(
+                                await Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) => const AddProductScreen(),
                                   ),
                                 );
-                                if (result == true) {
+                                // Always refresh when returning from Add
+                                // Product — the list may have been reset
+                                // by that screen's own category/unit
+                                // invalidation, or a product may have
+                                // been added/edited. Relying only on a
+                                // `result == true` pop value left the
+                                // list empty whenever you scanned a
+                                // barcode, removed the image, or just
+                                // backed out without saving.
+                                if (mounted) {
                                   ref
                                       .read(productListProvider.notifier)
                                       .refresh();
@@ -405,21 +424,21 @@ class _ProductScreenState extends ConsumerState<ProductScreen>
                       children: [
                         Expanded(
                           child: _statItem(
-                            title: "$totalCount items",
+                            title: "$totalCount Items",
                             value: "",
                           ),
                         ),
                         _statDivider(),
                         Expanded(
                           child: _statItem(
-                            title: "$totalUnits units",
+                            title: "$totalUnits Units",
                             value: "",
                           ),
                         ),
                         _statDivider(),
                         Expanded(
                           child: _statItem(
-                            title: "value ${_formatValue(totalValue)}",
+                            title: "${_formatValue(totalValue)} Selling",
                             value: "",
                           ),
                         ),
@@ -492,14 +511,11 @@ class _ProductScreenState extends ConsumerState<ProductScreen>
                                 filteredProducts.length +
                                 (hasMore || isLoadingMore ? 1 : 0),
                             itemBuilder: (context, index) {
-                              // ── Loading / End indicator ──
                               if (index == filteredProducts.length) {
                                 if (isLoadingMore) {
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 20,
-                                    ),
-                                    child: const Center(
+                                  return const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 20),
+                                    child: Center(
                                       child: SizedBox(
                                         width: 22,
                                         height: 22,
@@ -547,16 +563,19 @@ class _ProductScreenState extends ConsumerState<ProductScreen>
                               final bool isLowStock = qty > 0 && qty <= p.lsl;
                               final bool isOutStock = qty == 0;
 
-                              // ── Highlighted name ──────────
-                              final String displayName = p.name;
+                              // Format product name with capitalized starting letter
+                              final String displayName = _capitalizeFirstLetter(
+                                p.name,
+                              );
                               final List<TextSpan> nameSpans = [];
+
+                              // Highlight matching sub-strings anywhere in the name
                               if (searchQuery.isNotEmpty) {
                                 final lowerName = displayName.toLowerCase();
-                                final lowerQuery = searchQuery.toLowerCase();
                                 int start = 0;
                                 while (true) {
                                   final found = lowerName.indexOf(
-                                    lowerQuery,
+                                    searchQuery,
                                     start,
                                   );
                                   if (found == -1) break;
@@ -574,7 +593,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen>
                                     TextSpan(
                                       text: displayName.substring(
                                         found,
-                                        found + lowerQuery.length,
+                                        found + searchQuery.length,
                                       ),
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
@@ -582,7 +601,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen>
                                       ),
                                     ),
                                   );
-                                  start = found + lowerQuery.length;
+                                  start = found + searchQuery.length;
                                 }
                                 if (start < displayName.length) {
                                   nameSpans.add(
@@ -596,8 +615,8 @@ class _ProductScreenState extends ConsumerState<ProductScreen>
                               }
 
                               return GestureDetector(
+                                key: ValueKey('product_${p.id}'),
                                 onTap: () async {
-                                  // Pre-cache image for detail view
                                   if (p.imagePath.startsWith('http')) {
                                     await precacheImage(
                                       CachedNetworkImageProvider(p.imagePath),
@@ -638,7 +657,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen>
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      // ── Image with Hero and Shimmer ──
+                                      // ── Image Component ──
                                       Hero(
                                         tag: 'product_${p.id}',
                                         child: Container(
@@ -652,38 +671,9 @@ class _ProductScreenState extends ConsumerState<ProductScreen>
                                           ),
                                           child: ClipRRect(
                                             borderRadius: BorderRadius.circular(
-                                              R.radius(context, 14),
+                                              R.radius(context, 8),
                                             ),
-                                            child: p.imagePath.isNotEmpty
-                                                ? (p.imagePath.startsWith(
-                                                        'http',
-                                                      )
-                                                      ? CachedNetworkImage(
-                                                          imageUrl: p.imagePath,
-                                                          fit: BoxFit.cover,
-                                                          placeholder: (_, __) =>
-                                                              _buildShimmerImage(),
-                                                          errorWidget:
-                                                              (
-                                                                _,
-                                                                __,
-                                                                ___,
-                                                              ) => const Icon(
-                                                                Icons
-                                                                    .broken_image,
-                                                                color:
-                                                                    Colors.grey,
-                                                              ),
-                                                        )
-                                                      : Image.file(
-                                                          File(p.imagePath),
-                                                          fit: BoxFit.cover,
-                                                        ))
-                                                : Icon(
-                                                    Icons.inventory_2,
-                                                    size: R.icon(context, 40),
-                                                    color: Colors.grey,
-                                                  ),
+                                            child: _buildProductImage(p, imgSz),
                                           ),
                                         ),
                                       ),
@@ -726,7 +716,9 @@ class _ProductScreenState extends ConsumerState<ProductScreen>
                                             ),
                                             const SizedBox(height: 6),
                                             Text(
-                                              p.category,
+                                              _capitalizeFirstLetter(
+                                                p.category,
+                                              ),
                                               style: TextStyle(
                                                 fontSize: catFs,
                                                 color: Colors.grey.shade600,
@@ -818,7 +810,6 @@ class _ProductScreenState extends ConsumerState<ProductScreen>
               ],
             ),
           ),
-
           if (_showTopButton)
             Positioned(
               bottom: MediaQuery.of(context).padding.bottom + 8,

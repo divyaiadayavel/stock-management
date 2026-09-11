@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
-
+import '../../../../core/network/no_internet_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_spacing.dart';
@@ -16,16 +16,55 @@ import '../../../../core/network/api_config.dart';
 import '../../../../core/utils/responsive_helper.dart';
 
 import '../../../products/data/models/product_model.dart';
+import '../../../inventory/presentation/screens/new_purchase_order_screen.dart';
 import '../providers/inventory_filter_provider.dart';
 import '../providers/inventory_provider.dart';
+import 'receive_order_screen.dart';
 
-class LowStockScreen extends ConsumerWidget {
+/// Helper to capitalize the first letter of every word
+String _capitalize(String text) {
+  if (text.isEmpty) return text;
+  return text
+      .split(' ')
+      .map((word) {
+        if (word.isEmpty) return word;
+        return word[0].toUpperCase() + word.substring(1).toLowerCase();
+      })
+      .join(' ');
+}
+
+class LowStockScreen extends ConsumerStatefulWidget {
   const LowStockScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LowStockScreen> createState() => _LowStockScreenState();
+}
+
+class _LowStockScreenState extends ConsumerState<LowStockScreen> {
+  // ── Keeps track of product IDs that have already had POs created in this session ──
+  final Set<String> _createdPoProductIds = {};
+
+  void _markPoAsCreated(dynamic productId) {
+    if (productId != null) {
+      setState(() {
+        _createdPoProductIds.add(productId.toString());
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     // 🌐 Live Riverpod provider connected to PHP inventory.php?action=low_stock
     final lowStockAsync = ref.watch(lowStockProductsProvider);
+    if (lowStockAsync.hasError) {
+  return Scaffold(
+    body: NoInternetScreen(
+      onRetry: () {
+        ref.invalidate(lowStockProductsProvider);
+      },
+    ),
+  );
+}
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -45,13 +84,10 @@ class LowStockScreen extends ConsumerWidget {
       body: lowStockAsync.when(
         data: (products) {
           // Dynamic calculation of total restock value from PHP backend data
-          final totalRestockValue = products.fold<double>(
-            0.0,
-            (sum, p) {
-              final needed = (p.lsl * 2 - p.quantity).clamp(1, 100000);
-              return sum + (needed * p.purchasePrice);
-            },
-          );
+          final totalRestockValue = products.fold<double>(0.0, (sum, p) {
+            final needed = (p.lsl * 2 - p.quantity).clamp(1, 100000);
+            return sum + (needed * p.purchasePrice);
+          });
 
           return Column(
             children: [
@@ -124,8 +160,20 @@ class LowStockScreen extends ConsumerWidget {
                           itemCount: products.length,
                           separatorBuilder: (_, _) =>
                               SizedBox(height: R.sp(context, AppSpacing.sm)),
-                          itemBuilder: (context, i) =>
-                              _LowStockTile(product: products[i]),
+                          itemBuilder: (context, i) {
+                            final product = products[i];
+                            final isCreated = _createdPoProductIds.contains(
+                              product.id.toString(),
+                            );
+
+                            return _LowStockTile(
+                              product: product,
+                              isAlreadyCreated: isCreated,
+                              onPoCreatedSuccess: () {
+                                _markPoAsCreated(product.id);
+                              },
+                            );
+                          },
                         ),
                       ),
               ),
@@ -133,13 +181,10 @@ class LowStockScreen extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, st) => Center(
-          child: Text('Error loading low stock: $e',
-              style: AppTextStyles.small),
-        ),
+error: (e, st) => const SizedBox.shrink(),
       ),
 
-      // ── Bottom Navigation Bar: Bulk Create POs Grouped by Supplier ──
+      // ── Bottom Navigation Bar: Navigate Directly to Purchases Screen ──
       bottomNavigationBar: SafeArea(
         child: Container(
           padding: EdgeInsets.all(R.sp(context, AppSpacing.screenPadding)),
@@ -159,16 +204,12 @@ class LowStockScreen extends ConsumerWidget {
               ),
               child: ElevatedButton(
                 onPressed: () {
-                  final products = lowStockAsync.value;
-                  if (products == null || products.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('No low stock items available to reorder.'),
-                      ),
-                    );
-                    return;
-                  }
-                  _createGroupedPurchaseOrders(context, ref, products);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const NewPurchaseOrderScreen(),
+                    ),
+                  );
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.transparent,
@@ -200,11 +241,60 @@ class LowStockScreen extends ConsumerWidget {
 }
 
 // =========================================================
-// Item Tile Widget with Individual Create PO Button
+// Item Tile Widget with Individual Gradient Create PO Button
 // =========================================================
 class _LowStockTile extends ConsumerWidget {
   final Product product;
-  const _LowStockTile({required this.product});
+  final bool isAlreadyCreated;
+  final VoidCallback onPoCreatedSuccess;
+
+  const _LowStockTile({
+    required this.product,
+    required this.isAlreadyCreated,
+    required this.onPoCreatedSuccess,
+  });
+
+  void _showAlreadyCreatedDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        return AlertDialog(
+          backgroundColor: AppColors.card,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(
+              R.radius(dialogCtx, AppSizes.radiusLg),
+            ),
+          ),
+          title: Text(
+            'PO Already Sent',
+            style: AppTextStyles.heading.copyWith(
+              fontSize: R.fs(dialogCtx, 16),
+            ),
+          ),
+          content: Text(
+            'A Purchase Order for "${_capitalize(product.name)}" has already been created.\n\nPlease check in the "Receive Orders" section to manage or track this PO.',
+            style: AppTextStyles.small.copyWith(
+              color: AppColors.textSecondary,
+              fontSize: R.fs(dialogCtx, 13),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: Text(
+                'Go back',
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: R.fs(dialogCtx, 14),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -212,7 +302,9 @@ class _LowStockTile extends ConsumerWidget {
     final lsl = product.lsl;
     final suggested = (lsl * 2 - qty).clamp(1, 100000);
     final unit = product.unit.isNotEmpty ? product.unit : 'unit';
-    final supplier = product.supplier.isNotEmpty ? product.supplier : 'Unassigned';
+    final supplier = product.supplier.isNotEmpty
+        ? _capitalize(product.supplier)
+        : 'Unassigned';
     final isOut = qty <= 0;
 
     return Container(
@@ -234,7 +326,7 @@ class _LowStockTile extends ConsumerWidget {
                   children: [
                     Flexible(
                       child: Text(
-                        product.name,
+                        _capitalize(product.name),
                         style: AppTextStyles.cardValue.copyWith(
                           fontSize: R.fs(context, 14),
                           fontWeight: FontWeight.w600,
@@ -285,25 +377,47 @@ class _LowStockTile extends ConsumerWidget {
             ),
           ),
           SizedBox(width: R.sp(context, AppSpacing.sm)),
-          ElevatedButton(
-            onPressed: () => _createPoForProduct(context, ref, product),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              padding: EdgeInsets.symmetric(
-                horizontal: R.sp(context, 12),
-                vertical: R.sp(context, 8),
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(
-                  R.radius(context, AppSizes.radiusMd),
-                ),
+          Container(
+            decoration: BoxDecoration(
+              gradient: isAlreadyCreated ? null : AppColors.brandGradient,
+              color: isAlreadyCreated ? Colors.grey.shade400 : null,
+              borderRadius: BorderRadius.circular(
+                R.radius(context, AppSizes.radiusMd),
               ),
             ),
-            child: Text(
-              'Create PO ›',
-              style: AppTextStyles.small.copyWith(
-                color: AppColors.textWhite,
-                fontWeight: FontWeight.w600,
+            child: ElevatedButton(
+              onPressed: () {
+                if (isAlreadyCreated) {
+                  _showAlreadyCreatedDialog(context);
+                } else {
+                  _createPoForProduct(
+                    context,
+                    ref,
+                    product,
+                    onSuccess: onPoCreatedSuccess,
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                elevation: 0,
+                padding: EdgeInsets.symmetric(
+                  horizontal: R.sp(context, 12),
+                  vertical: R.sp(context, 8),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(
+                    R.radius(context, AppSizes.radiusMd),
+                  ),
+                ),
+              ),
+              child: Text(
+                isAlreadyCreated ? 'PO Created' : 'Create PO ›',
+                style: AppTextStyles.small.copyWith(
+                  color: AppColors.textWhite,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
@@ -319,25 +433,33 @@ class _LowStockTile extends ConsumerWidget {
 Future<void> _createPoForProduct(
   BuildContext context,
   WidgetRef ref,
-  Product product,
-) async {
+  Product product, {
+  required VoidCallback onSuccess,
+}) async {
   if (product.supplierId == null || product.supplierId == 0) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'No supplier assigned for "${product.name}". Assign a supplier in product settings.',
+          'No supplier assigned for "${_capitalize(product.name)}". Assign a supplier in product settings.',
         ),
       ),
     );
     return;
   }
 
-  // 🌐 Fetch Supplier details dynamically from suppliers.php API endpoint
+  // 🌐 Fetch Supplier details dynamically from suppliers API endpoint
   Map<String, dynamic>? supplierData;
   try {
     final supplierUri = Uri.parse(
-        ApiConfig.inventory.replaceAll('/inventory/inventory.php', '/suppliers/suppliers.php?id=${product.supplierId}'));
-    final response = await http.get(supplierUri, headers: ApiConfig.jsonHeaders);
+      ApiConfig.inventory.replaceAll(
+        '/inventory/inventory.php',
+        '/suppliers/suppliers.php?id=${product.supplierId}',
+      ),
+    );
+    final response = await http.get(
+      supplierUri,
+      headers: ApiConfig.jsonHeaders,
+    );
     if (response.statusCode == 200) {
       final jsonRes = json.decode(response.body);
       if (jsonRes['success'] == true && jsonRes['data'] != null) {
@@ -348,12 +470,13 @@ Future<void> _createPoForProduct(
     debugPrint('Error fetching supplier details: $e');
   }
 
-  final supplierName = supplierData?['supplier_name'] ??
-      supplierData?['company_name'] ??
-      product.supplier;
-  final supplierPhone = supplierData?['phone'] ??
-      supplierData?['alternate_phone'] ??
-      '';
+  final supplierName = _capitalize(
+    supplierData?['supplier_name'] ??
+        supplierData?['company_name'] ??
+        product.supplier,
+  );
+  final supplierPhone =
+      supplierData?['phone'] ?? supplierData?['alternate_phone'] ?? '';
 
   final qty = product.quantity;
   final lsl = product.lsl;
@@ -405,10 +528,13 @@ Future<void> _createPoForProduct(
 
                 _readOnlyField(sheetCtx, 'Supplier', supplierName),
                 SizedBox(height: R.sp(sheetCtx, 10)),
-                _readOnlyField(sheetCtx, 'Product', product.name),
+                _readOnlyField(sheetCtx, 'Product', _capitalize(product.name)),
                 SizedBox(height: R.sp(sheetCtx, 10)),
                 _readOnlyField(
-                    sheetCtx, 'Unit', product.unit.isNotEmpty ? product.unit : 'unit'),
+                  sheetCtx,
+                  'Unit',
+                  product.unit.isNotEmpty ? product.unit : 'unit',
+                ),
                 SizedBox(height: R.sp(sheetCtx, 10)),
 
                 Row(
@@ -424,8 +550,9 @@ Future<void> _createPoForProduct(
                     Expanded(
                       child: TextField(
                         controller: priceCtrl,
-                        keyboardType:
-                            const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
                         decoration: const InputDecoration(
                           labelText: 'Unit price (₹)',
                         ),
@@ -451,8 +578,9 @@ Future<void> _createPoForProduct(
                           ? null
                           : () async {
                               final qtyVal = int.tryParse(qtyCtrl.text.trim());
-                              final priceVal =
-                                  double.tryParse(priceCtrl.text.trim());
+                              final priceVal = double.tryParse(
+                                priceCtrl.text.trim(),
+                              );
 
                               if (qtyVal == null || qtyVal <= 0) {
                                 ScaffoldMessenger.of(sheetCtx).showSnackBar(
@@ -474,23 +602,32 @@ Future<void> _createPoForProduct(
                               setSheetState(() => sending = true);
 
                               try {
+                                // Safely convert product.id to integer
+                                final int parsedProductId =
+                                    int.tryParse(product.id.toString()) ?? 0;
+
                                 final poPayload = {
                                   'supplier_id': product.supplierId,
-                                  'purchase_date':
-                                      DateFormat('yyyy-MM-dd').format(DateTime.now()),
+                                  'purchase_date': DateFormat(
+                                    'yyyy-MM-dd HH:mm:ss',
+                                  ).format(DateTime.now()),
+                                  'status': 'ORDERED',
                                   'items': [
                                     {
-                                      'product_id': product.id,
+                                      'product_id': parsedProductId > 0
+                                          ? parsedProductId
+                                          : product.id,
                                       'quantity': qtyVal,
                                       'purchase_price': priceVal,
                                       'tax': 0,
-                                      'discount': 0
-                                    }
-                                  ]
+                                      'discount': 0,
+                                    },
+                                  ],
                                 };
 
                                 final createPoUri = Uri.parse(
-                                    '${ApiConfig.inventory}?action=create_purchase');
+                                  '${ApiConfig.purchases}?action=create_purchase',
+                                );
                                 final response = await http.post(
                                   createPoUri,
                                   headers: ApiConfig.jsonHeaders,
@@ -501,7 +638,14 @@ Future<void> _createPoForProduct(
 
                                 if (response.statusCode == 200 &&
                                     resData['success'] == true) {
-                                  final poId = resData['data']?['purchase_id'] ?? 0;
+                                  final rawPoId =
+                                      resData['data']?['purchase_id'] ?? 0;
+                                  final int createdPoId = rawPoId is int
+                                      ? rawPoId
+                                      : int.tryParse(rawPoId.toString()) ?? 0;
+
+                                  // Callback to disable the button locally
+                                  onSuccess();
 
                                   // Refresh inventory providers
                                   ref
@@ -512,10 +656,8 @@ Future<void> _createPoForProduct(
                                     await _sendPoWhatsApp(
                                       supplierName: supplierName,
                                       phone: supplierPhone,
-                                      poId: poId is int
-                                          ? poId
-                                          : int.tryParse(poId.toString()) ?? 0,
-                                      productName: product.name,
+                                      poId: createdPoId,
+                                      productName: _capitalize(product.name),
                                       unit: product.unit,
                                       qty: qtyVal,
                                       unitPrice: priceVal,
@@ -535,10 +677,21 @@ Future<void> _createPoForProduct(
                                         ),
                                       ),
                                     );
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ReceiveOrderScreen(
+                                          poId: createdPoId > 0
+                                              ? createdPoId
+                                              : null,
+                                        ),
+                                      ),
+                                    );
                                   }
                                 } else {
                                   throw Exception(
-                                      resData['message'] ?? 'Failed to create PO');
+                                    resData['message'] ?? 'Failed to create PO',
+                                  );
                                 }
                               } catch (err) {
                                 setSheetState(() => sending = false);
@@ -588,332 +741,6 @@ Future<void> _createPoForProduct(
                 ),
               ],
             ),
-          );
-        },
-      );
-    },
-  );
-}
-
-// =========================================================
-// 2. Bulk Create POs Grouped by Supplier Flow
-// =========================================================
-Future<void> _createGroupedPurchaseOrders(
-  BuildContext context,
-  WidgetRef ref,
-  List<Product> products,
-) async {
-  // Group low stock products by supplierId
-  final Map<int, List<Product>> grouped = {};
-  final List<Product> unassigned = [];
-
-  for (final p in products) {
-    if (p.supplierId != null && p.supplierId! > 0) {
-      grouped.putIfAbsent(p.supplierId!, () => []).add(p);
-    } else {
-      unassigned.add(p);
-    }
-  }
-
-  if (grouped.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'None of the low-stock items have a supplier assigned. Please assign suppliers to products first.',
-        ),
-      ),
-    );
-    return;
-  }
-
-  await showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.white,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
-    builder: (sheetCtx) {
-      bool creating = false;
-
-      return StatefulBuilder(
-        builder: (sheetCtx, setSheetState) {
-          return DraggableScrollableSheet(
-            expand: false,
-            initialChildSize: 0.75,
-            minChildSize: 0.4,
-            maxChildSize: 0.9,
-            builder: (_, scrollController) {
-              return Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: R.sp(sheetCtx, 18),
-                  vertical: R.sp(sheetCtx, 16),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: R.sp(sheetCtx, 40),
-                        height: R.sp(sheetCtx, 4),
-                        margin: EdgeInsets.only(bottom: R.sp(sheetCtx, 12)),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    ),
-                    Text(
-                      'Bulk Create Purchase Orders',
-                      style: TextStyle(
-                        fontSize: R.fs(sheetCtx, 16),
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimaryDark,
-                      ),
-                    ),
-                    SizedBox(height: R.sp(sheetCtx, 4)),
-                    Text(
-                      'Creating ${grouped.keys.length} purchase orders grouped by supplier.',
-                      style: TextStyle(
-                        fontSize: R.fs(sheetCtx, 12),
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    if (unassigned.isNotEmpty) ...[
-                      SizedBox(height: R.sp(sheetCtx, 8)),
-                      Text(
-                        '⚠️ ${unassigned.length} items have no supplier assigned and will be skipped.',
-                        style: TextStyle(
-                          fontSize: R.fs(sheetCtx, 11),
-                          color: AppColors.orange,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                    SizedBox(height: R.sp(sheetCtx, 14)),
-
-                    // Grouped Suppliers List
-                    Expanded(
-                      child: ListView.separated(
-                        controller: scrollController,
-                        itemCount: grouped.keys.length,
-                        separatorBuilder: (_, __) =>
-                            SizedBox(height: R.sp(sheetCtx, 12)),
-                        itemBuilder: (_, index) {
-                          final supplierId = grouped.keys.elementAt(index);
-                          final supplierItems = grouped[supplierId]!;
-                          final supplierName = supplierItems.first.supplier.isNotEmpty
-                              ? supplierItems.first.supplier
-                              : 'Supplier #$supplierId';
-
-                          final groupTotal = supplierItems.fold<double>(
-                            0.0,
-                            (sum, p) {
-                              final qty = (p.lsl * 2 - p.quantity).clamp(1, 100000);
-                              final price = p.purchasePrice > 0
-                                  ? p.purchasePrice
-                                  : p.sellingPrice;
-                              return sum + (qty * price);
-                            },
-                          );
-
-                          return Container(
-                            padding: EdgeInsets.all(R.sp(sheetCtx, 12)),
-                            decoration: BoxDecoration(
-                              color: AppColors.card,
-                              borderRadius: BorderRadius.circular(
-                                R.radius(sheetCtx, 10),
-                              ),
-                              border: Border.all(color: AppColors.border),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        supplierName,
-                                        style: TextStyle(
-                                          fontSize: R.fs(sheetCtx, 14),
-                                          fontWeight: FontWeight.bold,
-                                          color: AppColors.textPrimaryDark,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    Text(
-                                      '₹${groupTotal.toStringAsFixed(0)}',
-                                      style: TextStyle(
-                                        fontSize: R.fs(sheetCtx, 13),
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.primary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                Divider(height: R.sp(sheetCtx, 16)),
-                                ...supplierItems.map((p) {
-                                  final qty = (p.lsl * 2 - p.quantity)
-                                      .clamp(1, 100000);
-                                  final price = p.purchasePrice > 0
-                                      ? p.purchasePrice
-                                      : p.sellingPrice;
-                                  return Padding(
-                                    padding: EdgeInsets.only(
-                                      bottom: R.sp(sheetCtx, 4),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            '• ${p.name}',
-                                            style: TextStyle(
-                                              fontSize: R.fs(sheetCtx, 12),
-                                              color: AppColors.textPrimaryDark,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        Text(
-                                          '$qty ${p.unit.isNotEmpty ? p.unit : 'unit'} × ₹${price.toStringAsFixed(0)}',
-                                          style: TextStyle(
-                                            fontSize: R.fs(sheetCtx, 11),
-                                            color: AppColors.textSecondary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                }),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-
-                    SizedBox(height: R.sp(sheetCtx, 14)),
-
-                    // Batch Creation Action Button
-                    SizedBox(
-                      width: double.infinity,
-                      height: R.btnH(sheetCtx),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: AppColors.brandGradient,
-                          borderRadius: BorderRadius.circular(
-                            R.radius(sheetCtx, 10),
-                          ),
-                        ),
-                        child: ElevatedButton(
-                          onPressed: creating
-                              ? null
-                              : () async {
-                                  setSheetState(() => creating = true);
-                                  int successCount = 0;
-
-                                  for (final supplierId in grouped.keys) {
-                                    final supplierItems = grouped[supplierId]!;
-                                    final itemsPayload = supplierItems.map((p) {
-                                      final qty = (p.lsl * 2 - p.quantity)
-                                          .clamp(1, 100000);
-                                      final price = p.purchasePrice > 0
-                                          ? p.purchasePrice
-                                          : p.sellingPrice;
-                                      return {
-                                        'product_id': p.id,
-                                        'quantity': qty,
-                                        'purchase_price': price,
-                                        'tax': 0,
-                                        'discount': 0,
-                                      };
-                                    }).toList();
-
-                                    final payload = {
-                                      'supplier_id': supplierId,
-                                      'purchase_date': DateFormat('yyyy-MM-dd')
-                                          .format(DateTime.now()),
-                                      'items': itemsPayload,
-                                    };
-
-                                    try {
-                                      final uri = Uri.parse(
-                                          '${ApiConfig.inventory}?action=create_purchase');
-                                      final response = await http.post(
-                                        uri,
-                                        headers: ApiConfig.jsonHeaders,
-                                        body: json.encode(payload),
-                                      );
-                                      final res = json.decode(response.body);
-                                      if (response.statusCode == 200 &&
-                                          res['success'] == true) {
-                                        successCount++;
-                                      }
-                                    } catch (e) {
-                                      debugPrint(
-                                          'Failed to create PO for supplier $supplierId: $e');
-                                    }
-                                  }
-
-                                  // Refresh global state
-                                  ref
-                                      .read(inventoryRefreshProvider.notifier)
-                                      .state++;
-
-                                  setSheetState(() => creating = false);
-
-                                  if (sheetCtx.mounted) {
-                                    Navigator.pop(sheetCtx);
-                                  }
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'Successfully created $successCount purchase order(s) in backend!',
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(
-                                R.radius(sheetCtx, 10),
-                              ),
-                            ),
-                          ),
-                          child: creating
-                              ? SizedBox(
-                                  width: R.sp(sheetCtx, 20),
-                                  height: R.sp(sheetCtx, 20),
-                                  child: const CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : Text(
-                                  'Confirm & Create ${grouped.keys.length} Purchase Orders',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: R.fs(sheetCtx, 14),
-                                  ),
-                                ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
           );
         },
       );

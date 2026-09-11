@@ -1,19 +1,10 @@
 // lib/features/inventory/presentation/screens/receive_order_screen.dart
-//
-// Complete implementation with:
-// - Pending/Completed tabs
-// - Expandable PO cards showing items with editable quantity and unit price
-// - Confirm Stock‑In with partial support
-// - Completed items showing actual received price vs ordered price
-// - Partial badge and child PO link
-// - Price history modal
-// - No code compromises, full UI/UX.
-//
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
-
+import '../../../../core/network/no_internet_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_spacing.dart';
@@ -27,7 +18,8 @@ int asInt(dynamic value, [int fallback = 0]) {
   if (value == null) return fallback;
   if (value is int) return value;
   if (value is double) return value.toInt();
-  if (value is String) return int.tryParse(value) ?? double.tryParse(value)?.toInt() ?? fallback;
+  if (value is String)
+    return int.tryParse(value) ?? double.tryParse(value)?.toInt() ?? fallback;
   return fallback;
 }
 
@@ -59,6 +51,7 @@ class _ReceiveOrderScreenState extends ConsumerState<ReceiveOrderScreen>
     with SingleTickerProviderStateMixin {
   List<Map<String, dynamic>> _allOrders = [];
   bool _loadingOrders = true;
+  bool _networkError = false;
   int _selectedTab = 0; // 0 = Pending, 1 = Completed
 
   int? _expandedPendingPoId;
@@ -71,10 +64,13 @@ class _ReceiveOrderScreenState extends ConsumerState<ReceiveOrderScreen>
 
   bool _saving = false;
 
-  int? get _expandedPoId => _selectedTab == 0 ? _expandedPendingPoId : _expandedCompletedPoId;
+  int? get _expandedPoId =>
+      _selectedTab == 0 ? _expandedPendingPoId : _expandedCompletedPoId;
   void _setExpandedPoId(int? id) {
-    if (_selectedTab == 0) _expandedPendingPoId = id;
-    else _expandedCompletedPoId = id;
+    if (_selectedTab == 0)
+      _expandedPendingPoId = id;
+    else
+      _expandedCompletedPoId = id;
   }
 
   @override
@@ -102,11 +98,30 @@ class _ReceiveOrderScreenState extends ConsumerState<ReceiveOrderScreen>
           _receivingMapPerPo.clear();
           _priceControllers.clear();
           _loadingDetailMap.clear();
+          _networkError = false;
+
+          // Auto-expand specified PO ID if passed via parameter
+          if (widget.poId != null) {
+            final targetPo = _allOrders.firstWhere(
+              (o) => asInt(o['id']) == widget.poId,
+              orElse: () => {},
+            );
+            if (targetPo.isNotEmpty) {
+              final isComp = _isCompletedPO(targetPo);
+              _selectedTab = isComp ? 1 : 0;
+              _setExpandedPoId(widget.poId);
+              _loadPoDetail(widget.poId!);
+            }
+          }
         }
       }
     } catch (e) {
-      _showToast('Failed to load orders', isError: true);
-    } finally {
+  if (mounted) {
+    setState(() {
+      _networkError = true;
+    });
+  }
+} finally {
       if (mounted) setState(() => _loadingOrders = false);
     }
   }
@@ -116,14 +131,18 @@ class _ReceiveOrderScreenState extends ConsumerState<ReceiveOrderScreen>
 
     setState(() => _loadingDetailMap[poId] = true);
     try {
-      final uri = Uri.parse('${ApiConfig.purchases}?action=purchase_detail&id=$poId');
+      final uri = Uri.parse(
+        '${ApiConfig.purchases}?action=purchase_detail&id=$poId',
+      );
       final response = await http.get(uri, headers: ApiConfig.jsonHeaders);
 
       if (response.statusCode == 200) {
         final res = json.decode(response.body);
         if (res['success'] == true && res['data'] != null) {
           final poData = res['data'];
-          final itemsList = List<Map<String, dynamic>>.from(poData['items'] ?? []);
+          final itemsList = List<Map<String, dynamic>>.from(
+            poData['items'] ?? [],
+          );
 
           itemsList.sort((a, b) {
             final aOut = _outstandingOf(a);
@@ -133,7 +152,8 @@ class _ReceiveOrderScreenState extends ConsumerState<ReceiveOrderScreen>
             return 0;
           });
 
-          final fullPoData = Map<String, dynamic>.from(poData)..['items'] = itemsList;
+          final fullPoData = Map<String, dynamic>.from(poData)
+            ..['items'] = itemsList;
           _poDetailsCache[poId] = fullPoData;
 
           final receivingMap = <int, int>{};
@@ -142,8 +162,10 @@ class _ReceiveOrderScreenState extends ConsumerState<ReceiveOrderScreen>
             final itemId = asInt(item['id']);
             final outstanding = _outstandingOf(item);
             receivingMap[itemId] = outstanding > 0 ? outstanding : 0;
-            final price = asDouble(item['unitPrice']);
-            priceCtrls[itemId] = TextEditingController(text: price.toStringAsFixed(2));
+            final price = asDouble(item['unitPrice'] ?? item['unit_price']);
+            priceCtrls[itemId] = TextEditingController(
+              text: price.toStringAsFixed(2),
+            );
           }
           _receivingMapPerPo[poId] = receivingMap;
           _priceControllers[poId] = priceCtrls;
@@ -163,11 +185,14 @@ class _ReceiveOrderScreenState extends ConsumerState<ReceiveOrderScreen>
   // --------------------------------------------------------------------------
   Future<List<Map<String, dynamic>>> _fetchPriceHistory(int productId) async {
     try {
-      final uri = Uri.parse('${ApiConfig.inventory}?action=price_history&product_id=$productId');
+      final uri = Uri.parse(
+        '${ApiConfig.inventory}?action=price_history&product_id=$productId',
+      );
       final response = await http.get(uri, headers: ApiConfig.jsonHeaders);
       if (response.statusCode == 200) {
         final res = json.decode(response.body);
-        if (res['success'] == true) return List<Map<String, dynamic>>.from(res['data']);
+        if (res['success'] == true)
+          return List<Map<String, dynamic>>.from(res['data']);
       }
     } catch (e) {
       debugPrint('Error fetching price history: $e');
@@ -186,7 +211,8 @@ class _ReceiveOrderScreenState extends ConsumerState<ReceiveOrderScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => _PriceHistoryModal(productName: productName, history: history),
+      builder: (ctx) =>
+          _PriceHistoryModal(productName: productName, history: history),
     );
   }
 
@@ -195,16 +221,24 @@ class _ReceiveOrderScreenState extends ConsumerState<ReceiveOrderScreen>
   // --------------------------------------------------------------------------
   bool _isCompletedPO(Map<String, dynamic> po) {
     final status = asStr(po['status'] ?? po['purchase_status']).toUpperCase();
-    return status == 'RECEIVED' || status == 'COMPLETE' || status == 'COMPLETED';
+    return status == 'RECEIVED' ||
+        status == 'COMPLETE' ||
+        status == 'COMPLETED';
   }
 
   bool _isPendingPO(Map<String, dynamic> po) {
     final status = asStr(po['status'] ?? po['purchase_status']).toUpperCase();
-    return status == 'ORDERED' || status == 'PARTIALLY_RECEIVED';
+    // Covers newly created and sent via WhatsApp orders
+    return status == 'ORDERED' ||
+        status == 'SENT' ||
+        status == 'PARTIALLY_RECEIVED' ||
+        status == 'PENDING';
   }
 
-  int _orderedQtyOf(Map<String, dynamic> item) => asInt(item['orderedQty']);
-  int _alreadyReceivedOf(Map<String, dynamic> item) => asInt(item['receivedQty']);
+  int _orderedQtyOf(Map<String, dynamic> item) =>
+      asInt(item['orderedQty'] ?? item['quantity']);
+  int _alreadyReceivedOf(Map<String, dynamic> item) =>
+      asInt(item['receivedQty'] ?? item['quantity_received']);
 
   int _outstandingOf(Map<String, dynamic> item) {
     final ordered = _orderedQtyOf(item);
@@ -231,7 +265,9 @@ class _ReceiveOrderScreenState extends ConsumerState<ReceiveOrderScreen>
           content: Text(msg),
           backgroundColor: isError ? AppColors.red : AppColors.green,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+          ),
         ),
       );
     }
@@ -264,7 +300,7 @@ class _ReceiveOrderScreenState extends ConsumerState<ReceiveOrderScreen>
         .where((item) => _outstandingOf(item) > 0)
         .map((item) {
           final itemId = asInt(item['id']);
-          final prodId = asInt(item['productId']);
+          final prodId = asInt(item['productId'] ?? item['product_id']);
           final qtyVal = receivingMap[itemId] ?? 0;
           final priceController = priceCtrls[itemId];
           double? unitPrice;
@@ -272,8 +308,12 @@ class _ReceiveOrderScreenState extends ConsumerState<ReceiveOrderScreen>
             final priceText = priceController.text.trim();
             if (priceText.isNotEmpty) unitPrice = double.tryParse(priceText);
           }
-          final payload = <String, dynamic>{'product_id': prodId, 'quantity_received': qtyVal};
-          if (unitPrice != null && unitPrice > 0) payload['unit_price'] = unitPrice;
+          final payload = <String, dynamic>{
+            'product_id': prodId,
+            'quantity_received': qtyVal,
+          };
+          if (unitPrice != null && unitPrice > 0)
+            payload['unit_price'] = unitPrice;
           return payload;
         })
         .where((e) => (e['quantity_received'] as int) > 0)
@@ -338,8 +378,24 @@ class _ReceiveOrderScreenState extends ConsumerState<ReceiveOrderScreen>
   @override
   Widget build(BuildContext context) {
     final pendingOrders = _allOrders.where((po) => _isPendingPO(po)).toList();
-    final completedOrders = _allOrders.where((po) => _isCompletedPO(po)).toList();
+    final completedOrders = _allOrders
+        .where((po) => _isCompletedPO(po))
+        .toList();
     final currentList = _selectedTab == 0 ? pendingOrders : completedOrders;
+
+    if (_networkError) {
+  return Scaffold(
+    body: NoInternetScreen(
+      onRetry: () async {
+        setState(() {
+          _networkError = false;
+        });
+
+        await _fetchOrdersList();
+      },
+    ),
+  );
+}
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -353,7 +409,7 @@ class _ReceiveOrderScreenState extends ConsumerState<ReceiveOrderScreen>
           IconButton(
             icon: Icon(Icons.refresh, color: AppColors.textSecondary),
             onPressed: _fetchOrdersList,
-            tooltip: 'Refresh',
+            tooltip: 'Refresh Orders',
           ),
         ],
       ),
@@ -365,55 +421,68 @@ class _ReceiveOrderScreenState extends ConsumerState<ReceiveOrderScreen>
                 Expanded(
                   child: currentList.isEmpty
                       ? _buildEmptyState()
-                      : ListView.builder(
-                          padding: R.hPad(context, base: AppSpacing.lg).copyWith(
-                            top: R.sp(context, AppSpacing.sm),
-                            bottom: R.sp(context, AppSpacing.lg),
-                          ),
-                          itemCount: currentList.length,
-                          itemBuilder: (context, index) {
-                            final po = currentList[index];
-                            final poId = asInt(po['id']);
-                            final isExpanded = _expandedPoId == poId;
-                            final isCompleted = _isCompletedPO(po);
-                            final isLoading = _loadingDetailMap[poId] ?? false;
-                            final poDetail = _poDetailsCache[poId];
-                            final items = poDetail != null
-                                ? List<Map<String, dynamic>>.from(poDetail['items'] ?? [])
-                                : <Map<String, dynamic>>[];
-                            final receivingMap = _receivingMapPerPo[poId] ?? {};
-                            final priceCtrls = _priceControllers[poId] ?? {};
+                      : RefreshIndicator(
+                          onRefresh: _fetchOrdersList,
+                          child: ListView.builder(
+                            padding: R
+                                .hPad(context, base: AppSpacing.lg)
+                                .copyWith(
+                                  top: R.sp(context, AppSpacing.sm),
+                                  bottom: R.sp(context, AppSpacing.lg),
+                                ),
+                            itemCount: currentList.length,
+                            itemBuilder: (context, index) {
+                              final po = currentList[index];
+                              final poId = asInt(po['id']);
+                              final isExpanded = _expandedPoId == poId;
+                              final isCompleted = _isCompletedPO(po);
+                              final isLoading =
+                                  _loadingDetailMap[poId] ?? false;
+                              final poDetail = _poDetailsCache[poId];
+                              final items = poDetail != null
+                                  ? List<Map<String, dynamic>>.from(
+                                      poDetail['items'] ?? [],
+                                    )
+                                  : <Map<String, dynamic>>[];
+                              final receivingMap =
+                                  _receivingMapPerPo[poId] ?? {};
+                              final priceCtrls = _priceControllers[poId] ?? {};
 
-                            return _POCard(
-                              po: po,
-                              poDetail: poDetail,
-                              isExpanded: isExpanded,
-                              isLoading: isLoading,
-                              items: items,
-                              receivingMap: receivingMap,
-                              priceControllers: priceCtrls,
-                              onToggle: () => _toggleExpansion(poId),
-                              onQtyChanged: (itemId, newQty) {
-                                setState(() {
-                                  final map = _receivingMapPerPo[poId];
-                                  if (map != null) {
-                                    final item = items.firstWhere(
-                                      (i) => asInt(i['id']) == itemId,
-                                    );
-                                    map[itemId] = newQty.clamp(0, _outstandingOf(item));
-                                  }
-                                });
-                              },
-                              outstandingOf: _outstandingOf,
-                              isCompleted: isCompleted,
-                              onShowPriceHistory: _showPriceHistory,
-                            );
-                          },
+                              return _POCard(
+                                po: po,
+                                poDetail: poDetail,
+                                isExpanded: isExpanded,
+                                isLoading: isLoading,
+                                items: items,
+                                receivingMap: receivingMap,
+                                priceControllers: priceCtrls,
+                                onToggle: () => _toggleExpansion(poId),
+                                onQtyChanged: (itemId, newQty) {
+                                  setState(() {
+                                    final map = _receivingMapPerPo[poId];
+                                    if (map != null) {
+                                      final item = items.firstWhere(
+                                        (i) => asInt(i['id']) == itemId,
+                                      );
+                                      map[itemId] = newQty.clamp(
+                                        0,
+                                        _outstandingOf(item),
+                                      );
+                                    }
+                                  });
+                                },
+                                outstandingOf: _outstandingOf,
+                                isCompleted: isCompleted,
+                                onShowPriceHistory: _showPriceHistory,
+                              );
+                            },
+                          ),
                         ),
                 ),
               ],
             ),
-      bottomNavigationBar: _selectedTab == 0 &&
+      bottomNavigationBar:
+          _selectedTab == 0 &&
               _expandedPoId != null &&
               _poDetailsCache.containsKey(_expandedPoId) &&
               !(_loadingDetailMap[_expandedPoId] ?? false)
@@ -447,44 +516,85 @@ class _ReceiveOrderScreenState extends ConsumerState<ReceiveOrderScreen>
 
   Widget _buildTabs(int pending, int completed) {
     return Padding(
-      padding: R.hPad(context, base: AppSpacing.lg)
-          .copyWith(top: R.sp(context, AppSpacing.sm), bottom: R.sp(context, AppSpacing.sm)),
-      child: SegmentedButton<int>(
-        segments: [
-          ButtonSegment<int>(
-            value: 0,
-            label: Text('Pending ($pending)'),
+      padding: R
+          .hPad(context, base: AppSpacing.lg)
+          .copyWith(
+            top: R.sp(context, AppSpacing.sm),
+            bottom: R.sp(context, AppSpacing.sm),
           ),
-          ButtonSegment<int>(
-            value: 1,
-            label: Text('Completed ($completed)'),
+      child: Container(
+        padding: EdgeInsets.all(R.sp(context, 4)),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(
+            R.radius(context, AppSizes.radiusMd),
           ),
-        ],
-        selected: {_selectedTab},
-        onSelectionChanged: (Set<int> newSelection) {
-          setState(() => _selectedTab = newSelection.first);
-        },
-        style: ButtonStyle(
-          backgroundColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) return AppColors.primary;
-            return Colors.transparent;
-          }),
-          foregroundColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) return Colors.white;
-            return AppColors.textSecondary;
-          }),
-          side: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) return const BorderSide(color: Colors.transparent);
-            return BorderSide(color: AppColors.border);
-          }),
-          shape: WidgetStateProperty.resolveWith((states) {
-            return RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
-            );
-          }),
-          textStyle: WidgetStateProperty.resolveWith((states) {
-            return TextStyle(fontWeight: FontWeight.w600, fontSize: R.fs(context, 13));
-          }),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() => _selectedTab = 0),
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    vertical: R.sp(context, AppSpacing.sm),
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: _selectedTab == 0
+                        ? AppColors.brandGradient
+                        : null,
+                    borderRadius: BorderRadius.circular(
+                      R.radius(context, AppSizes.radiusSm),
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      'Pending ($pending)',
+                      style: AppTextStyles.small.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: R.fs(context, 13),
+                        color: _selectedTab == 0
+                            ? AppColors.textWhite
+                            : AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(width: R.sp(context, 4)),
+            Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() => _selectedTab = 1),
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    vertical: R.sp(context, AppSpacing.sm),
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: _selectedTab == 1
+                        ? AppColors.brandGradient
+                        : null,
+                    borderRadius: BorderRadius.circular(
+                      R.radius(context, AppSizes.radiusSm),
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      'Completed ($completed)',
+                      style: AppTextStyles.small.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: R.fs(context, 13),
+                        color: _selectedTab == 1
+                            ? AppColors.textWhite
+                            : AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -524,7 +634,9 @@ class _ReceiveOrderScreenState extends ConsumerState<ReceiveOrderScreen>
                   SizedBox(height: R.sp(context, 2)),
                   Text(
                     '$total Units',
-                    style: AppTextStyles.cardValue.copyWith(fontSize: R.fs(context, 18)),
+                    style: AppTextStyles.cardValue.copyWith(
+                      fontSize: R.fs(context, 18),
+                    ),
                   ),
                 ],
               ),
@@ -535,16 +647,22 @@ class _ReceiveOrderScreenState extends ConsumerState<ReceiveOrderScreen>
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: AppColors.brandGradient,
-                  borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
+                  borderRadius: BorderRadius.circular(
+                    R.radius(context, AppSizes.radiusMd),
+                  ),
                 ),
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.transparent,
                     shadowColor: Colors.transparent,
                     elevation: 0,
-                    padding: EdgeInsets.symmetric(horizontal: R.sp(context, AppSpacing.xl)),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: R.sp(context, AppSpacing.xl),
+                    ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
+                      borderRadius: BorderRadius.circular(
+                        R.radius(context, AppSizes.radiusMd),
+                      ),
                     ),
                   ),
                   onPressed: (_saving || !_hasOutstandingForPo(poId))
@@ -559,11 +677,17 @@ class _ReceiveOrderScreenState extends ConsumerState<ReceiveOrderScreen>
                             color: Colors.white,
                           ),
                         )
-                      : Icon(Icons.check_circle_outline,
-                          color: Colors.white, size: R.icon(context, 20)),
+                      : Icon(
+                          Icons.check_circle_outline,
+                          color: Colors.white,
+                          size: R.icon(context, 20),
+                        ),
                   label: Text(
                     _saving ? 'Saving…' : 'Confirm Stock-In',
-                    style: AppTextStyles.button.copyWith(fontSize: R.fs(context, 14)),
+                    style: AppTextStyles.button.copyWith(
+                      fontSize: R.fs(context, 14),
+                      color: AppColors.textWhite,
+                    ),
                   ),
                 ),
               ),
@@ -622,9 +746,7 @@ class _POCardState extends State<_POCard> with SingleTickerProviderStateMixin {
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
-    _heightFactor = _controller.drive(
-      CurveTween(curve: Curves.easeInOut),
-    );
+    _heightFactor = _controller.drive(CurveTween(curve: Curves.easeInOut));
     if (widget.isExpanded) _controller.value = 1.0;
   }
 
@@ -647,49 +769,51 @@ class _POCardState extends State<_POCard> with SingleTickerProviderStateMixin {
     final poId = asInt(widget.po['id']);
     final poNumber = asStr(widget.po['purchase_number'], 'PO-$poId');
     final supplier = asStr(widget.po['supplier_name'], 'Supplier');
-    final total = widget.po['grand_total'] != null ? '₹${widget.po['grand_total']}' : null;
+    final total = widget.po['grand_total'] != null
+        ? '₹${widget.po['grand_total']}'
+        : null;
     final parentPo = widget.po['parent_po_number'] != null
         ? 'Remainder from ${widget.po['parent_po_number']}'
         : '';
     final hasPartial = widget.po['has_partial'] == true;
     final childPoNumber = widget.po['child_po_number'] ?? '';
 
-    final subtotal = widget.poDetail != null ? asDouble(widget.poDetail!['subtotal']) : 0.0;
-    final tax = widget.poDetail != null ? asDouble(widget.poDetail!['tax_amount']) : 0.0;
-    final discount = widget.poDetail != null ? asDouble(widget.poDetail!['discount_amount']) : 0.0;
-    final shipping = widget.poDetail != null ? asDouble(widget.poDetail!['shipping_charge']) : 0.0;
-    final grandTotal = widget.poDetail != null ? asDouble(widget.poDetail!['grand_total']) : 0.0;
+    final grandTotal = widget.poDetail != null
+        ? asDouble(widget.poDetail!['grand_total'])
+        : 0.0;
     double calculatedGrandTotal = grandTotal;
 
-if (!widget.isCompleted && widget.items.isNotEmpty) {
-  calculatedGrandTotal = 0;
+    if (!widget.isCompleted && widget.items.isNotEmpty) {
+      calculatedGrandTotal = 0;
 
-  for (final item in widget.items) {
-    final itemId = asInt(item['id']);
+      for (final item in widget.items) {
+        final itemId = asInt(item['id']);
+        final qty = widget.receivingMap[itemId] ?? 0;
+        double price = asDouble(item['unitPrice'] ?? item['unit_price']);
 
-    final qty = widget.receivingMap[itemId] ?? 0;
+        final controller = widget.priceControllers[itemId];
+        if (controller != null) {
+          final parsed = double.tryParse(controller.text.trim());
+          if (parsed != null) {
+            price = parsed;
+          }
+        }
 
-    double price = asDouble(item['unitPrice']);
-
-    final controller = widget.priceControllers[itemId];
-    if (controller != null) {
-      final parsed = double.tryParse(controller.text.trim());
-      if (parsed != null) {
-        price = parsed;
+        calculatedGrandTotal += qty * price;
       }
     }
-
-    calculatedGrandTotal += qty * price;
-  }
-}
 
     return Container(
       margin: EdgeInsets.only(bottom: R.sp(context, AppSpacing.sm)),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusLg)),
+        borderRadius: BorderRadius.circular(
+          R.radius(context, AppSizes.radiusLg),
+        ),
         border: Border.all(
-          color: widget.isExpanded ? AppColors.primary.withValues(alpha: 0.35) : AppColors.border,
+          color: widget.isExpanded
+              ? AppColors.primary.withValues(alpha: 0.35)
+              : AppColors.border,
         ),
         boxShadow: [
           BoxShadow(
@@ -706,7 +830,9 @@ if (!widget.isCompleted && widget.items.isNotEmpty) {
             color: Colors.transparent,
             child: InkWell(
               onTap: widget.onToggle,
-              borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusLg)),
+              borderRadius: BorderRadius.circular(
+                R.radius(context, AppSizes.radiusLg),
+              ),
               child: Padding(
                 padding: EdgeInsets.all(R.sp(context, AppSpacing.lg)),
                 child: Column(
@@ -745,7 +871,9 @@ if (!widget.isCompleted && widget.items.isNotEmpty) {
                           SizedBox(width: R.sp(context, AppSpacing.sm)),
                           Text(
                             total,
-                            style: AppTextStyles.cardValue.copyWith(fontSize: R.fs(context, 14)),
+                            style: AppTextStyles.cardValue.copyWith(
+                              fontSize: R.fs(context, 14),
+                            ),
                           ),
                         ],
                       ],
@@ -753,15 +881,20 @@ if (!widget.isCompleted && widget.items.isNotEmpty) {
                     SizedBox(height: R.sp(context, AppSpacing.xs)),
                     Row(
                       children: [
-                        Icon(Icons.storefront_outlined,
-                            size: R.icon(context, 13), color: AppColors.textSecondary),
+                        Icon(
+                          Icons.storefront_outlined,
+                          size: R.icon(context, 13),
+                          color: AppColors.textSecondary,
+                        ),
                         SizedBox(width: R.sp(context, 4)),
                         Expanded(
                           child: Text(
                             supplier,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 12)),
+                            style: AppTextStyles.small.copyWith(
+                              fontSize: R.fs(context, 12),
+                            ),
                           ),
                         ),
                         SizedBox(width: R.sp(context, AppSpacing.sm)),
@@ -774,7 +907,9 @@ if (!widget.isCompleted && widget.items.isNotEmpty) {
                               ),
                               decoration: BoxDecoration(
                                 color: AppColors.orange.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusSm)),
+                                borderRadius: BorderRadius.circular(
+                                  R.radius(context, AppSizes.radiusSm),
+                                ),
                               ),
                               child: Text(
                                 'Partially Received',
@@ -804,7 +939,9 @@ if (!widget.isCompleted && widget.items.isNotEmpty) {
                               ),
                               decoration: BoxDecoration(
                                 color: AppColors.green.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusSm)),
+                                borderRadius: BorderRadius.circular(
+                                  R.radius(context, AppSizes.radiusSm),
+                                ),
                               ),
                               child: Text(
                                 'RECEIVED',
@@ -834,87 +971,87 @@ if (!widget.isCompleted && widget.items.isNotEmpty) {
             ),
           ),
 
-// ── Expanded Content ──
-SizeTransition(
-  sizeFactor: _heightFactor,
-  child: widget.isLoading
-      ? Padding(
-          padding: EdgeInsets.all(R.sp(context, AppSpacing.lg)),
-          child: const Center(child: CircularProgressIndicator()),
-        )
-      : widget.items.isEmpty
-          ? Padding(
-              padding: EdgeInsets.all(R.sp(context, AppSpacing.lg)),
-              child: Text(
-                'No items in this order',
-                style: AppTextStyles.small.copyWith(
-                  fontSize: R.fs(context, 12),
-                ),
-              ),
-            )
-          : Padding(
-              padding: EdgeInsets.fromLTRB(
-                R.sp(context, AppSpacing.lg),
-                0,
-                R.sp(context, AppSpacing.lg),
-                R.sp(context, AppSpacing.md),
-              ),
-              child: Column(
-                children: [
-                  Divider(
-                    color: AppColors.border,
-                    height: R.sp(context, AppSpacing.md),
-                  ),
-
-                  ...widget.items.map((item) {
-                    final itemId = asInt(item['id']);
-                    final outstanding = widget.outstandingOf(item);
-
-                    if (widget.isCompleted || outstanding <= 0) {
-                      return _CompletedItemTile(
-                        item: item,
-                        onShowPriceHistory: widget.onShowPriceHistory,
-                      );
-                    }
-
-                    return _ReceivingItemTile(
-                      item: item,
-                      outstanding: outstanding,
-                      currentQty: widget.receivingMap[itemId] ?? 0,
-                      priceController: widget.priceControllers[itemId],
-                      onQtyChanged: (newQty) =>
-                          widget.onQtyChanged(itemId, newQty),
-                      onShowPriceHistory: widget.onShowPriceHistory,
-                    );
-                  }).toList(),
-
-                  const SizedBox(height: 6),
-
-                  // ── Grand Total Only ──
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: R.sp(context, AppSpacing.md),
-                      vertical: R.sp(context, 10),
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.background,
-                      borderRadius: BorderRadius.circular(
-                        R.radius(context, AppSizes.radiusMd),
+          // ── Expanded Content ──
+          SizeTransition(
+            sizeFactor: _heightFactor,
+            child: widget.isLoading
+                ? Padding(
+                    padding: EdgeInsets.all(R.sp(context, AppSpacing.lg)),
+                    child: const Center(child: CircularProgressIndicator()),
+                  )
+                : widget.items.isEmpty
+                ? Padding(
+                    padding: EdgeInsets.all(R.sp(context, AppSpacing.lg)),
+                    child: Text(
+                      'No items in this order',
+                      style: AppTextStyles.small.copyWith(
+                        fontSize: R.fs(context, 12),
                       ),
-                      border: Border.all(color: AppColors.border),
                     ),
-                    child: _SummaryRow(
-                      label: 'Grand Total',
-                      value: widget.isCompleted
-                          ? grandTotal
-                          : calculatedGrandTotal,
-                      isBold: true,
+                  )
+                : Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      R.sp(context, AppSpacing.lg),
+                      0,
+                      R.sp(context, AppSpacing.lg),
+                      R.sp(context, AppSpacing.md),
+                    ),
+                    child: Column(
+                      children: [
+                        Divider(
+                          color: AppColors.border,
+                          height: R.sp(context, AppSpacing.md),
+                        ),
+
+                        ...widget.items.map((item) {
+                          final itemId = asInt(item['id']);
+                          final outstanding = widget.outstandingOf(item);
+
+                          if (widget.isCompleted || outstanding <= 0) {
+                            return _CompletedItemTile(
+                              item: item,
+                              onShowPriceHistory: widget.onShowPriceHistory,
+                            );
+                          }
+
+                          return _ReceivingItemTile(
+                            item: item,
+                            outstanding: outstanding,
+                            currentQty: widget.receivingMap[itemId] ?? 0,
+                            priceController: widget.priceControllers[itemId],
+                            onQtyChanged: (newQty) =>
+                                widget.onQtyChanged(itemId, newQty),
+                            onShowPriceHistory: widget.onShowPriceHistory,
+                          );
+                        }).toList(),
+
+                        const SizedBox(height: 6),
+
+                        // ── Grand Total Only ──
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: R.sp(context, AppSpacing.md),
+                            vertical: R.sp(context, 10),
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.background,
+                            borderRadius: BorderRadius.circular(
+                              R.radius(context, AppSizes.radiusMd),
+                            ),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: _SummaryRow(
+                            label: 'Grand Total',
+                            value: widget.isCompleted
+                                ? grandTotal
+                                : calculatedGrandTotal,
+                            isBold: true,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
-),
+          ),
         ],
       ),
     );
@@ -947,7 +1084,9 @@ class _SummaryRow extends StatelessWidget {
             style: AppTextStyles.small.copyWith(
               fontSize: R.fs(context, 12),
               fontWeight: isBold ? FontWeight.w600 : FontWeight.w400,
-              color: isBold ? AppColors.textPrimaryDark : AppColors.textSecondary,
+              color: isBold
+                  ? AppColors.textPrimaryDark
+                  : AppColors.textSecondary,
             ),
           ),
           Text(
@@ -955,7 +1094,9 @@ class _SummaryRow extends StatelessWidget {
             style: AppTextStyles.small.copyWith(
               fontSize: R.fs(context, 13),
               fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
-              color: isBold ? AppColors.textPrimaryDark : AppColors.textSecondary,
+              color: isBold
+                  ? AppColors.textPrimaryDark
+                  : AppColors.textSecondary,
             ),
           ),
         ],
@@ -989,8 +1130,8 @@ class _ReceivingItemTile extends StatelessWidget {
     final name = asStr(item['name']);
     final sku = asStr(item['sku']);
     final unit = asStr(item['unit'], 'pcs');
-    final productId = asInt(item['productId']);
-    final unitPrice = asDouble(item['unitPrice']);
+    final productId = asInt(item['productId'] ?? item['product_id']);
+    final unitPrice = asDouble(item['unitPrice'] ?? item['unit_price']);
 
     double currentPrice = unitPrice;
     if (priceController != null) {
@@ -1005,10 +1146,14 @@ class _ReceivingItemTile extends StatelessWidget {
     return Container(
       margin: EdgeInsets.only(bottom: R.sp(context, AppSpacing.sm)),
       padding: EdgeInsets.symmetric(
-          horizontal: R.sp(context, AppSpacing.md), vertical: R.sp(context, AppSpacing.sm)),
+        horizontal: R.sp(context, AppSpacing.md),
+        vertical: R.sp(context, AppSpacing.sm),
+      ),
       decoration: BoxDecoration(
         color: AppColors.background,
-        borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
+        borderRadius: BorderRadius.circular(
+          R.radius(context, AppSizes.radiusMd),
+        ),
         border: Border.all(color: AppColors.border),
       ),
       child: Column(
@@ -1028,12 +1173,42 @@ class _ReceivingItemTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              IconButton(
-                icon: Icon(Icons.history, size: R.icon(context, 16), color: AppColors.primary),
-                onPressed: () => onShowPriceHistory(productId, name),
-                tooltip: 'View price history',
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
+              GestureDetector(
+                onTap: () => onShowPriceHistory(productId, name),
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: R.sp(context, AppSpacing.xs + 2),
+                    vertical: R.sp(context, 3),
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.orange.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(
+                      R.radius(context, AppSizes.radiusSm),
+                    ),
+                    border: Border.all(
+                      color: AppColors.orange.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.history_outlined,
+                        size: R.icon(context, 12),
+                        color: Colors.orange,
+                      ),
+                      SizedBox(width: R.sp(context, 3)),
+                      Text(
+                        'Price',
+                        style: TextStyle(
+                          fontSize: R.fs(context, 10.5),
+                          fontWeight: FontWeight.w600,
+                          color: Colors.orange,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -1043,16 +1218,22 @@ class _ReceivingItemTile extends StatelessWidget {
               if (sku.isNotEmpty) ...[
                 Text(
                   'SKU: $sku',
-                  style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 11)),
+                  style: AppTextStyles.small.copyWith(
+                    fontSize: R.fs(context, 11),
+                  ),
                 ),
                 SizedBox(width: R.sp(context, AppSpacing.sm)),
               ],
               Container(
                 padding: EdgeInsets.symmetric(
-                    horizontal: R.sp(context, 6), vertical: R.sp(context, 2)),
+                  horizontal: R.sp(context, 6),
+                  vertical: R.sp(context, 2),
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusSm)),
+                  borderRadius: BorderRadius.circular(
+                    R.radius(context, AppSizes.radiusSm),
+                  ),
                 ),
                 child: Text(
                   'Bal: $outstanding $unit',
@@ -1066,163 +1247,167 @@ class _ReceivingItemTile extends StatelessWidget {
             ],
           ),
           SizedBox(height: R.sp(context, AppSpacing.sm)),
-          // Price and quantity row
-Row(
-  crossAxisAlignment: CrossAxisAlignment.end,
-  children: [
-    // ---------------- Unit Price ----------------
-    Expanded(
-      flex: 5,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Unit Price (₹)',
-            style: AppTextStyles.cardTitle.copyWith(
-              fontSize: R.fs(context, 10),
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          TextFormField(
-            controller: priceController,
-            onChanged: (_) {
-              (context as Element).markNeedsBuild();
-            },
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
-              isDense: true,
-              filled: true,
-              fillColor: AppColors.card,
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: R.sp(context, 12),
-                vertical: R.sp(context, 10),
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(
-                  R.radius(context, AppSizes.radiusSm),
-                ),
-                borderSide: BorderSide(color: AppColors.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(
-                  R.radius(context, AppSizes.radiusSm),
-                ),
-                borderSide: BorderSide(color: AppColors.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(
-                  R.radius(context, AppSizes.radiusSm),
-                ),
-                borderSide: BorderSide(
-                  color: AppColors.primary,
-                  width: 1.3,
-                ),
-              ),
-            ),
-            style: TextStyle(
-              fontSize: R.fs(context, 15),
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimaryDark,
-            ),
-          ),
-        ],
-      ),
-    ),
-
-    SizedBox(width: R.sp(context, 12)),
-
-    // ---------------- Quantity ----------------
-    SizedBox(
-      width: 90,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text(
-            'Qty',
-            style: AppTextStyles.cardTitle.copyWith(
-              fontSize: R.fs(context, 10),
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 6),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: currentQty > 0
-                    ? () => onQtyChanged(currentQty - 1)
-                    : null,
-                child: Icon(
-                  Icons.remove_circle_outline,
-                  size: 22,
-                  color: currentQty > 0
-                      ? AppColors.primary
-                      : AppColors.textSecondary.withValues(alpha: 0.4),
+              // ---------------- Unit Price ----------------
+              Expanded(
+                flex: 5,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Unit Price (₹)',
+                      style: AppTextStyles.cardTitle.copyWith(
+                        fontSize: R.fs(context, 10),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    TextFormField(
+                      controller: priceController,
+                      onChanged: (_) {
+                        (context as Element).markNeedsBuild();
+                      },
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        filled: true,
+                        fillColor: AppColors.card,
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: R.sp(context, 12),
+                          vertical: R.sp(context, 10),
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(
+                            R.radius(context, AppSizes.radiusSm),
+                          ),
+                          borderSide: BorderSide(color: AppColors.border),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(
+                            R.radius(context, AppSizes.radiusSm),
+                          ),
+                          borderSide: BorderSide(color: AppColors.border),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(
+                            R.radius(context, AppSizes.radiusSm),
+                          ),
+                          borderSide: BorderSide(
+                            color: AppColors.primary,
+                            width: 1.3,
+                          ),
+                        ),
+                      ),
+                      style: TextStyle(
+                        fontSize: R.fs(context, 15),
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimaryDark,
+                      ),
+                    ),
+                  ],
                 ),
               ),
 
-              Text(
-                '$currentQty',
-                style: AppTextStyles.cardValue.copyWith(
-                  fontSize: R.fs(context, 15),
-                  fontWeight: FontWeight.w600,
+              SizedBox(width: R.sp(context, 12)),
+
+              // ---------------- Quantity ----------------
+              SizedBox(
+                width: 90,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Qty',
+                      style: AppTextStyles.cardTitle.copyWith(
+                        fontSize: R.fs(context, 10),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: currentQty > 0
+                              ? () => onQtyChanged(currentQty - 1)
+                              : null,
+                          child: Icon(
+                            Icons.remove_circle_outline,
+                            size: 22,
+                            color: currentQty > 0
+                                ? AppColors.primary
+                                : AppColors.textSecondary.withValues(
+                                    alpha: 0.4,
+                                  ),
+                          ),
+                        ),
+
+                        Text(
+                          '$currentQty',
+                          style: AppTextStyles.cardValue.copyWith(
+                            fontSize: R.fs(context, 15),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+
+                        InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: currentQty < outstanding
+                              ? () => onQtyChanged(currentQty + 1)
+                              : null,
+                          child: Icon(
+                            Icons.add_circle_outline,
+                            size: 22,
+                            color: currentQty < outstanding
+                                ? AppColors.primary
+                                : AppColors.textSecondary.withValues(
+                                    alpha: 0.4,
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
 
-              InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: currentQty < outstanding
-                    ? () => onQtyChanged(currentQty + 1)
-                    : null,
-                child: Icon(
-                  Icons.add_circle_outline,
-                  size: 22,
-                  color: currentQty < outstanding
-                      ? AppColors.primary
-                      : AppColors.textSecondary.withValues(alpha: 0.4),
+              const Spacer(),
+
+              // ---------------- Total ----------------
+              SizedBox(
+                width: 60,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Total',
+                      style: AppTextStyles.small.copyWith(
+                        fontSize: R.fs(context, 9),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        '₹${lineTotal.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: R.fs(context, 15),
+                          color: AppColors.textPrimaryDark,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-        ],
-      ),
-    ),
-
-    const Spacer(),
-
-    // ---------------- Total ----------------
-    SizedBox(
-      width: 60,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(
-            'Total',
-            style: AppTextStyles.small.copyWith(
-              fontSize: R.fs(context, 9),
-            ),
-          ),
-          const SizedBox(height: 2),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerRight,
-            child: Text(
-              '₹${lineTotal.toStringAsFixed(2)}',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: R.fs(context, 15),
-                color: AppColors.textPrimaryDark,
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
-  ],
-),
         ],
       ),
     );
@@ -1230,7 +1415,7 @@ Row(
 }
 
 // ============================================================================
-// Completed Item Tile – shows actual received price with optional note
+// Completed Item Tile
 // ============================================================================
 class _CompletedItemTile extends StatelessWidget {
   final Map<String, dynamic> item;
@@ -1244,27 +1429,41 @@ class _CompletedItemTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final name = asStr(item['name']);
-    final receivedQty = asInt(item['receivedQty']);
+    final receivedQty = asInt(item['receivedQty'] ?? item['quantity_received']);
     final unit = asStr(item['unit'], 'pcs');
-    final productId = asInt(item['productId']);
-    // Use actual received unit price if available
-    final unitPrice = asDouble(item['actualReceivedUnitPrice'] ?? item['unitPrice'] ?? 0.0);
-    final orderedPrice = asDouble(item['unitPrice'] ?? 0.0);
+    final productId = asInt(item['productId'] ?? item['product_id']);
+    final unitPrice = asDouble(
+      item['actualReceivedUnitPrice'] ??
+          item['unitPrice'] ??
+          item['unit_price'] ??
+          0.0,
+    );
+    final orderedPrice = asDouble(
+      item['unitPrice'] ?? item['unit_price'] ?? 0.0,
+    );
     final totalReceived = receivedQty * unitPrice;
     final priceDiffers = (orderedPrice - unitPrice).abs() > 0.01;
 
     return Container(
       margin: EdgeInsets.only(bottom: R.sp(context, AppSpacing.sm)),
       padding: EdgeInsets.symmetric(
-          horizontal: R.sp(context, AppSpacing.md), vertical: R.sp(context, AppSpacing.sm)),
+        horizontal: R.sp(context, AppSpacing.md),
+        vertical: R.sp(context, AppSpacing.sm),
+      ),
       decoration: BoxDecoration(
         color: AppColors.green.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
+        borderRadius: BorderRadius.circular(
+          R.radius(context, AppSizes.radiusMd),
+        ),
         border: Border.all(color: AppColors.green.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-          Icon(Icons.check_circle, color: AppColors.green, size: R.icon(context, 18)),
+          Icon(
+            Icons.check_circle,
+            color: AppColors.green,
+            size: R.icon(context, 18),
+          ),
           SizedBox(width: R.sp(context, AppSpacing.sm)),
           Expanded(
             child: Column(
@@ -1284,12 +1483,42 @@ class _CompletedItemTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    IconButton(
-                      icon: Icon(Icons.history, size: R.icon(context, 16), color: AppColors.primary),
-                      onPressed: () => onShowPriceHistory(productId, name),
-                      tooltip: 'View price history',
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
+                    GestureDetector(
+                      onTap: () => onShowPriceHistory(productId, name),
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: R.sp(context, AppSpacing.xs + 2),
+                          vertical: R.sp(context, 3),
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.orange.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(
+                            R.radius(context, AppSizes.radiusSm),
+                          ),
+                          border: Border.all(
+                            color: AppColors.orange.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.history,
+                              size: R.icon(context, 12),
+                              color: AppColors.orange,
+                            ),
+                            SizedBox(width: R.sp(context, 3)),
+                            Text(
+                              'Price',
+                              style: TextStyle(
+                                fontSize: R.fs(context, 10.5),
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.orange,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -1313,10 +1542,14 @@ class _CompletedItemTile extends StatelessWidget {
           ),
           Container(
             padding: EdgeInsets.symmetric(
-                horizontal: R.sp(context, AppSpacing.sm), vertical: R.sp(context, 3)),
+              horizontal: R.sp(context, AppSpacing.sm),
+              vertical: R.sp(context, 3),
+            ),
             decoration: BoxDecoration(
               color: AppColors.green.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusSm)),
+              borderRadius: BorderRadius.circular(
+                R.radius(context, AppSizes.radiusSm),
+              ),
             ),
             child: Text(
               '$receivedQty $unit received',
@@ -1334,16 +1567,13 @@ class _CompletedItemTile extends StatelessWidget {
 }
 
 // ============================================================================
-// Price History Modal
+// Price History Modal (Fixed Horizontal Overflow)
 // ============================================================================
 class _PriceHistoryModal extends StatelessWidget {
   final String productName;
   final List<Map<String, dynamic>> history;
 
-  const _PriceHistoryModal({
-    required this.productName,
-    required this.history,
-  });
+  const _PriceHistoryModal({required this.productName, required this.history});
 
   @override
   Widget build(BuildContext context) {
@@ -1352,7 +1582,9 @@ class _PriceHistoryModal extends StatelessWidget {
       padding: EdgeInsets.all(R.sp(context, AppSpacing.lg)),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppSizes.radiusXl)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppSizes.radiusXl),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1386,7 +1618,8 @@ class _PriceHistoryModal extends StatelessWidget {
                     itemBuilder: (ctx, index) {
                       final entry = history[index];
                       final date = entry['date']?.toString() ?? '';
-                      final supplier = entry['supplier']?.toString() ?? 'Supplier';
+                      final supplier =
+                          entry['supplier']?.toString() ?? 'Supplier';
                       final unitPrice = asDouble(entry['unit_price']);
                       final quantity = asInt(entry['quantity']);
                       final poNumber = entry['po_number']?.toString() ?? 'PO-';
@@ -1395,22 +1628,35 @@ class _PriceHistoryModal extends StatelessWidget {
                       final total = unitPrice * quantity;
 
                       return Container(
-                        margin: EdgeInsets.only(bottom: R.sp(context, AppSpacing.sm)),
+                        margin: EdgeInsets.only(
+                          bottom: R.sp(context, AppSpacing.sm),
+                        ),
                         padding: EdgeInsets.all(R.sp(context, AppSpacing.md)),
                         decoration: BoxDecoration(
-                          color: isReceived ? AppColors.green.withValues(alpha: 0.05) : AppColors.background,
-                          borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
+                          color: isReceived
+                              ? AppColors.green.withValues(alpha: 0.05)
+                              : AppColors.background,
+                          borderRadius: BorderRadius.circular(
+                            R.radius(context, AppSizes.radiusMd),
+                          ),
                           border: Border.all(
-                            color: isReceived ? AppColors.green.withValues(alpha: 0.3) : AppColors.border,
+                            color: isReceived
+                                ? AppColors.green.withValues(alpha: 0.3)
+                                : AppColors.border,
                           ),
                         ),
                         child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(
+                                  Wrap(
+                                    crossAxisAlignment:
+                                        WrapCrossAlignment.center,
+                                    spacing: R.sp(context, AppSpacing.xs),
+                                    runSpacing: R.sp(context, 2),
                                     children: [
                                       Text(
                                         poNumber,
@@ -1420,62 +1666,55 @@ class _PriceHistoryModal extends StatelessWidget {
                                           color: AppColors.textPrimaryDark,
                                         ),
                                       ),
-                                      SizedBox(width: R.sp(context, AppSpacing.sm)),
                                       Text(
                                         date,
-                                        style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 11)),
+                                        style: AppTextStyles.small.copyWith(
+                                          fontSize: R.fs(context, 11),
+                                        ),
                                       ),
-                                      if (isReceived) ...[
-                                        SizedBox(width: R.sp(context, AppSpacing.sm)),
-                                        Container(
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: R.sp(context, 6),
-                                            vertical: R.sp(context, 1),
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.green.withValues(alpha: 0.2),
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: Text(
-                                            'Received',
-                                            style: TextStyle(
-                                              fontSize: R.fs(context, 9),
-                                              color: AppColors.green,
-                                              fontWeight: FontWeight.w700,
-                                            ),
+                                      Container(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: R.sp(context, 6),
+                                          vertical: R.sp(context, 1),
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: isReceived
+                                              ? AppColors.green.withValues(
+                                                  alpha: 0.2,
+                                                )
+                                              : AppColors.primary.withValues(
+                                                  alpha: 0.1,
+                                                ),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
                                           ),
                                         ),
-                                      ] else ...[
-                                        SizedBox(width: R.sp(context, AppSpacing.sm)),
-                                        Container(
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: R.sp(context, 6),
-                                            vertical: R.sp(context, 1),
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.primary.withValues(alpha: 0.1),
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: Text(
-                                            'Ordered',
-                                            style: TextStyle(
-                                              fontSize: R.fs(context, 9),
-                                              color: AppColors.primary,
-                                              fontWeight: FontWeight.w700,
-                                            ),
+                                        child: Text(
+                                          isReceived ? 'Received' : 'Ordered',
+                                          style: TextStyle(
+                                            fontSize: R.fs(context, 9),
+                                            color: isReceived
+                                                ? AppColors.green
+                                                : AppColors.primary,
+                                            fontWeight: FontWeight.w700,
                                           ),
                                         ),
-                                      ],
+                                      ),
                                     ],
                                   ),
-                                  SizedBox(height: R.sp(context, 2)),
+                                  SizedBox(height: R.sp(context, 4)),
                                   Text(
                                     supplier,
-                                    style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 12)),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTextStyles.small.copyWith(
+                                      fontSize: R.fs(context, 12),
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
+                            SizedBox(width: R.sp(context, AppSpacing.sm)),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
@@ -1489,7 +1728,9 @@ class _PriceHistoryModal extends StatelessWidget {
                                 ),
                                 Text(
                                   '$quantity units · ₹${total.toStringAsFixed(2)}',
-                                  style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 11)),
+                                  style: AppTextStyles.small.copyWith(
+                                    fontSize: R.fs(context, 11),
+                                  ),
                                 ),
                               ],
                             ),

@@ -1,110 +1,112 @@
-import 'dart:convert';
-import 'package:sqflite/sqflite.dart';
+// ============================================================
+// lib/features/settings/data/datasources/printers_hardware/storage/
+// printer_local_datasource.dart
+// ============================================================
 
-import '../../../models/printers_hardware/printer/printer_device_model.dart';
-import '../../../models/printers_hardware/printer/printer_configuration_model.dart';
-import '../../../models/printers_hardware/printer/printer_capability_model.dart';
- // adjust to actual path
+
+import '../../..../../../models/printers_hardware/printer/printer_device_model.dart';
 
 abstract class PrinterLocalDataSource {
-  /// Save a printer (insert or update if exists).
+  /// Save a printer.
   Future<void> savePrinter(PrinterDeviceModel printer);
 
   /// Get all saved printers.
   Future<List<PrinterDeviceModel>> getSavedPrinters();
 
-  /// Get the default printer (the one marked as default).
+  /// Get the default printer.
   Future<PrinterDeviceModel?> getDefaultPrinter();
 
-  /// Remove a single saved printer.
+  /// Delete one saved printer.
   Future<void> deletePrinter(String printerId);
 
-  /// Mark the given printer as the default one.
+  /// Mark one printer as default.
   Future<void> setDefaultPrinter(String printerId);
 
-  /// Clear all saved printers.
+  /// Remove all saved printers.
   Future<void> clearAllPrinters();
 }
 
-class PrinterLocalDataSourceImpl implements PrinterLocalDataSource {
-  final Database database;
 
-  PrinterLocalDataSourceImpl({required this.database});
+/// ============================================================
+/// In-memory printer datasource
+///
+/// IMPORTANT:
+
+///
+/// Persistent printer configuration is handled by the backend.
+/// This class only maintains the printer state required during
+/// the current application session.
+/// ============================================================
+
+class PrinterLocalDataSourceImpl
+    implements PrinterLocalDataSource {
+  final Map<String, PrinterDeviceModel> _printers = {};
+
+  String? _defaultPrinterId;
 
   @override
-  Future<void> savePrinter(PrinterDeviceModel printer) async {
-    await database.insert(
-      'printers',
-      {
-        'id': printer.id,
-        'name': printer.name,
-        'configuration': jsonEncode(
-          PrinterConfigurationModel.fromEntity(printer.configuration).toJson(),
-        ),
-        'capabilities': jsonEncode(
-          PrinterCapabilityModel.fromEntity(printer.capabilities).toJson(),
-        ),
-        'isDefault': 0, // we'll handle default separately
-        'lastConnected': DateTime.now().toIso8601String(),
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+  Future<void> savePrinter(
+    PrinterDeviceModel printer,
+  ) async {
+    _printers[printer.id] = printer;
+
+    // First saved printer becomes default automatically.
+    _defaultPrinterId ??= printer.id;
   }
 
   @override
   Future<List<PrinterDeviceModel>> getSavedPrinters() async {
-    final List<Map<String, dynamic>> maps = await database.query('printers');
-    return maps.map((map) {
-      final configJson = jsonDecode(map['configuration'] as String);
-      final capJson = jsonDecode(map['capabilities'] as String);
-      return PrinterDeviceModel(
-        id: map['id'] as String,
-        name: map['name'] as String,
-        configuration: PrinterConfigurationModel.fromJson(configJson),
-        capabilities: PrinterCapabilityModel.fromJson(capJson),
-      );
-    }).toList();
+    final printers = _printers.values.toList();
+
+    printers.sort((a, b) {
+      if (a.id == _defaultPrinterId) return -1;
+      if (b.id == _defaultPrinterId) return 1;
+
+      return a.name.toLowerCase().compareTo(
+            b.name.toLowerCase(),
+          );
+    });
+
+    return List.unmodifiable(printers);
   }
 
   @override
   Future<PrinterDeviceModel?> getDefaultPrinter() async {
-    final maps = await database.query(
-      'printers',
-      where: 'isDefault = 1',
-      limit: 1,
-    );
-    if (maps.isEmpty) return null;
-    final map = maps.first;
-    final configJson = jsonDecode(map['configuration'] as String);
-    final capJson = jsonDecode(map['capabilities'] as String);
-    return PrinterDeviceModel(
-      id: map['id'] as String,
-      name: map['name'] as String,
-      configuration: PrinterConfigurationModel.fromJson(configJson),
-      capabilities: PrinterCapabilityModel.fromJson(capJson),
-    );
+    final id = _defaultPrinterId;
+
+    if (id == null) {
+      return null;
+    }
+
+    return _printers[id];
   }
 
   @override
-  Future<void> deletePrinter(String printerId) async {
-    await database.delete('printers', where: 'id = ?', whereArgs: [printerId]);
+  Future<void> deletePrinter(
+    String printerId,
+  ) async {
+    _printers.remove(printerId);
+
+    if (_defaultPrinterId == printerId) {
+      _defaultPrinterId =
+          _printers.isEmpty ? null : _printers.keys.first;
+    }
   }
 
   @override
-  Future<void> setDefaultPrinter(String printerId) async {
-    await database.transaction((txn) async {
-      await txn.update('printers', {'isDefault': 0});
-      await txn.update(
-        'printers',
-        {'isDefault': 1},
-        where: 'id = ?',
-        whereArgs: [printerId],
-      );
-    });
+  Future<void> setDefaultPrinter(
+    String printerId,
+  ) async {
+    if (!_printers.containsKey(printerId)) {
+      return;
+    }
+
+    _defaultPrinterId = printerId;
   }
 
   @override
   Future<void> clearAllPrinters() async {
-    await database.delete('printers');
+    _printers.clear();
+    _defaultPrinterId = null;
   }
 }

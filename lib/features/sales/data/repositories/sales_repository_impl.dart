@@ -18,4 +18,21 @@ class SalesRepositoryImpl implements SalesRepository {
   Future<SaleModel?> getInvoice(int saleId) async {
     return await remoteDataSource.getInvoiceFromServer(saleId);
   }
+
+  @override
+  Future<Map<String, dynamic>> addPayment({
+    required int saleId,
+    required String paymentMethod,
+    required double amount,
+    String? referenceNumber,
+    String? remarks,
+  }) async {
+    return await remoteDataSource.addPaymentOnServer(
+      saleId: saleId,
+      paymentMethod: paymentMethod,
+      amount: amount,
+      referenceNumber: referenceNumber,
+      remarks: remarks,
+    );
+  }
 }

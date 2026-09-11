@@ -1,14 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/utils/responsive_helper.dart';
+import '../../../../core/utils/validators.dart';
 import '../../data/models/customer_model.dart';
 import '../provider/customer_provider.dart';
 
 class AddCustomerScreen extends ConsumerStatefulWidget {
-  const AddCustomerScreen({super.key});
+  /// When true, on a successful save this screen pops with the newly
+  /// created [CustomerModel] (including its server-assigned id) instead
+  /// of the default `true`.
+  ///
+  /// Used by the Payment screen's "Add new customer" shortcut so the
+  /// customer that was just created can be auto-selected back on the
+  /// Payment screen. Defaults to `false` so every existing caller
+  /// (e.g. the Customers screen) keeps behaving exactly as before.
+  final bool returnCreatedCustomer;
+
+  const AddCustomerScreen({
+    super.key,
+    this.returnCreatedCustomer = false,
+  });
 
   @override
   ConsumerState<AddCustomerScreen> createState() => _AddCustomerScreenState();
@@ -21,15 +36,441 @@ class _AddCustomerScreenState extends ConsumerState<AddCustomerScreen> {
   final emailCtrl = TextEditingController();
   final gstCtrl = TextEditingController();
   final addressCtrl = TextEditingController();
-  final cityCtrl = TextEditingController();
-  final stateCtrl = TextEditingController();
-  final countryCtrl = TextEditingController(text: "India");
-  final postalCtrl = TextEditingController();
   final openBalanceCtrl = TextEditingController(text: "0");
-  final notesCtrl = TextEditingController();
 
-  final List<String> statuses = ["ACTIVE", "INACTIVE"];
-  String _selectedStatus = "ACTIVE";
+  final Map<String, String?> _errors = {};
+
+  bool _isSaving = false;
+
+  // ============================================================
+  // ERROR HANDLING
+  // ============================================================
+
+  void _setError(String field, String? error) {
+    if (!mounted) return;
+
+    setState(() {
+      _errors[field] = error;
+    });
+  }
+
+  String? _getError(String field) {
+    return _errors[field];
+  }
+
+  // ============================================================
+  // FIELD VALIDATION
+  // ============================================================
+
+  String? _validateField(String field, String value) {
+    switch (field) {
+      case 'name':
+        return Validators.validateName(
+          value,
+          fieldName: 'Customer name',
+          minLength: 3,
+        );
+
+      case 'phone':
+        return Validators.validatePhone(
+          value,
+          fieldName: 'Phone number',
+        );
+
+      case 'alternatePhone':
+        return Validators.validateOptionalPhone(
+          value,
+          fieldName: 'Alternate phone number',
+        );
+
+      case 'email':
+        return Validators.validateOptionalEmail(value);
+
+      case 'gst':
+        return Validators.validateGstin(value);
+
+      case 'address':
+        final addressError = Validators.validateAddress(
+          value,
+          required: false,
+        );
+
+        if (addressError != null) {
+          return addressError;
+        }
+
+        return Validators.validateMaxLength(
+          value,
+          max: 500,
+          fieldName: 'Address',
+        );
+
+      case 'openingBalance':
+        return Validators.validateCustomerAmount(
+          value,
+          fieldName: 'Opening balance',
+          required: true,
+        );
+
+      default:
+        return null;
+    }
+  }
+
+  void _validateOnChange(String field, String value) {
+    final error = _validateField(field, value);
+    _setError(field, error);
+  }
+
+  bool _validateAllFields() {
+    final validationResults = <String, String?>{
+      'name': _validateField('name', nameCtrl.text),
+      'phone': _validateField('phone', phoneCtrl.text),
+      'alternatePhone': _validateField(
+        'alternatePhone',
+        altPhoneCtrl.text,
+      ),
+      'email': _validateField(
+        'email',
+        emailCtrl.text,
+      ),
+      'gst': _validateField(
+        'gst',
+        gstCtrl.text,
+      ),
+      'address': _validateField(
+        'address',
+        addressCtrl.text,
+      ),
+      'openingBalance': _validateField(
+        'openingBalance',
+        openBalanceCtrl.text,
+      ),
+    };
+
+    setState(() {
+      _errors
+        ..clear()
+        ..addAll(validationResults);
+    });
+
+    return validationResults.values.every(
+      (error) => error == null,
+    );
+  }
+
+  // ============================================================
+  // DUPLICATE VALIDATION
+  // ============================================================
+
+  Future<String?> _checkDuplicatePhone() async {
+    final phone = Validators.normalizeDigits(phoneCtrl.text);
+
+    if (phone.isEmpty) {
+      return null;
+    }
+
+    try {
+      final customers = await ref.read(allCustomersProvider.future);
+
+      final duplicate = customers.any(
+        (customer) =>
+            Validators.normalizeDigits(customer.phone) == phone,
+      );
+
+      if (duplicate) {
+        return 'This phone number is already registered to another customer.';
+      }
+    } catch (_) {
+      // Backend remains the final duplicate validation authority.
+    }
+
+    return null;
+  }
+
+  Future<String?> _checkDuplicateAlternatePhone() async {
+    final alternatePhone = Validators.normalizeDigits(
+      altPhoneCtrl.text,
+    );
+
+    if (alternatePhone.isEmpty) {
+      return null;
+    }
+
+    final primaryPhone = Validators.normalizeDigits(
+      phoneCtrl.text,
+    );
+
+    if (alternatePhone == primaryPhone) {
+      return 'Alternate phone number must be different from the primary phone number.';
+    }
+
+    try {
+      final customers = await ref.read(allCustomersProvider.future);
+
+      final duplicate = customers.any(
+        (customer) {
+          final existingPhone = Validators.normalizeDigits(
+            customer.phone,
+          );
+
+          final existingAlternate = Validators.normalizeDigits(
+            customer.alternatePhone,
+          );
+
+          return existingPhone == alternatePhone ||
+              existingAlternate == alternatePhone;
+        },
+      );
+
+      if (duplicate) {
+        return 'This alternate phone number is already registered to another customer.';
+      }
+    } catch (_) {
+      // Backend remains final authority.
+    }
+
+    return null;
+  }
+
+  Future<String?> _checkDuplicateEmail() async {
+    final email = Validators.normalizeEmail(
+      emailCtrl.text,
+    );
+
+    if (email.isEmpty) {
+      return null;
+    }
+
+    try {
+      final customers = await ref.read(allCustomersProvider.future);
+
+      final duplicate = customers.any(
+        (customer) =>
+            Validators.normalizeEmail(customer.email) == email,
+      );
+
+      if (duplicate) {
+        return 'This email address is already registered to another customer.';
+      }
+    } catch (_) {
+      // Backend remains final authority.
+    }
+
+    return null;
+  }
+
+  // ============================================================
+  // NORMALIZATION
+  // ============================================================
+
+  void _normalizeControllers() {
+    final normalizedName = Validators.normalizeName(
+      nameCtrl.text,
+    );
+
+    final normalizedPhone = Validators.normalizeDigits(
+      phoneCtrl.text,
+    );
+
+    final normalizedAlternatePhone =
+        Validators.normalizeDigits(
+      altPhoneCtrl.text,
+    );
+
+    final normalizedEmail = Validators.normalizeEmail(
+      emailCtrl.text,
+    );
+
+    final normalizedGst = Validators.normalizeUppercase(
+      gstCtrl.text,
+    );
+
+    final normalizedAddress = Validators.normalizeText(
+      addressCtrl.text,
+    );
+
+    final normalizedBalance = openBalanceCtrl.text.trim();
+
+    nameCtrl.text = normalizedName;
+    phoneCtrl.text = normalizedPhone;
+    altPhoneCtrl.text = normalizedAlternatePhone;
+    emailCtrl.text = normalizedEmail;
+    gstCtrl.text = normalizedGst;
+    addressCtrl.text = normalizedAddress;
+    openBalanceCtrl.text = normalizedBalance;
+  }
+
+  // ============================================================
+  // SAVE
+  // ============================================================
+
+  Future<void> _save() async {
+    FocusScope.of(context).unfocus();
+
+    if (!_validateAllFields()) {
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // Duplicate phone
+    // ----------------------------------------------------------
+
+    final duplicatePhone = await _checkDuplicatePhone();
+
+    if (duplicatePhone != null) {
+      _setError('phone', duplicatePhone);
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // Duplicate alternate phone
+    // ----------------------------------------------------------
+
+    final duplicateAlternatePhone =
+        await _checkDuplicateAlternatePhone();
+
+    if (duplicateAlternatePhone != null) {
+      _setError(
+        'alternatePhone',
+        duplicateAlternatePhone,
+      );
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // Duplicate email
+    // ----------------------------------------------------------
+
+    final duplicateEmail = await _checkDuplicateEmail();
+
+    if (duplicateEmail != null) {
+      _setError('email', duplicateEmail);
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // Normalize values only after validation
+    // ----------------------------------------------------------
+
+    _normalizeControllers();
+
+    final openingBalance =
+        double.tryParse(openBalanceCtrl.text.trim());
+
+    if (openingBalance == null) {
+      _setError(
+        'openingBalance',
+        'Enter a valid Opening balance',
+      );
+      return;
+    }
+
+    final customerData = CustomerModel(
+      customerCode: "",
+      customerName: Validators.normalizeName(
+        nameCtrl.text,
+      ),
+      phone: Validators.normalizeDigits(
+        phoneCtrl.text,
+      ),
+      alternatePhone: Validators.normalizeDigits(
+        altPhoneCtrl.text,
+      ),
+      email: Validators.normalizeEmail(
+        emailCtrl.text,
+      ),
+      gstNumber: Validators.normalizeUppercase(
+        gstCtrl.text,
+      ),
+      address: Validators.normalizeText(
+        addressCtrl.text,
+      ),
+      city: "",
+      state: "",
+      country: "",
+      postalCode: "",
+      openingBalance: openingBalance,
+      currentBalance: openingBalance,
+      loyaltyPoints: 0,
+      notes: "",
+      status: "ACTIVE",
+    );
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      if (widget.returnCreatedCustomer) {
+        // Payment-screen flow: return the created customer object
+        // (with its new id) so the caller can auto-select it.
+        final createdCustomer = await ref
+            .read(customerOperationsProvider.notifier)
+            .addCustomerAndReturn(customerData);
+
+        if (!mounted) return;
+
+        if (createdCustomer != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                "Customer profile created successfully.",
+              ),
+            ),
+          );
+
+          Navigator.pop(context, createdCustomer);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                "Unable to create customer. Please check the entered details.",
+              ),
+            ),
+          );
+        }
+
+        return;
+      }
+
+      final success = await ref
+          .read(customerOperationsProvider.notifier)
+          .addCustomer(customerData);
+
+      if (!mounted) return;
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "Customer profile created successfully.",
+            ),
+          ),
+        );
+
+        Navigator.pop(context, true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "Unable to create customer. Please check the entered details.",
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  // ============================================================
+  // DISPOSE
+  // ============================================================
 
   @override
   void dispose() {
@@ -39,28 +480,48 @@ class _AddCustomerScreenState extends ConsumerState<AddCustomerScreen> {
     emailCtrl.dispose();
     gstCtrl.dispose();
     addressCtrl.dispose();
-    cityCtrl.dispose();
-    stateCtrl.dispose();
-    countryCtrl.dispose();
-    postalCtrl.dispose();
     openBalanceCtrl.dispose();
-    notesCtrl.dispose();
     super.dispose();
   }
 
-  // ── Section header used inside a card ──
-  Widget _sectionHeader(String title, IconData icon) {
+  // ============================================================
+  // SECTION HEADER
+  // ============================================================
+
+  Widget _sectionHeader(
+    String title,
+    IconData icon,
+  ) {
     return Row(
       children: [
         Container(
-          padding: EdgeInsets.all(R.sp(context, AppSpacing.xs + 2)),
+          padding: EdgeInsets.all(
+            R.sp(context, AppSpacing.xs + 2),
+          ),
           decoration: BoxDecoration(
             color: AppColors.primary.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusSm + 4)),
+            borderRadius: BorderRadius.circular(
+              R.radius(
+                context,
+                AppSizes.radiusSm + 4,
+              ),
+            ),
           ),
-          child: Icon(icon, size: R.icon(context, AppSizes.iconSm), color: AppColors.primary),
+          child: Icon(
+            icon,
+            size: R.icon(
+              context,
+              AppSizes.iconSm,
+            ),
+            color: AppColors.primary,
+          ),
         ),
-        SizedBox(width: R.sp(context, AppSpacing.sm + 2)),
+        SizedBox(
+          width: R.sp(
+            context,
+            AppSpacing.sm + 2,
+          ),
+        ),
         Text(
           title,
           style: TextStyle(
@@ -74,60 +535,100 @@ class _AddCustomerScreenState extends ConsumerState<AddCustomerScreen> {
     );
   }
 
-  // ── Card wrapper that groups related fields with consistent spacing ──
-  Widget _sectionCard({required String title, required IconData icon, required List<Widget> children}) {
+  // ============================================================
+  // SECTION CARD
+  // ============================================================
+
+  Widget _sectionCard({
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+  }) {
     return Container(
       width: double.infinity,
-      margin: EdgeInsets.only(bottom: R.sp(context, AppSpacing.lg)),
-      padding: EdgeInsets.all(R.sp(context, AppSpacing.cardPadding)),
+      margin: EdgeInsets.only(
+        bottom: R.sp(
+          context,
+          AppSpacing.lg,
+        ),
+      ),
+      padding: EdgeInsets.all(
+        R.sp(
+          context,
+          AppSpacing.cardPadding,
+        ),
+      ),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusLg)),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(
+          R.radius(
+            context,
+            AppSizes.radiusLg,
+          ),
+        ),
+        border: Border.all(
+          color: AppColors.border,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: Colors.black.withValues(
+              alpha: 0.03,
+            ),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
           _sectionHeader(title, icon),
-          SizedBox(height: R.sp(context, AppSpacing.md)),
+          SizedBox(
+            height: R.sp(
+              context,
+              AppSpacing.md,
+            ),
+          ),
           ...children,
         ],
       ),
     );
   }
 
-  Widget _gapV([double size = AppSpacing.md]) => SizedBox(height: R.sp(context, size));
-
-  // Consistent two-column row with even spacing
-  Widget _fieldRow(Widget left, Widget right) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(child: left),
-        SizedBox(width: R.sp(context, AppSpacing.md)),
-        Expanded(child: right),
-      ],
+  Widget _gapV([
+    double size = AppSpacing.md,
+  ]) {
+    return SizedBox(
+      height: R.sp(context, size),
     );
   }
 
+  // ============================================================
+  // FIELD
+  // ============================================================
+
   Widget _field({
+    required String fieldKey,
     required String label,
     required String hint,
     required IconData icon,
     required TextEditingController controller,
     bool required = false,
-    TextInputType keyboard = TextInputType.text,
+    TextInputType keyboard =
+        TextInputType.text,
     int maxLines = 1,
   }) {
+    final error = _getError(fieldKey);
+    final hasError = error != null;
+
+    final borderColor = hasError
+        ? AppColors.red
+        : AppColors.border;
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment:
+          CrossAxisAlignment.start,
       children: [
         RichText(
           text: TextSpan(
@@ -135,38 +636,164 @@ class _AddCustomerScreenState extends ConsumerState<AddCustomerScreen> {
             style: TextStyle(
               fontSize: R.fs(context, 12),
               fontWeight: FontWeight.w600,
-              color: AppColors.textPrimaryDark.withValues(alpha: 0.8),
+              color: AppColors.textPrimaryDark
+                  .withValues(alpha: 0.8),
             ),
-            children: required ? const [TextSpan(text: " *", style: TextStyle(color: AppColors.red))] : [],
+            children: required
+                ? const [
+                    TextSpan(
+                      text: " *",
+                      style: TextStyle(
+                        color: AppColors.red,
+                      ),
+                    ),
+                  ]
+                : [],
           ),
         ),
-        SizedBox(height: R.sp(context, AppSpacing.xs + 2)),
+
+        SizedBox(
+          height: R.sp(
+            context,
+            AppSpacing.xs + 2,
+          ),
+        ),
+
         TextField(
           controller: controller,
           keyboardType: keyboard,
           maxLines: maxLines,
-          style: TextStyle(fontSize: R.fs(context, 14), color: AppColors.textPrimaryDark, fontWeight: FontWeight.w500),
+
+          onChanged: (value) {
+            _validateOnChange(
+              fieldKey,
+              value,
+            );
+          },
+
+          style: TextStyle(
+            fontSize: R.fs(context, 14),
+            color: AppColors.textPrimaryDark,
+            fontWeight: FontWeight.w500,
+          ),
+
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: TextStyle(fontSize: R.fs(context, 13), color: AppColors.textSecondary.withValues(alpha: 0.7)),
-            prefixIcon: Icon(icon, size: R.icon(context, AppSizes.iconSm + 2), color: AppColors.textSecondary),
+
+            hintStyle: TextStyle(
+              fontSize: R.fs(context, 13),
+              color: AppColors.textSecondary
+                  .withValues(alpha: 0.7),
+            ),
+
+            prefixIcon: Icon(
+              icon,
+              size: R.icon(
+                context,
+                AppSizes.iconSm + 2,
+              ),
+              color: hasError
+                  ? AppColors.red
+                  : AppColors.textSecondary,
+            ),
+
             filled: true,
             fillColor: AppColors.card,
-            contentPadding: EdgeInsets.symmetric(
-              horizontal: R.sp(context, AppSpacing.md + 2),
-              vertical: R.sp(context, AppSpacing.md),
+
+            contentPadding:
+                EdgeInsets.symmetric(
+              horizontal: R.sp(
+                context,
+                AppSpacing.md + 2,
+              ),
+              vertical: R.sp(
+                context,
+                AppSpacing.md,
+              ),
             ),
+
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
-              borderSide: const BorderSide(color: AppColors.border),
+              borderRadius:
+                  BorderRadius.circular(
+                R.radius(
+                  context,
+                  AppSizes.radiusMd,
+                ),
+              ),
+              borderSide: BorderSide(
+                color: borderColor,
+                width: hasError ? 1.5 : 1,
+              ),
             ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
-              borderSide: const BorderSide(color: AppColors.border),
+
+            enabledBorder:
+                OutlineInputBorder(
+              borderRadius:
+                  BorderRadius.circular(
+                R.radius(
+                  context,
+                  AppSizes.radiusMd,
+                ),
+              ),
+              borderSide: BorderSide(
+                color: borderColor,
+                width: hasError ? 1.5 : 1,
+              ),
             ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+
+            focusedBorder:
+                OutlineInputBorder(
+              borderRadius:
+                  BorderRadius.circular(
+                R.radius(
+                  context,
+                  AppSizes.radiusMd,
+                ),
+              ),
+              borderSide: BorderSide(
+                color: hasError
+                    ? AppColors.red
+                    : AppColors.primary,
+                width: 1.5,
+              ),
+            ),
+
+            errorBorder:
+                OutlineInputBorder(
+              borderRadius:
+                  BorderRadius.circular(
+                R.radius(
+                  context,
+                  AppSizes.radiusMd,
+                ),
+              ),
+              borderSide: const BorderSide(
+                color: AppColors.red,
+                width: 1.5,
+              ),
+            ),
+
+            focusedErrorBorder:
+                OutlineInputBorder(
+              borderRadius:
+                  BorderRadius.circular(
+                R.radius(
+                  context,
+                  AppSizes.radiusMd,
+                ),
+              ),
+              borderSide: const BorderSide(
+                color: AppColors.red,
+                width: 1.5,
+              ),
+            ),
+
+            errorText: error,
+
+            errorStyle: TextStyle(
+              color: AppColors.red,
+              fontSize: R.fs(context, 11),
+              fontWeight: FontWeight.w500,
             ),
           ),
         ),
@@ -174,280 +801,426 @@ class _AddCustomerScreenState extends ConsumerState<AddCustomerScreen> {
     );
   }
 
-  Future<void> _save() async {
-    if (nameCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Customer name is required")));
-      return;
-    }
-    if (phoneCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Contact number is required")));
-      return;
-    }
-    if (!RegExp(r'^\d{10}$').hasMatch(phoneCtrl.text.trim())) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Enter a valid 10-digit phone number")));
-      return;
-    }
-
-    final double openingBal = double.tryParse(openBalanceCtrl.text.trim()) ?? 0.00;
-
-    final customerData = CustomerModel(
-      customerCode: "",
-      customerName: nameCtrl.text.trim(),
-      phone: phoneCtrl.text.trim(),
-      alternatePhone: altPhoneCtrl.text.trim(),
-      email: emailCtrl.text.trim(),
-      gstNumber: gstCtrl.text.trim(),
-      address: addressCtrl.text.trim(),
-      city: cityCtrl.text.trim(),
-      state: stateCtrl.text.trim(),
-      country: countryCtrl.text.trim(),
-      postalCode: postalCtrl.text.trim(),
-      openingBalance: openingBal,
-      currentBalance: openingBal,
-      loyaltyPoints: 0,
-      notes: notesCtrl.text.trim(),
-      status: _selectedStatus,
-    );
-
-    final success = await ref.read(customerOperationsProvider.notifier).addCustomer(customerData);
-
-    if (success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Customer profile created successfully.")));
-      Navigator.pop(context, true);
-    }
-  }
+  // ============================================================
+  // BUILD
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: R.hPad(context, base: AppSpacing.screenPadding).copyWith(
-            top: R.sp(context, AppSpacing.lg),
-            bottom: R.sp(context, 120),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Top bar ──
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: Icon(
-                      Icons.arrow_back,
-                      color: AppColors.textPrimaryDark,
-                      size: R.icon(context, 22),
+        child: Column(
+          children: [
+            // Top bar
+            Padding(
+              padding: R
+                  .hPad(
+                    context,
+                    base: AppSpacing.screenPadding,
+                  )
+                  .copyWith(
+                    top: R.sp(
+                      context,
+                      AppSpacing.lg,
+                    ),
+                    bottom: R.sp(
+                      context,
+                      AppSpacing.md,
                     ),
                   ),
-                  SizedBox(width: R.sp(context, AppSpacing.sm)),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: _isSaving
+                        ? null
+                        : () => Navigator.pop(
+                              context,
+                            ),
+                    icon: Icon(
+                      Icons.arrow_back,
+                      color:
+                          AppColors.textPrimaryDark,
+                      size: R.icon(
+                        context,
+                        22,
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(
+                    width: R.sp(
+                      context,
+                      AppSpacing.sm,
+                    ),
+                  ),
+
                   Expanded(
                     child: Text(
                       "Add Customer",
                       style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimaryDark,
-                        fontSize: R.fs(context, 18),
+                        fontWeight:
+                            FontWeight.bold,
+                        color: AppColors
+                            .textPrimaryDark,
+                        fontSize:
+                            R.fs(context, 18),
                       ),
                     ),
                   ),
                 ],
               ),
-              SizedBox(height: R.sp(context, AppSpacing.xl)),
+            ),
 
-              // ── Personal Details ──
-              _sectionCard(
-                title: "Personal Details",
-                icon: Icons.person_rounded,
-                children: [
-                  _field(label: "Customer Name", hint: "Enter name", icon: Icons.person_outline, controller: nameCtrl, required: true),
-                  _gapV(AppSpacing.md + 2),
-                  _field(
-                    label: "Contact Number",
-                    hint: "98xxxxxx21",
-                    icon: Icons.phone_outlined,
-                    controller: phoneCtrl,
-                    required: true,
-                    keyboard: TextInputType.phone,
-                  ),
-                  _gapV(AppSpacing.md + 2),
-                  _field(
-                    label: "Alternate Phone",
-                    hint: "Enter secondary contact number",
-                    icon: Icons.phone_android_outlined,
-                    controller: altPhoneCtrl,
-                    keyboard: TextInputType.phone,
-                  ),
-                  _gapV(AppSpacing.md + 2),
-                  _field(
-                    label: "Email Address",
-                    hint: "example@mail.com",
-                    icon: Icons.email_outlined,
-                    controller: emailCtrl,
-                    keyboard: TextInputType.emailAddress,
-                  ),
-                ],
-              ),
-
-              // ── Business & Financial ──
-              _sectionCard(
-                title: "Business & Financial",
-                icon: Icons.account_balance_wallet_rounded,
-                children: [
-                  _field(label: "GST Number", hint: "Enter valid GSTIN", icon: Icons.receipt_long_outlined, controller: gstCtrl),
-                  _gapV(AppSpacing.md + 2),
-                  _field(
-                    label: "Opening Balance",
-                    hint: "0.00",
-                    icon: Icons.account_balance_wallet_outlined,
-                    controller: openBalanceCtrl,
-                    keyboard: TextInputType.number,
-                  ),
-                ],
-              ),
-
-              // ── Address ──
-              _sectionCard(
-                title: "Address",
-                icon: Icons.pin_drop_rounded,
-                children: [
-                  _field(label: "Address Line", hint: "Street details", icon: Icons.location_on_outlined, controller: addressCtrl, maxLines: 2),
-                  _gapV(AppSpacing.md + 2),
-                  _fieldRow(
-                    _field(label: "City", hint: "City", icon: Icons.location_city, controller: cityCtrl),
-                    _field(label: "State", hint: "State", icon: Icons.map_outlined, controller: stateCtrl),
-                  ),
-                  _gapV(AppSpacing.md + 2),
-                  _fieldRow(
-                    _field(label: "Country", hint: "Country", icon: Icons.public, controller: countryCtrl),
-                    _field(label: "Postal Code", hint: "PIN", icon: Icons.pin_drop_outlined, controller: postalCtrl, keyboard: TextInputType.number),
-                  ),
-                ],
-              ),
-
-              // ── Notes & Status ──
-              _sectionCard(
-                title: "Notes & Status",
-                icon: Icons.fact_check_rounded,
-                children: [
-                  _field(label: "Internal Notes", hint: "Add comments...", icon: Icons.note_alt_outlined, controller: notesCtrl, maxLines: 3),
-                  _gapV(AppSpacing.md + 2),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Account Status",
-                        style: TextStyle(
-                          fontSize: R.fs(context, 12),
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimaryDark.withValues(alpha: 0.8),
-                        ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: R
+                    .hPad(
+                      context,
+                      base: AppSpacing.screenPadding,
+                    )
+                    .copyWith(
+                      bottom: R.sp(
+                        context,
+                        AppSpacing.lg,
                       ),
-                      SizedBox(height: R.sp(context, AppSpacing.xs + 2)),
-                      DropdownButtonFormField<String>(
-                        initialValue: _selectedStatus,
-                        isExpanded: true,
-                        dropdownColor: AppColors.card,
-                        borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
-                        style: TextStyle(fontSize: R.fs(context, 13), color: AppColors.textPrimaryDark),
-                        decoration: InputDecoration(
-                          hintText: "Select status",
-                          hintStyle: TextStyle(fontSize: R.fs(context, 13), color: AppColors.textSecondary.withValues(alpha: 0.7)),
-                          prefixIcon: Icon(Icons.shield_outlined, size: R.icon(context, AppSizes.iconSm + 2), color: AppColors.textSecondary),
-                          filled: true,
-                          fillColor: AppColors.card,
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: R.sp(context, AppSpacing.md + 2),
-                            vertical: R.sp(context, AppSpacing.md),
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
-                            borderSide: const BorderSide(color: AppColors.border),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
-                            borderSide: const BorderSide(color: AppColors.border),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
-                            borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                    ),
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    // ==================================================
+                    // PERSONAL DETAILS
+                    // ==================================================
+
+                    _sectionCard(
+                      title: "Personal Details",
+                      icon:
+                          Icons.person_rounded,
+                      children: [
+                        _field(
+                          fieldKey: 'name',
+                          label:
+                              "Customer Name",
+                          hint: "Enter name",
+                          icon:
+                              Icons.person_outline,
+                          controller: nameCtrl,
+                          required: true,
+                        ),
+
+                        _gapV(
+                          AppSpacing.md + 2,
+                        ),
+
+                        _field(
+                          fieldKey: 'phone',
+                          label:
+                              "Contact Number",
+                          hint: "98xxxxxx21",
+                          icon:
+                              Icons.phone_outlined,
+                          controller: phoneCtrl,
+                          required: true,
+                          keyboard:
+                              TextInputType.phone,
+                        ),
+
+                        _gapV(
+                          AppSpacing.md + 2,
+                        ),
+
+                        _field(
+                          fieldKey:
+                              'alternatePhone',
+                          label:
+                              "Alternate Phone",
+                          hint:
+                              "Enter secondary contact number",
+                          icon: Icons
+                              .phone_android_outlined,
+                          controller:
+                              altPhoneCtrl,
+                          keyboard:
+                              TextInputType.phone,
+                        ),
+
+                        _gapV(
+                          AppSpacing.md + 2,
+                        ),
+
+                        _field(
+                          fieldKey: 'email',
+                          label:
+                              "Email Address",
+                          hint:
+                              "example@mail.com",
+                          icon:
+                              Icons.email_outlined,
+                          controller: emailCtrl,
+                          keyboard:
+                              TextInputType
+                                  .emailAddress,
+                        ),
+                      ],
+                    ),
+
+                    // ==================================================
+                    // BUSINESS & FINANCIAL
+                    // ==================================================
+
+                    _sectionCard(
+                      title:
+                          "Business & Financial",
+                      icon: Icons
+                          .account_balance_wallet_rounded,
+                      children: [
+                        _field(
+                          fieldKey: 'gst',
+                          label:
+                              "GST Number",
+                          hint:
+                              "Enter valid GSTIN",
+                          icon: Icons
+                              .receipt_long_outlined,
+                          controller: gstCtrl,
+                        ),
+
+                        _gapV(
+                          AppSpacing.md + 2,
+                        ),
+
+                        _field(
+                          fieldKey:
+                              'openingBalance',
+                          label:
+                              "Opening Balance",
+                          hint: "0.00",
+                          icon: Icons
+                              .account_balance_wallet_outlined,
+                          controller:
+                              openBalanceCtrl,
+                          required: true,
+                          keyboard:
+                              const TextInputType
+                                  .numberWithOptions(
+                            decimal: true,
                           ),
                         ),
-                        items: statuses
-                            .map((s) => DropdownMenuItem(
-                                  value: s,
-                                  child: Text(s, style: TextStyle(fontSize: R.fs(context, 13), fontWeight: FontWeight.w500)),
-                                ))
-                            .toList(),
-                        onChanged: (val) => setState(() => _selectedStatus = val!),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+
+                    // ==================================================
+                    // ADDRESS
+                    // ==================================================
+
+                    _sectionCard(
+                      title: "Address",
+                      icon:
+                          Icons.pin_drop_rounded,
+                      children: [
+                        _field(
+                          fieldKey: 'address',
+                          label: "Address",
+                          hint:
+                              "Enter full address (street, city, state, country, PIN)",
+                          icon: Icons
+                              .location_on_outlined,
+                          controller:
+                              addressCtrl,
+                          maxLines: 3,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-      bottomNavigationBar: Container(
+
+      // ============================================================
+      // BOTTOM BUTTONS
+      // ============================================================
+
+      bottomNavigationBar:
+          Container(
         decoration: BoxDecoration(
           color: AppColors.card,
-          border: Border(top: BorderSide(color: AppColors.border.withValues(alpha: 0.4))),
+          border: Border(
+            top: BorderSide(
+              color: AppColors.border
+                  .withValues(alpha: 0.4),
+            ),
+          ),
         ),
+
         padding: EdgeInsets.only(
-          left: R.sp(context, AppSpacing.screenPadding + 2),
-          right: R.sp(context, AppSpacing.screenPadding + 2),
-          top: R.sp(context, AppSpacing.md),
-          bottom: R.sp(context, AppSpacing.md) + MediaQuery.of(context).padding.bottom,
+          left: R.sp(
+            context,
+            AppSpacing.screenPadding + 2,
+          ),
+          right: R.sp(
+            context,
+            AppSpacing.screenPadding + 2,
+          ),
+          top: R.sp(
+            context,
+            AppSpacing.md,
+          ),
+          bottom: R.sp(
+                context,
+                AppSpacing.md,
+              ) +
+              MediaQuery.of(context)
+                  .padding
+                  .bottom,
         ),
+
         child: Row(
           children: [
             Expanded(
               child: SizedBox(
                 height: R.btnH(context),
                 child: OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: OutlinedButton.styleFrom(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd + 2))),
-                    side: const BorderSide(color: AppColors.border),
+                  onPressed: _isSaving
+                      ? null
+                      : () => Navigator.pop(
+                            context,
+                          ),
+                  style:
+                      OutlinedButton.styleFrom(
+                    shape:
+                        RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(
+                        R.radius(
+                          context,
+                          AppSizes.radiusMd +
+                              2,
+                        ),
+                      ),
+                    ),
+                    side: const BorderSide(
+                      color: AppColors.border,
+                    ),
                   ),
                   child: Text(
                     "Cancel",
-                    style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600, fontSize: R.fs(context, 14)),
+                    style: TextStyle(
+                      color:
+                          AppColors.textSecondary,
+                      fontWeight:
+                          FontWeight.w600,
+                      fontSize:
+                          R.fs(context, 14),
+                    ),
                   ),
                 ),
               ),
             ),
-            SizedBox(width: R.sp(context, AppSpacing.md)),
+
+            SizedBox(
+              width: R.sp(
+                context,
+                AppSpacing.md,
+              ),
+            ),
+
             Expanded(
               flex: 2,
               child: SizedBox(
                 height: R.btnH(context),
                 child: Container(
-                  decoration: BoxDecoration(
-                    gradient: AppColors.brandGradient,
-                    borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd + 2)),
+                  decoration:
+                      BoxDecoration(
+                    gradient:
+                        AppColors.brandGradient,
+                    borderRadius:
+                        BorderRadius.circular(
+                      R.radius(
+                        context,
+                        AppSizes.radiusMd +
+                            2,
+                      ),
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.25),
+                        color: AppColors
+                            .primary
+                            .withValues(
+                          alpha: 0.25,
+                        ),
                         blurRadius: 8,
-                        offset: const Offset(0, 4),
+                        offset:
+                            const Offset(
+                          0,
+                          4,
+                        ),
                       ),
                     ],
                   ),
-                  child: ElevatedButton(
-                    onPressed: _save,
-                    style: ElevatedButton.styleFrom(
+
+                  child:
+                      ElevatedButton(
+                    onPressed:
+                        _isSaving
+                            ? null
+                            : _save,
+
+                    style:
+                        ElevatedButton
+                            .styleFrom(
                       elevation: 0,
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd + 2))),
+                      backgroundColor:
+                          Colors.transparent,
+                      shadowColor:
+                          Colors.transparent,
+                      shape:
+                          RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(
+                          R.radius(
+                            context,
+                            AppSizes
+                                    .radiusMd +
+                                2,
+                          ),
+                        ),
+                      ),
                     ),
-                    child: Text(
-                      "Save Customer",
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: R.fs(context, 14)),
-                    ),
+
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child:
+                                CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation<
+                                      Color>(
+                                Colors.white,
+                              ),
+                            ),
+                          )
+                        : Text(
+                            "Save Customer",
+                            style:
+                                TextStyle(
+                              color:
+                                  Colors.white,
+                              fontWeight:
+                                  FontWeight.bold,
+                              fontSize:
+                                  R.fs(
+                                context,
+                                14,
+                              ),
+                            ),
+                          ),
                   ),
                 ),
               ),

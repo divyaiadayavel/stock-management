@@ -8,7 +8,6 @@ import '../../../../data/datasources/printers_hardware/connection/wifi_datasourc
 import '../../../../data/datasources/printers_hardware/connection/usb_datasource.dart';
 import '../../../../data/datasources/printers_hardware/hardware/cash_drawer_datasource.dart';
 import '../../../../data/datasources/printers_hardware/storage/printer_local_datasource.dart';
-import '../../../../data/models/printers_hardware/printer/printer_device_model.dart';
 import '../../../../data/repositories/printers_hardware/printers_hardware_repository_impl.dart';
 import '../../../../data/services/printers_hardware/printing/document_print_service.dart';
 import '../../../../data/services/printers_hardware/discovery/mdns_discovery_service.dart';
@@ -53,7 +52,7 @@ final printersHardwareRepositoryProvider =
     bluetoothDataSource: ref.read(bluetoothDataSourceProvider),
     wifiDataSource: ref.read(wifiDataSourceProvider),
     usbDataSource: ref.read(usbDataSourceProvider),
-    localDataSource: _NoOpLocalDataSource(),
+    localDataSource: PrinterLocalDataSourceImpl(),
     discoveryService: ref.read(mdnsDiscoveryServiceProvider),
   );
 });
@@ -75,14 +74,47 @@ class PrintersHardwareNotifier
   Future<void> _loadDefaultPrinter() async {
     try {
       final printers = await _repo.getSavedPrinters();
-      if (printers.isEmpty) return;
+      if (printers.isEmpty) {
+        state = state.copyWith(
+          savedPrinters: const [],
+          clearConnectedPrinter: true,
+          clearUnavailablePrinter: true,
+          isReconnecting: false,
+          clearError: true,
+        );
+        return;
+      }
+
+      final defaultPrinter = await _repo.getDefaultPrinter() ?? printers.first;
 
       state = state.copyWith(
         savedPrinters: printers,
-        connectedPrinter: printers.first,
+        connectedPrinter: defaultPrinter,
+        clearUnavailablePrinter: true,
+        isReconnecting: true,
+        clearError: true,
       );
+
+      final connected = await _repo.connectSavedPrinter(defaultPrinter);
+      state = connected
+          ? state.copyWith(
+              connectedPrinter: defaultPrinter,
+              savedPrinters: printers,
+              clearUnavailablePrinter: true,
+              isReconnecting: false,
+              clearError: true,
+            )
+          : state.copyWith(
+              savedPrinters: printers,
+              unavailablePrinter: defaultPrinter,
+              clearConnectedPrinter: true,
+              isReconnecting: false,
+            );
     } catch (e) {
-      state = state.copyWith(errorMessage: _messageFromError(e));
+      state = state.copyWith(
+        errorMessage: _messageFromError(e),
+        isReconnecting: false,
+      );
     }
   }
 
@@ -96,18 +128,46 @@ class PrintersHardwareNotifier
   /// This re-checks the saved-printers list on demand and returns null only
   /// if the user genuinely has no printer configured.
   Future<PrinterDevice?> ensureDefaultPrinterLoaded() async {
-    if (state.connectedPrinter != null) return state.connectedPrinter;
+    if (state.connectedPrinter != null && !state.isReconnecting) {
+      return state.connectedPrinter;
+    }
     try {
       final printers = await _repo.getSavedPrinters();
       if (printers.isEmpty) return null;
-      final defaultPrinter = printers.first;
+
+      final defaultPrinter = await _repo.getDefaultPrinter() ?? printers.first;
       state = state.copyWith(
         savedPrinters: printers,
         connectedPrinter: defaultPrinter,
+        clearUnavailablePrinter: true,
+        isReconnecting: true,
+        clearError: true,
+      );
+
+      final connected = await _repo.connectSavedPrinter(defaultPrinter);
+      if (!connected) {
+        state = state.copyWith(
+          savedPrinters: printers,
+          unavailablePrinter: defaultPrinter,
+          clearConnectedPrinter: true,
+          isReconnecting: false,
+        );
+        return null;
+      }
+
+      state = state.copyWith(
+        savedPrinters: printers,
+        connectedPrinter: defaultPrinter,
+        clearUnavailablePrinter: true,
+        isReconnecting: false,
+        clearError: true,
       );
       return defaultPrinter;
     } catch (e) {
-      state = state.copyWith(errorMessage: _messageFromError(e));
+      state = state.copyWith(
+        errorMessage: _messageFromError(e),
+        isReconnecting: false,
+      );
       return null;
     }
   }
@@ -136,10 +196,17 @@ class PrintersHardwareNotifier
         return false;
       }
 
-      state = state.copyWith(connectedPrinter: printer, isConnecting: false);
-
       await _repo.saveDefaultPrinter(printer);
-      await refreshSavedPrinters();
+      final printers = await _repo.getSavedPrinters();
+
+      state = state.copyWith(
+        connectedPrinter: printer,
+        savedPrinters: printers,
+        isConnecting: false,
+        isReconnecting: false,
+        clearUnavailablePrinter: true,
+        clearError: true,
+      );
 
       return true;
     } on PrinterPermissionException catch (e) {
@@ -164,7 +231,13 @@ class PrintersHardwareNotifier
   Future<void> disconnect() async {
     try {
       await _repo.disconnectPrinter();
-      state = const PrintersHardwareState();
+      state = state.copyWith(
+        clearConnectedPrinter: true,
+        clearUnavailablePrinter: true,
+        isConnecting: false,
+        isReconnecting: false,
+      );
+      await refreshSavedPrinters();
     } catch (e) {
       state = state.copyWith(errorMessage: 'Disconnect failed: $e');
     }
@@ -173,11 +246,22 @@ class PrintersHardwareNotifier
   /// Removes a saved printer from the server's list.
   Future<bool> removePrinter(String printerId) async {
     try {
-      await _repo.deletePrinter(printerId);
-      if (state.connectedPrinter?.id == printerId) {
-        state = const PrintersHardwareState();
+      final wasConnected = state.connectedPrinter?.id == printerId;
+      final wasUnavailable = state.unavailablePrinter?.id == printerId;
+      if (wasConnected) {
+        await _repo.disconnectPrinter();
       }
-      await refreshSavedPrinters();
+
+      await _repo.deletePrinter(printerId);
+      final printers = await _repo.getSavedPrinters();
+      state = state.copyWith(
+        savedPrinters: printers,
+        clearConnectedPrinter: wasConnected,
+        clearUnavailablePrinter: wasUnavailable,
+        isConnecting: false,
+        isReconnecting: false,
+        clearError: true,
+      );
       return true;
     } catch (e) {
       state = state.copyWith(
@@ -344,47 +428,3 @@ final printersHardwareProvider = NotifierProvider.autoDispose<
 );
 
 // ── In-memory local datasource ──────────────────────────────────────────
-//
-// Printers are kept in memory only for now; no local persistence layer is
-// wired up for this build.
-
-class _NoOpLocalDataSource implements PrinterLocalDataSource {
-  final List<PrinterDeviceModel> _printers = [];
-  String? _defaultPrinterId;
-
-  @override
-  Future<void> savePrinter(PrinterDeviceModel printer) async {
-    _printers.removeWhere((p) => p.id == printer.id);
-    _printers.add(printer);
-  }
-
-  @override
-  Future<List<PrinterDeviceModel>> getSavedPrinters() async =>
-      List.unmodifiable(_printers);
-
-  @override
-  Future<PrinterDeviceModel?> getDefaultPrinter() async {
-    if (_defaultPrinterId == null) return null;
-    for (final printer in _printers) {
-      if (printer.id == _defaultPrinterId) return printer;
-    }
-    return null;
-  }
-
-  @override
-  Future<void> deletePrinter(String printerId) async {
-    _printers.removeWhere((p) => p.id == printerId);
-    if (_defaultPrinterId == printerId) _defaultPrinterId = null;
-  }
-
-  @override
-  Future<void> setDefaultPrinter(String printerId) async {
-    _defaultPrinterId = printerId;
-  }
-
-  @override
-  Future<void> clearAllPrinters() async {
-    _printers.clear();
-    _defaultPrinterId = null;
-  }
-}

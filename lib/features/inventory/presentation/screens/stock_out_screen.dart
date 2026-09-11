@@ -9,15 +9,42 @@ import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/utils/responsive_helper.dart';
-
+import '../../../../core/network/no_internet_screen.dart';
 import '../../../products/data/models/product_model.dart';
 import '../providers/inventory_filter_provider.dart';
 import '../providers/inventory_provider.dart';
 import 'product_detail_screen.dart';
 
+/// Helper to capitalize the first letter of every word
+String _capitalize(String text) {
+  if (text.isEmpty) return text;
+  return text
+      .split(' ')
+      .map((word) {
+        if (word.isEmpty) return word;
+        return word[0].toUpperCase() + word.substring(1).toLowerCase();
+      })
+      .join(' ');
+}
+
+/// Helper to get user-friendly sort label
+String _getSortLabel(String sortKey) {
+  switch (sortKey) {
+    case 'name_asc':
+      return 'Name (A-Z)';
+    case 'name_desc':
+      return 'Name (Z-A)';
+    case 'reorder_desc':
+      return 'Highest Reorder Level';
+    default:
+      return 'Sort';
+  }
+}
+
 /// Provider to fetch and filter out-of-stock products (quantity <= 0)
-final outOfStockProductsProvider =
-    FutureProvider.autoDispose<List<Product>>((ref) async {
+final outOfStockProductsProvider = FutureProvider.autoDispose<List<Product>>((
+  ref,
+) async {
   ref.watch(inventoryRefreshProvider);
   final useCase = ref.watch(getInventoryStockProvider);
   final products = await useCase.call(
@@ -49,6 +76,15 @@ class _StockOutScreenState extends ConsumerState<StockOutScreen> {
   @override
   Widget build(BuildContext context) {
     final productsAsync = ref.watch(outOfStockProductsProvider);
+    if (productsAsync.hasError) {
+      return Scaffold(
+        body: NoInternetScreen(
+          onRetry: () {
+            ref.invalidate(outOfStockProductsProvider);
+          },
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -72,9 +108,8 @@ class _StockOutScreenState extends ConsumerState<StockOutScreen> {
         data: (products) {
           var filtered = products.where((p) {
             final query = _searchQuery.toLowerCase();
-            return p.name.toLowerCase().contains(query) ||
-                p.category.toLowerCase().contains(query) ||
-                p.supplier.toLowerCase().contains(query);
+            // Filter strictly by product name only
+            return p.name.toLowerCase().contains(query);
           }).toList();
 
           if (_sortBy == 'name_asc') {
@@ -97,7 +132,8 @@ class _StockOutScreenState extends ConsumerState<StockOutScreen> {
                   children: [
                     Container(
                       padding: EdgeInsets.all(
-                          R.sp(context, AppSpacing.cardPadding)),
+                        R.sp(context, AppSpacing.cardPadding),
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.red.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(
@@ -199,30 +235,54 @@ class _StockOutScreenState extends ConsumerState<StockOutScreen> {
                                 borderRadius: BorderRadius.circular(
                                   R.radius(context, AppSizes.radiusMd),
                                 ),
-                                borderSide:
-                                    const BorderSide(color: AppColors.primary),
+                                borderSide: const BorderSide(
+                                  color: AppColors.cyanDim,
+                                ),
                               ),
                             ),
                           ),
                         ),
                         SizedBox(width: R.sp(context, AppSpacing.xs)),
                         PopupMenuButton<String>(
-                          icon: Container(
-                            padding: EdgeInsets.all(R.sp(context, 10)),
-                            decoration: BoxDecoration(
-                              color: AppColors.card,
-                              borderRadius: BorderRadius.circular(
-                                R.radius(context, AppSizes.radiusMd),
-                              ),
-                              border: Border.all(color: AppColors.border),
-                            ),
-                            child: Icon(
-                              Icons.sort_rounded,
-                              color: AppColors.textPrimaryDark,
-                              size: R.icon(context, 20),
+                          initialValue: _sortBy,
+                          color: AppColors.card,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(
+                              AppSizes.radiusMd,
                             ),
                           ),
                           onSelected: (val) => setState(() => _sortBy = val),
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: R.sp(context, AppSpacing.sm),
+                              vertical: R.sp(context, AppSpacing.xs),
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.card,
+                              border: Border.all(color: AppColors.border),
+                              borderRadius: BorderRadius.circular(
+                                AppSizes.radiusMd,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.sort,
+                                  size: R.icon(context, 16),
+                                  color: AppColors.primary,
+                                ),
+                                SizedBox(width: R.sp(context, AppSpacing.xs)),
+                                Text(
+                                  _getSortLabel(_sortBy),
+                                  style: AppTextStyles.small.copyWith(
+                                    color: AppColors.textPrimaryDark,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                           itemBuilder: (ctx) => [
                             const PopupMenuItem(
                               value: 'name_asc',
@@ -273,7 +333,10 @@ class _StockOutScreenState extends ConsumerState<StockOutScreen> {
                               SizedBox(height: R.sp(context, AppSpacing.sm)),
                           itemBuilder: (context, i) {
                             final product = filtered[i];
-                            return _OutOfStockCard(product: product);
+                            return _OutOfStockCard(
+                              product: product,
+                              searchQuery: _searchQuery,
+                            );
                           },
                         ),
                       ),
@@ -282,10 +345,7 @@ class _StockOutScreenState extends ConsumerState<StockOutScreen> {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, st) => Center(
-          child: Text('Error loading out-of-stock products: $e',
-              style: AppTextStyles.small),
-        ),
+        error: (e, st) => const SizedBox.shrink(),
       ),
     );
   }
@@ -293,10 +353,16 @@ class _StockOutScreenState extends ConsumerState<StockOutScreen> {
 
 class _OutOfStockCard extends StatelessWidget {
   final Product product;
-  const _OutOfStockCard({required this.product});
+  final String searchQuery;
+
+  const _OutOfStockCard({required this.product, required this.searchQuery});
 
   @override
   Widget build(BuildContext context) {
+    final supplierText = product.supplier.isNotEmpty
+        ? _capitalize(product.supplier)
+        : 'Unassigned';
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -324,13 +390,10 @@ class _OutOfStockCard extends StatelessWidget {
                   Row(
                     children: [
                       Flexible(
-                        child: Text(
-                          product.name,
-                          style: AppTextStyles.cardValue.copyWith(
-                            fontSize: R.fs(context, 14),
-                            fontWeight: FontWeight.w600,
-                          ),
-                          overflow: TextOverflow.ellipsis,
+                        child: _buildHighlightedName(
+                          context,
+                          _capitalize(product.name),
+                          searchQuery,
                         ),
                       ),
                       SizedBox(width: R.sp(context, AppSpacing.xs)),
@@ -358,7 +421,7 @@ class _OutOfStockCard extends StatelessWidget {
                   ),
                   SizedBox(height: R.sp(context, 4)),
                   Text(
-                    'Supplier: ${product.supplier.isNotEmpty ? product.supplier : 'Unassigned'}',
+                    'Supplier: $supplierText',
                     style: AppTextStyles.small.copyWith(
                       color: AppColors.textSecondary,
                     ),
@@ -405,6 +468,59 @@ class _OutOfStockCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildHighlightedName(
+    BuildContext context,
+    String text,
+    String query,
+  ) {
+    final baseStyle = AppTextStyles.cardValue.copyWith(
+      fontSize: R.fs(context, 14),
+      fontWeight: FontWeight.w600,
+    );
+
+    if (query.isEmpty) {
+      return Text(text, style: baseStyle, overflow: TextOverflow.ellipsis);
+    }
+
+    final nameSpans = <TextSpan>[];
+    final String lowerName = text.toLowerCase();
+    final String lowerQuery = query.toLowerCase();
+
+    int start = 0;
+    while (true) {
+      final found = lowerName.indexOf(lowerQuery, start);
+      if (found == -1) break;
+
+      if (found > start) {
+        nameSpans.add(
+          TextSpan(text: text.substring(start, found), style: baseStyle),
+        );
+      }
+
+      nameSpans.add(
+        TextSpan(
+          text: text.substring(found, found + query.length),
+          style: baseStyle.copyWith(
+            fontWeight: FontWeight.bold,
+            color: AppColors.primary,
+          ),
+        ),
+      );
+
+      start = found + query.length;
+    }
+
+    if (start < text.length) {
+      nameSpans.add(TextSpan(text: text.substring(start), style: baseStyle));
+    }
+
+    return Text.rich(
+      TextSpan(children: nameSpans),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }

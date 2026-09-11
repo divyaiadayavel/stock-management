@@ -10,29 +10,39 @@ class CustomerRemoteDataSource {
   CustomerRemoteDataSource({required this.client});
 
   // Fetch verified customer array matrix records
-  Future<List<CustomerModel>> getCustomersFromServer({String search = ""}) async {
-    try {
-      final endpointUri = search.isNotEmpty 
-          ? '${ApiConfig.getCustomers}?search=${Uri.encodeComponent(search)}'
-          : ApiConfig.getCustomers;
+Future<List<CustomerModel>> getCustomersFromServer({
+  String search = "",
+}) async {
+  try {
+    final endpointUri = search.isNotEmpty
+        ? '${ApiConfig.getCustomers}?search=${Uri.encodeComponent(search)}'
+        : ApiConfig.getCustomers;
 
-      final response = await client.get(
-        Uri.parse(endpointUri),
-        headers: ApiConfig.jsonHeaders,
-      );
+    final response = await client.get(
+      Uri.parse(endpointUri),
+      headers: ApiConfig.jsonHeaders,
+    );
 
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> body = jsonDecode(response.body);
-        if (body['success'] == true && body['data'] != null) {
-          final List rawDataList = body['data'];
-          return rawDataList.map((jsonRow) => CustomerModel.fromMap(jsonRow)).toList();
-        }
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> body = jsonDecode(response.body);
+
+      if (body['success'] == true && body['data'] != null) {
+        final List rawDataList = body['data'];
+
+        return rawDataList
+            .map((jsonRow) => CustomerModel.fromMap(jsonRow))
+            .toList();
       }
-    } catch (errorTrace) {
-      debugPrint("Customer Remote DataSource GET Exception: $errorTrace");
     }
-    return [];
+
+    throw Exception(
+      "Failed to load customers. Server returned ${response.statusCode}",
+    );
+  } catch (errorTrace) {
+    debugPrint("Customer Remote DataSource GET Exception: $errorTrace");
+    rethrow;
   }
+}
 
   // Push fresh database insertion targets
   Future<int> addCustomerToServer(CustomerModel customer) async {

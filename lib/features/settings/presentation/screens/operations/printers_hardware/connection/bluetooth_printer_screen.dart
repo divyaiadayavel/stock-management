@@ -143,7 +143,7 @@ class _BluetoothPrinterScreenState extends ConsumerState<BluetoothPrinterScreen>
           child: ListView.separated(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
             itemCount: devices.length,
-            separatorBuilder: (_, __) => const Divider(height: 1, indent: 56, color: AppColors.borderStrong),
+            separatorBuilder: (_, _) => const Divider(height: 1, indent: 56, color: AppColors.borderStrong),
             itemBuilder: (context, i) => _deviceRow(devices[i]),
           ),
         ),

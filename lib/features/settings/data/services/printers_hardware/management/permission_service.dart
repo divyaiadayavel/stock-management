@@ -38,4 +38,12 @@ class PermissionService {
     final state = await FlutterBluePlus.adapterState.first;
     return state == BluetoothAdapterState.on;
   }
+
+  Future<bool> requestWifiScanPermissions() async {
+    if (Platform.isAndroid || Platform.isIOS) {
+      final status = await Permission.location.request();
+      return status.isGranted || status.isLimited;
+    }
+    return true;
+  }
 }

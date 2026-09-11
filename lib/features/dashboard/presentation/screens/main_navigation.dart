@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/app_colors.dart';
@@ -9,7 +12,7 @@ import '../../../auth/presentation/providers/access_provider.dart';
 import '../../../auth/presentation/widgets/access_guard.dart';
 import '../../../products/presentation/screens/product_screen.dart';
 import '../../../sales/presentation/screens/current_bill_screen.dart';
-import '../../../More/presentation/screens/more_screen.dart';
+import '../../../reports/presentation/screens/reports_screen.dart';
 import '../../../inventory/presentation/screens/inventory_screen.dart';
 import 'dashboard_screen.dart';
 
@@ -23,6 +26,13 @@ class MainNavigationScreen extends ConsumerStatefulWidget {
 
 class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
   int _currentIndex = 0;
+
+  // ── Double-back-to-exit state ──────────────────────
+  DateTime? _lastBackPressTime;
+  static const Duration _exitWindow = Duration(seconds: 2);
+
+  // Home tab index — back button/swipe returns here first from any other tab
+  static const int _homeIndex = 0;
 
   // Pages: Dashboard · Products · (Sale = FAB) · Inventory · More
   // Index:    0           1                          2           3
@@ -42,17 +52,18 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
     ),
     // index 3 → More / Settings
     (
-      AppFeature.more,
-      AccessGuard(feature: AppFeature.more, child: MoreScreen()),
+      AppFeature.reports,
+      AccessGuard(feature: AppFeature.reports, child: ReportsScreen()),
     ),
   ];
 
   // Nav items (4 tabs — Sale is the center FAB, not a tab)
+
   static const List<(IconData, String, AppFeature)> _navItems = [
     (Icons.home_outlined, 'Home', AppFeature.dashboard),
     (Icons.inventory_2_outlined, 'Products', AppFeature.products),
     (Icons.widgets_outlined, 'Inventory', AppFeature.inventory),
-    (Icons.more_horiz, 'More', AppFeature.more),
+    (Icons.bar_chart_outlined, 'Reports', AppFeature.reports),
   ];
 
   bool _canAccess(AppFeature feature) =>
@@ -93,92 +104,138 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
     );
   }
 
+  // ── Back/swipe handler ──────────────────────
+  // If not on Home tab → go to Home first.
+  // If already on Home tab → run double-tap-to-exit logic.
+  Future<void> _onBackInvoked() async {
+    if (_currentIndex != _homeIndex) {
+      setState(() => _currentIndex = _homeIndex);
+      _lastBackPressTime = null; // reset exit timer when jumping to Home
+      return;
+    }
+
+    final now = DateTime.now();
+    final isSecondTap =
+        _lastBackPressTime != null &&
+        now.difference(_lastBackPressTime!) < _exitWindow;
+
+    if (isSecondTap) {
+      SystemNavigator.pop();
+      return;
+    }
+
+    _lastBackPressTime = now;
+
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(
+          'Tap again to exit app',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.black),
+        ),
+        backgroundColor: AppColors.card,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        duration: _exitWindow,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.watch(roleAccessProvider);
 
-    return Scaffold(
-      body: _pages[_currentIndex].$2,
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 12,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: SizedBox(
-            height: 64,
-            child: Row(
-              children: [
-                // Home
-                Expanded(child: _navItem(0)),
-                // Products
-                Expanded(child: _navItem(1)),
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (didPop) return;
+        _onBackInvoked();
+      },
+      child: Scaffold(
+        body: _pages[_currentIndex].$2,
+        bottomNavigationBar: Container(
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black12,
+                blurRadius: 12,
+                offset: const Offset(0, -2),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            child: SizedBox(
+              height: 64,
+              child: Row(
+                children: [
+                  // Home
+                  Expanded(child: _navItem(0)),
+                  // Products
+                  Expanded(child: _navItem(1)),
 
-                // ── CENTER  Sale  BUTTON ──────────────────────
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 6,
-                  ),
-                  child: GestureDetector(
-                    onTap: _openSale,
-                    child: Container(
-                      width: 56,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        gradient: _canAccess(AppFeature.billing)
-                            ? AppColors.brandGradient
-                            : null,
-                        color: _canAccess(AppFeature.billing)
-                            ? null
-                            : AppColors.borderStrong,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: _canAccess(AppFeature.billing)
-                            ? [
-                                BoxShadow(
-                                  color: AppColors.cyan.withOpacity(0.4),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 3),
-                                ),
-                              ]
-                            : null,
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            _canAccess(AppFeature.billing)
-                                ? Icons.currency_rupee
-                                : Icons.lock_outline,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            "Sale",
-                            style: AppTextStyles.small.copyWith(
+                  // ── CENTER  Sale  BUTTON ──────────────────────
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
+                    ),
+                    child: GestureDetector(
+                      onTap: _openSale,
+                      child: Container(
+                        width: 56,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          gradient: _canAccess(AppFeature.billing)
+                              ? AppColors.brandGradient
+                              : null,
+                          color: _canAccess(AppFeature.billing)
+                              ? null
+                              : AppColors.borderStrong,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: _canAccess(AppFeature.billing)
+                              ? [
+                                  BoxShadow(
+                                    color: AppColors.cyan.withOpacity(0.4),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              _canAccess(AppFeature.billing)
+                                  ? Icons.currency_rupee
+                                  : Icons.lock_outline,
                               color: Colors.white,
-                              fontSize: 10,
-                              letterSpacing: 0,
+                              size: 20,
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 2),
+                            Text(
+                              "Sale",
+                              style: AppTextStyles.small.copyWith(
+                                color: Colors.white,
+                                fontSize: 10,
+                                letterSpacing: 0,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
 
-                // Inventory
-                Expanded(child: _navItem(2)),
-                // More
-                Expanded(child: _navItem(3)),
-              ],
+                  // Inventory
+                  Expanded(child: _navItem(2)),
+                  // More
+                  Expanded(child: _navItem(3)),
+                ],
+              ),
             ),
           ),
         ),

@@ -1,3 +1,4 @@
+// lib/features/sales/presentation/screens/payment_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,14 +13,27 @@ import '../providers/payment_provider.dart';
 import '../providers/sales_provider.dart';
 import '../../../customers/presentation/provider/customer_provider.dart';
 import '../../../customers/data/models/customer_model.dart';
+import '../../../customers/presentation/screens/add_customer_screen.dart';
+import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 import 'invoice_screen.dart';
 
 class PaymentScreen extends ConsumerStatefulWidget {
   final double totalAmount;
 
+  /// When set, this screen is being used to settle the outstanding
+  /// balance on an already-existing invoice (e.g. from the Invoice
+  /// Details screen's "Balance Payment" button) instead of creating a
+  /// brand new sale. [totalAmount] is then the remaining balance due.
+  final int? existingSaleId;
+  final String? existingCustomerName;
+  final String? existingInvoiceNumber;
+
   const PaymentScreen({
     super.key,
     required this.totalAmount,
+    this.existingSaleId,
+    this.existingCustomerName,
+    this.existingInvoiceNumber,
   });
 
   @override
@@ -30,6 +44,10 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
   late TextEditingController _cashCtrl;
   late TextEditingController _upiCtrl;
   bool _saving = false;
+
+  /// True when this screen is settling an existing invoice's balance
+  /// (add_payment.php) rather than creating a brand new sale.
+  bool get _isSettlingBalance => widget.existingSaleId != null;
 
   @override
   void initState() {
@@ -47,6 +65,29 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     super.dispose();
   }
 
+  Future<void> _addNewCustomer() async {
+    final createdCustomer = await Navigator.push<CustomerModel>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const AddCustomerScreen(returnCreatedCustomer: true),
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (createdCustomer != null && createdCustomer.id != null) {
+      ref
+          .read(paymentProvider.notifier)
+          .selectCustomer(
+            id: createdCustomer.id!,
+            name: createdCustomer.customerName,
+          );
+
+      ref.invalidate(rawCustomersProvider);
+      ref.invalidate(allCustomersProvider);
+    }
+  }
+
   Future<void> _pickCustomer() async {
     final customers = await ref.read(rawCustomersProvider.future);
     if (!mounted) return;
@@ -62,7 +103,8 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
         child: Padding(
           padding: EdgeInsets.only(
             top: R.sp(ctx, AppSpacing.lg),
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + R.sp(ctx, AppSpacing.lg),
+            bottom:
+                MediaQuery.of(ctx).viewInsets.bottom + R.sp(ctx, AppSpacing.lg),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -78,6 +120,41 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                 ),
               ),
               SizedBox(height: R.sp(ctx, AppSpacing.sm)),
+              Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: R.sp(ctx, AppSpacing.screenPadding),
+                ),
+                child: InkWell(
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _addNewCustomer();
+                  },
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      vertical: R.sp(ctx, AppSpacing.sm),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.person_add_alt_1,
+                          color: AppColors.primary,
+                          size: R.icon(ctx, AppSizes.iconMd),
+                        ),
+                        SizedBox(width: R.sp(ctx, AppSpacing.sm)),
+                        Text(
+                          'Add new customer',
+                          style: AppTextStyles.cardValue.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const Divider(height: 1, color: AppColors.border),
+              SizedBox(height: R.sp(ctx, AppSpacing.xs)),
               Flexible(
                 child: customers.isEmpty
                     ? Padding(
@@ -110,15 +187,13 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     );
 
     if (picked != null) {
-      ref.read(paymentProvider.notifier).selectCustomer(
-            id: picked.id!,
-            name: picked.customerName,
-          );
+      ref
+          .read(paymentProvider.notifier)
+          .selectCustomer(id: picked.id!, name: picked.customerName);
     }
   }
 
-  // --- UI/UX EXPERT SUCCESS ANIMATION DIALOG ---
-  void _showSuccessOverlay(int saleId) {
+  void _showSuccessOverlay(int saleId, double paidAmount) {
     showGeneralDialog(
       context: context,
       barrierDismissible: false,
@@ -126,28 +201,33 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
       transitionDuration: const Duration(milliseconds: 400),
       pageBuilder: (context, animation, secondaryAnimation) {
         return _SuccessAnimationWidget(
-          totalAmount: widget.totalAmount,
+          paidAmount: paidAmount,
           onAnimationComplete: () {
             if (!mounted) return;
-            // Clear cart and state right before deep navigation
+
+            if (_isSettlingBalance) {
+              // Settling an existing invoice: close the success dialog
+              // and pop straight back to whoever opened this screen
+              // (Invoice Details), which will reload the invoice and
+              // show it as PAID / PARTIAL / PENDING accordingly.
+              Navigator.of(context).pop();
+              Navigator.of(context).pop(true);
+              return;
+            }
+
             ref.read(billingProvider.notifier).clearCart();
             ref.read(paymentProvider.notifier).reset();
 
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(
-                builder: (_) => InvoiceScreen(saleId: saleId),
-              ),
+              MaterialPageRoute(builder: (_) => InvoiceScreen(saleId: saleId)),
             );
           },
         );
       },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
         return ScaleTransition(
-          scale: CurvedAnimation(
-            parent: animation,
-            curve: Curves.elasticOut,
-          ),
+          scale: CurvedAnimation(parent: animation, curve: Curves.elasticOut),
           child: child,
         );
       },
@@ -164,7 +244,47 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
       final cash = double.tryParse(_cashCtrl.text) ?? 0;
       final upi = double.tryParse(_upiCtrl.text) ?? 0;
       final tendered = cash + upi;
-      final balanceDue = tendered < widget.totalAmount ? widget.totalAmount - tendered : 0;
+      final balanceDue = tendered < widget.totalAmount
+          ? widget.totalAmount - tendered
+          : 0;
+
+      // Validation check: Require a registered customer if there is a balance due
+      if (balanceDue > 0 && paymentState.selectedCustomerId == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Please select a customer for sales with an outstanding balance.',
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() => _saving = false);
+        }
+        return;
+      }
+
+      // Determine correct payment status based on tendered amount
+      String paymentStatus = "PAID";
+      if (tendered <= 0.001) {
+        paymentStatus = "PENDING";
+      } else if (tendered < widget.totalAmount - 0.001) {
+        paymentStatus = "PARTIAL";
+      } else {
+        paymentStatus = "PAID";
+      }
+
+      final List<SalePayment> salePayments = [];
+      if (cash > 0) {
+        salePayments.add(
+          SalePayment(id: 0, saleId: 0, paymentMethod: 'CASH', amount: cash),
+        );
+      }
+      if (upi > 0) {
+        salePayments.add(
+          SalePayment(id: 0, saleId: 0, paymentMethod: 'UPI', amount: upi),
+        );
+      }
 
       final sale = SaleModel(
         invoiceNumber: '',
@@ -179,11 +299,13 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
         balanceAmount: balanceDue.toDouble(),
         invoiceDate: DateTime.now(),
         roundOff: 0.0,
-        paymentStatus: balanceDue == 0 ? "PAID" : "PARTIAL",
+        paymentStatus: paymentStatus,
         invoiceStatus: "FINAL",
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
         items: List.from(billingState.cart),
+        payments: salePayments,
+        recordedPaymentTotal: tendered.toDouble(),
       );
 
       final saleId = await ref.read(createSaleUseCaseProvider)(sale);
@@ -191,7 +313,9 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
       if (saleId == 0) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to create sale. Please try again.')),
+            const SnackBar(
+              content: Text('Failed to create sale. Please try again.'),
+            ),
           );
           setState(() => _saving = false);
         }
@@ -200,10 +324,12 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
 
       if (!mounted) return;
       setState(() => _saving = false);
-      
-      // Trigger the premium Meesho-styled smooth animation
-      _showSuccessOverlay(saleId);
 
+      ref.invalidate(rawCustomersProvider);
+      ref.invalidate(allCustomersProvider);
+      ref.read(dashboardProvider.notifier).refresh();
+
+      _showSuccessOverlay(saleId, tendered.toDouble());
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -214,6 +340,83 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     }
   }
 
+  /// Records a payment against an already-existing invoice's balance
+  /// (add_payment.php) — used when this screen was opened from the
+  /// Invoice Details screen's "Balance Payment" button, instead of
+  /// creating a brand new sale.
+  Future<void> _confirmSettlement() async {
+    setState(() => _saving = true);
+
+    try {
+      final cash = double.tryParse(_cashCtrl.text) ?? 0;
+      final upi = double.tryParse(_upiCtrl.text) ?? 0;
+      final tendered = cash + upi;
+
+      if (tendered <= 0) {
+        _failSettlement('Enter an amount to record.');
+        return;
+      }
+
+      if (tendered > widget.totalAmount + 0.01) {
+        _failSettlement(
+          'Amount cannot be greater than the balance due '
+          '(₹${widget.totalAmount.toStringAsFixed(2)}).',
+        );
+        return;
+      }
+
+      final saleId = widget.existingSaleId!;
+
+      if (cash > 0) {
+        await ref.read(addPaymentUseCaseProvider)(
+          saleId: saleId,
+          paymentMethod: 'CASH',
+          amount: cash,
+        );
+      }
+      if (upi > 0) {
+        await ref.read(addPaymentUseCaseProvider)(
+          saleId: saleId,
+          paymentMethod: 'UPI',
+          amount: upi,
+        );
+      }
+
+      if (!mounted) return;
+      setState(() => _saving = false);
+
+      // The invoice's balance just changed — refresh customer +
+      // dashboard receivable totals everywhere. The invoice itself
+      // gets refreshed by the caller (Invoice Details screen) once we
+      // pop back to it after the success animation.
+      ref.invalidate(rawCustomersProvider);
+      ref.invalidate(allCustomersProvider);
+      ref.read(dashboardProvider.notifier).refresh();
+
+      _showSuccessOverlay(saleId, tendered.toDouble());
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Could not record payment: '
+              '${e.toString().replaceFirst('Exception: ', '')}',
+            ),
+          ),
+        );
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  void _failSettlement(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+    setState(() => _saving = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final billingState = ref.watch(billingProvider);
@@ -222,8 +425,12 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     final cash = double.tryParse(_cashCtrl.text) ?? 0;
     final upi = double.tryParse(_upiCtrl.text) ?? 0;
     final tendered = cash + upi;
-    final change = tendered > widget.totalAmount ? tendered - widget.totalAmount : 0;
-    final balanceDue = tendered < widget.totalAmount ? widget.totalAmount - tendered : 0;
+    final change = tendered > widget.totalAmount
+        ? tendered - widget.totalAmount
+        : 0;
+    final balanceDue = tendered < widget.totalAmount
+        ? widget.totalAmount - tendered
+        : 0;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -241,7 +448,9 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
         title: Text('Payment', style: AppTextStyles.heading),
       ),
       body: SingleChildScrollView(
-        padding: R.hPad(context, base: AppSpacing.screenPadding).copyWith(
+        padding: R
+            .hPad(context, base: AppSpacing.screenPadding)
+            .copyWith(
               top: R.sp(context, AppSpacing.md),
               bottom: R.sp(context, AppSpacing.xl),
             ),
@@ -261,7 +470,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'TOTAL PAYABLE',
+                    _isSettlingBalance ? 'BALANCE DUE' : 'TOTAL PAYABLE',
                     style: AppTextStyles.small.copyWith(
                       color: Colors.white70,
                       letterSpacing: 1,
@@ -277,7 +486,12 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                   ),
                   SizedBox(height: R.sp(context, AppSpacing.xs)),
                   Text(
-                    'incl GST (${billingState.tax.toStringAsFixed(2)})',
+                    _isSettlingBalance
+                        ? (widget.existingInvoiceNumber != null &&
+                                  widget.existingInvoiceNumber!.isNotEmpty
+                              ? 'Invoice ${widget.existingInvoiceNumber}'
+                              : 'Outstanding balance')
+                        : 'incl GST (${billingState.tax.toStringAsFixed(2)})',
                     style: AppTextStyles.small.copyWith(color: Colors.white70),
                   ),
                 ],
@@ -286,10 +500,43 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
             SizedBox(height: R.sp(context, AppSpacing.lg)),
             Text(
               'Customer',
-              style: AppTextStyles.small.copyWith(color: AppColors.textSecondary),
+              style: AppTextStyles.small.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
             SizedBox(height: R.sp(context, AppSpacing.xs)),
-            GestureDetector(
+            _isSettlingBalance
+                ? Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: R.sp(context, AppSpacing.md),
+                      vertical: R.sp(context, AppSpacing.md),
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      borderRadius: BorderRadius.circular(
+                        R.radius(context, AppSizes.radiusMd),
+                      ),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          widget.existingCustomerName ?? 'Walk-in Customer',
+                          style: AppTextStyles.cardValue.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Icon(
+                          Icons.lock_outline,
+                          color: AppColors.textSecondary,
+                          size: R.icon(context, AppSizes.iconMd),
+                        ),
+                      ],
+                    ),
+                  )
+                : GestureDetector(
               onTap: _pickCustomer,
               child: Container(
                 width: double.infinity,
@@ -299,7 +546,9 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                 ),
                 decoration: BoxDecoration(
                   color: AppColors.card,
-                  borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
+                  borderRadius: BorderRadius.circular(
+                    R.radius(context, AppSizes.radiusMd),
+                  ),
                   border: Border.all(color: AppColors.border),
                 ),
                 child: Row(
@@ -307,7 +556,9 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                   children: [
                     Text(
                       paymentState.selectedCustomerName ?? 'Walk-in Customer',
-                      style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w600),
+                      style: AppTextStyles.cardValue.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     Icon(
                       Icons.keyboard_arrow_down,
@@ -338,11 +589,15 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
               children: [
                 Text(
                   'Cash tendered ₹${cash.toStringAsFixed(2)}',
-                  style: AppTextStyles.small.copyWith(color: AppColors.textSecondary),
+                  style: AppTextStyles.small.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 Text(
                   'Change ₹${change.toStringAsFixed(2)}',
-                  style: AppTextStyles.small.copyWith(color: AppColors.textSecondary),
+                  style: AppTextStyles.small.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -356,7 +611,9 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                 ),
                 decoration: BoxDecoration(
                   color: AppColors.orange.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
+                  borderRadius: BorderRadius.circular(
+                    R.radius(context, AppSizes.radiusMd),
+                  ),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -392,7 +649,9 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                   SizedBox(width: R.sp(context, AppSpacing.xs)),
                   Text(
                     'Secure 256-bit encrypted transaction',
-                    style: AppTextStyles.small.copyWith(color: AppColors.textSecondary),
+                    style: AppTextStyles.small.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ],
               ),
@@ -403,7 +662,9 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(
-          padding: R.hPad(context, base: AppSpacing.screenPadding).copyWith(
+          padding: R
+              .hPad(context, base: AppSpacing.screenPadding)
+              .copyWith(
                 top: R.sp(context, AppSpacing.sm),
                 bottom: R.sp(context, AppSpacing.sm),
               ),
@@ -418,12 +679,16 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                       backgroundColor: Colors.white,
                       side: const BorderSide(color: AppColors.border),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
+                        borderRadius: BorderRadius.circular(
+                          R.radius(context, AppSizes.radiusMd),
+                        ),
                       ),
                     ),
                     child: Text(
                       'Cancel',
-                      style: AppTextStyles.button.copyWith(color: AppColors.textPrimaryDark),
+                      style: AppTextStyles.button.copyWith(
+                        color: AppColors.textPrimaryDark,
+                      ),
                     ),
                   ),
                 ),
@@ -436,16 +701,24 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: AppColors.brandGradient,
-                      borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
+                      borderRadius: BorderRadius.circular(
+                        R.radius(context, AppSizes.radiusMd),
+                      ),
                     ),
                     child: ElevatedButton(
-                      onPressed: _saving ? null : _confirmAndPrint,
+                      onPressed: _saving
+                          ? null
+                          : (_isSettlingBalance
+                                ? _confirmSettlement
+                                : _confirmAndPrint),
                       style: ElevatedButton.styleFrom(
                         elevation: 0,
                         backgroundColor: Colors.transparent,
                         shadowColor: Colors.transparent,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
+                          borderRadius: BorderRadius.circular(
+                            R.radius(context, AppSizes.radiusMd),
+                          ),
                         ),
                       ),
                       child: _saving
@@ -458,8 +731,12 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                               ),
                             )
                           : Text(
-                              'Confirm & print invoice',
-                              style: AppTextStyles.button.copyWith(color: Colors.white),
+                              _isSettlingBalance
+                                  ? 'Confirm Payment'
+                                  : 'Confirm & print invoice',
+                              style: AppTextStyles.button.copyWith(
+                                color: Colors.white,
+                              ),
                             ),
                     ),
                   ),
@@ -493,14 +770,18 @@ class _TenderField extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
+        borderRadius: BorderRadius.circular(
+          R.radius(context, AppSizes.radiusMd),
+        ),
         border: Border.all(color: AppColors.border),
       ),
       child: Row(
         children: [
           Text(
             label,
-            style: AppTextStyles.cardValue.copyWith(color: AppColors.textSecondary),
+            style: AppTextStyles.cardValue.copyWith(
+              color: AppColors.textSecondary,
+            ),
           ),
           const Spacer(),
           Text('₹', style: AppTextStyles.cardValue),
@@ -510,7 +791,9 @@ class _TenderField extends StatelessWidget {
               controller: controller,
               keyboardType: TextInputType.number,
               textAlign: TextAlign.right,
-              style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w600),
+              style: AppTextStyles.cardValue.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
               decoration: const InputDecoration(
                 isDense: true,
                 border: InputBorder.none,
@@ -524,21 +807,22 @@ class _TenderField extends StatelessWidget {
   }
 }
 
-// --- UX EXPERT COMPONENT: MEESHO STYLED ANIMATION WIDGET ---
 class _SuccessAnimationWidget extends StatefulWidget {
-  final double totalAmount;
+  final double paidAmount;
   final VoidCallback onAnimationComplete;
 
   const _SuccessAnimationWidget({
-    required this.totalAmount,
+    required this.paidAmount,
     required this.onAnimationComplete,
   });
 
   @override
-  State<_SuccessAnimationWidget> createState() => _SuccessAnimationWidgetState();
+  State<_SuccessAnimationWidget> createState() =>
+      _SuccessAnimationWidgetState();
 }
 
-class _SuccessAnimationWidgetState extends State<_SuccessAnimationWidget> with SingleTickerProviderStateMixin {
+class _SuccessAnimationWidgetState extends State<_SuccessAnimationWidget>
+    with SingleTickerProviderStateMixin {
   late AnimationController _animCtrl;
   late Animation<double> _checkScale;
   late Animation<double> _containerScale;
@@ -563,7 +847,6 @@ class _SuccessAnimationWidgetState extends State<_SuccessAnimationWidget> with S
 
     _animCtrl.forward();
 
-    // Trigger auto redirect after micro-interactions finish displaying
     Future.delayed(const Duration(milliseconds: 2200), () {
       if (mounted) widget.onAnimationComplete();
     });
@@ -592,7 +875,7 @@ class _SuccessAnimationWidgetState extends State<_SuccessAnimationWidget> with S
                 color: Colors.black.withOpacity(0.15),
                 blurRadius: 20,
                 offset: const Offset(0, 10),
-              )
+              ),
             ],
           ),
           child: Column(
@@ -601,7 +884,6 @@ class _SuccessAnimationWidgetState extends State<_SuccessAnimationWidget> with S
               Stack(
                 alignment: Alignment.center,
                 children: [
-                  // Animated Outer ripple effect
                   AnimatedBuilder(
                     animation: _animCtrl,
                     builder: (context, child) {
@@ -610,12 +892,13 @@ class _SuccessAnimationWidgetState extends State<_SuccessAnimationWidget> with S
                         height: 110,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: const Color(0xFF4CAF50).withOpacity((1.0 - _animCtrl.value) * 0.2),
+                          color: const Color(
+                            0xFF4CAF50,
+                          ).withOpacity((1.0 - _animCtrl.value) * 0.2),
                         ),
                       );
                     },
                   ),
-                  // Solid green circle scaling checkmark
                   ScaleTransition(
                     scale: _checkScale,
                     child: Container(
@@ -646,20 +929,20 @@ class _SuccessAnimationWidgetState extends State<_SuccessAnimationWidget> with S
               const SizedBox(height: 8),
               Text(
                 'Payment received successfully',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
               ),
               const SizedBox(height: 16),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  '₹${widget.totalAmount.toStringAsFixed(2)}',
+                  '₹${widget.paidAmount.toStringAsFixed(2)}',
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
@@ -676,7 +959,9 @@ class _SuccessAnimationWidgetState extends State<_SuccessAnimationWidget> with S
                     height: 16,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.grey[400]!),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Colors.grey[400]!,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -689,7 +974,7 @@ class _SuccessAnimationWidgetState extends State<_SuccessAnimationWidget> with S
                     ),
                   ),
                 ],
-              )
+              ),
             ],
           ),
         ),

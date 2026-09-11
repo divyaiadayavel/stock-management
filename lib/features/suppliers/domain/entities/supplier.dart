@@ -23,6 +23,9 @@ class Supplier extends Equatable {
   final String? notes;
   final String status;
 
+  // Supplier category IDs from product_categories.
+  final List<int> categoryIds;
+
   const Supplier({
     required this.id,
     required this.supplierCode,
@@ -45,13 +48,32 @@ class Supplier extends Equatable {
     required this.creditLimit,
     this.notes,
     required this.status,
+    this.categoryIds = const [],
   });
 
   @override
   List<Object?> get props => [
-        id, supplierCode, image, supplierName, companyName, contactPerson,
-        phone, alternatePhone, email, gstNumber, panNumber, address,
-        city, state, country, postalCode, openingBalance, currentBalance,
-        creditLimit, notes, status,
+        id,
+        supplierCode,
+        image,
+        supplierName,
+        companyName,
+        contactPerson,
+        phone,
+        alternatePhone,
+        email,
+        gstNumber,
+        panNumber,
+        address,
+        city,
+        state,
+        country,
+        postalCode,
+        openingBalance,
+        currentBalance,
+        creditLimit,
+        notes,
+        status,
+        categoryIds,
       ];
 }

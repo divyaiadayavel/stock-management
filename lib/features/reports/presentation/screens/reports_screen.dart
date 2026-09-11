@@ -1,483 +1,823 @@
-// lib/features/reports/presentation/screens/reports_screen.dart
-//
-// Simplified Reports Screen:
-// - Top summary cards: total products, inventory value, today stock in/out.
-// - Main list: each stock movement as a card, sorted latest first.
-// - Clean, scrollable, all cards.
-//
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_text_styles.dart';
-import '../../../../core/network/api_config.dart';
 import '../../../../core/utils/responsive_helper.dart';
 
-// ---- Models ----
-class DashboardData {
-  final int totalProducts;
-  final int totalUnits;
-  final double inventoryValue;
-  final double totalPurchases;
-  final double totalSales;
-  final double grossProfit;
-  final int lowStock;
+import '../../domain/entities/report_extras.dart';
+import '../providers/reports_provider.dart';
+import '../providers/report_extras_provider.dart';
 
-  DashboardData({
-    required this.totalProducts,
-    required this.totalUnits,
-    required this.inventoryValue,
-    required this.totalPurchases,
-    required this.totalSales,
-    required this.grossProfit,
-    required this.lowStock,
-  });
+import 'sales_reports_screen.dart';
+import 'product_performance_screen.dart';
+import 'purchases_suppliers_screen.dart';
+import 'inventory_stock_report_screen.dart';
+import 'services_reports_screen.dart';
+import 'profitability_margins_screen.dart';
 
-  factory DashboardData.fromJson(Map<String, dynamic> json) {
-    return DashboardData(
-      totalProducts: json['total_products'] ?? 0,
-      totalUnits: json['total_units'] ?? 0,
-      inventoryValue: (json['inventory_value'] ?? 0).toDouble(),
-      totalPurchases: (json['total_purchases'] ?? 0).toDouble(),
-      totalSales: (json['total_sales'] ?? 0).toDouble(),
-      grossProfit: (json['gross_profit'] ?? 0).toDouble(),
-      lowStock: json['low_stock'] ?? 0,
-    );
-  }
-}
-
-class Movement {
-  final int id;
-  final int productId;
-  final String productName;
-  final String sku;
-  final String movementType;
-  final String referenceType;
-  final int? referenceId;
-  final double quantity;
-  final double stockBefore;
-  final double stockAfter;
-  final double unitCost;
-  final String remarks;
-  final DateTime createdAt;
-
-  Movement({
-    required this.id,
-    required this.productId,
-    required this.productName,
-    required this.sku,
-    required this.movementType,
-    required this.referenceType,
-    this.referenceId,
-    required this.quantity,
-    required this.stockBefore,
-    required this.stockAfter,
-    required this.unitCost,
-    required this.remarks,
-    required this.createdAt,
-  });
-
-  factory Movement.fromJson(Map<String, dynamic> json) {
-    return Movement(
-      id: json['id'] ?? 0,
-      productId: json['product_id'] ?? 0,
-      productName: json['product_name'] ?? 'Unknown',
-      sku: json['sku'] ?? '',
-      movementType: json['movement_type'] ?? '',
-      referenceType: json['reference_type'] ?? '',
-      referenceId: json['reference_id'],
-      quantity: (json['quantity'] ?? 0).toDouble(),
-      stockBefore: (json['stock_before'] ?? 0).toDouble(),
-      stockAfter: (json['stock_after'] ?? 0).toDouble(),
-      unitCost: (json['unit_cost'] ?? 0).toDouble(),
-      remarks: json['remarks'] ?? '',
-      createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()),
-    );
-  }
-}
-
-// ---- Providers ----
-final reportsDashboardProvider = FutureProvider.autoDispose<DashboardData>((ref) async {
-  final uri = Uri.parse('${ApiConfig.reports}?action=dashboard');
-  final response = await http.get(uri, headers: ApiConfig.jsonHeaders);
-  if (response.statusCode == 200) {
-    final res = json.decode(response.body);
-    if (res['success'] == true && res['data'] != null) {
-      return DashboardData.fromJson(res['data']);
-    }
-  }
-  throw Exception('Failed to load dashboard');
-});
-
-final movementsListProvider = FutureProvider.autoDispose<List<Movement>>((ref) async {
-  final uri = Uri.parse('${ApiConfig.reports}?action=movements_list&limit=100');
-  final response = await http.get(uri, headers: ApiConfig.jsonHeaders);
-  if (response.statusCode == 200) {
-    final res = json.decode(response.body);
-    if (res['success'] == true && res['data'] != null) {
-      final list = res['data'] as List<dynamic>;
-      return list.map((item) => Movement.fromJson(item)).toList();
-    }
-  }
-  throw Exception('Failed to load movements');
-});
-
-// ---- Main Screen ----
-class ReportsScreen extends ConsumerWidget {
+class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final dashboardAsync = ref.watch(reportsDashboardProvider);
-    final movementsAsync = ref.watch(movementsListProvider);
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.card,
-        elevation: 0,
-        title: Text('Reports', style: AppTextStyles.appBarTitle),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.refresh, color: AppColors.textSecondary),
-            onPressed: () {
-              ref.refresh(reportsDashboardProvider);
-              ref.refresh(movementsListProvider);
-            },
-            tooltip: 'Refresh',
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          ref.refresh(reportsDashboardProvider);
-          ref.refresh(movementsListProvider);
-          await Future.delayed(const Duration(milliseconds: 500));
-        },
-        child: Column(
-          children: [
-            // Summary Cards (top)
-            dashboardAsync.when(
-              loading: () => _buildLoadingSummary(context),
-              error: (e, _) => _buildErrorSummary(context, e.toString()),
-              data: (data) => _buildSummaryCards(context, data),
-            ),
-            // Movements List
-            Expanded(
-              child: movementsAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Center(
-                  child: Text('Error loading movements: $e',
-                    style: AppTextStyles.small.copyWith(color: AppColors.red)),
-                ),
-                data: (movements) => _buildMovementsList(context, movements),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ---- Helper: Loading Summary ----
-  Widget _buildLoadingSummary(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.all(R.sp(context, AppSpacing.md)),
-      height: R.sp(context, 110),
-      child: const Center(child: CircularProgressIndicator()),
-    );
-  }
-
-  // ---- Helper: Error Summary ----
-  Widget _buildErrorSummary(BuildContext context, String error) {
-    return Container(
-      padding: EdgeInsets.all(R.sp(context, AppSpacing.md)),
-      height: R.sp(context, 110),
-      child: Center(
-        child: Text('Error: $error',
-          style: AppTextStyles.small.copyWith(color: AppColors.red)),
-      ),
-    );
-  }
-
-  // ---- Helper: Summary Cards ----
-  Widget _buildSummaryCards(BuildContext context, DashboardData data) {
-    final items = [
-      _SummaryItem(
-        label: 'Products',
-        value: '${data.totalProducts}',
-        icon: Icons.inventory_2_outlined,
-        color: AppColors.primary,
-      ),
-      _SummaryItem(
-        label: 'Stock Value',
-        value: '₹${NumberFormat('#,##0').format(data.inventoryValue)}',
-        icon: Icons.pie_chart,
-        color: AppColors.green,
-      ),
-      _SummaryItem(
-        label: 'Low Stock',
-        value: '${data.lowStock}',
-        icon: Icons.warning_amber_outlined,
-        color: AppColors.red,
-      ),
-      _SummaryItem(
-        label: 'Sales',
-        value: '₹${NumberFormat('#,##0').format(data.totalSales)}',
-        icon: Icons.arrow_upward_outlined,
-        color: Colors.blue,
-      ),
-    ];
-
-    return Container(
-      padding: EdgeInsets.all(R.sp(context, AppSpacing.md)),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: items.map((item) {
-          return Expanded(
-            child: Container(
-              margin: EdgeInsets.symmetric(horizontal: R.sp(context, 2)),
-              padding: EdgeInsets.symmetric(vertical: R.sp(context, AppSpacing.sm)),
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(R.radius(context, AppSizes.cardRadius)),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(item.icon, color: item.color, size: R.icon(context, 20)),
-                  SizedBox(height: R.sp(context, 4)),
-                  Text(
-                    item.value,
-                    style: AppTextStyles.cardValue.copyWith(fontSize: R.fs(context, 14)),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    item.label,
-                    style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 10)),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  // ---- Helper: Movements List ----
-  Widget _buildMovementsList(BuildContext context, List<Movement> movements) {
-    if (movements.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.inbox_outlined, size: 48, color: AppColors.textSecondary.withValues(alpha: 0.4)),
-            SizedBox(height: R.sp(context, AppSpacing.sm)),
-            Text('No movements found', style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 13))),
-          ],
-        ),
-      );
-    }
-
-    return ListView.builder(
-      padding: EdgeInsets.all(R.sp(context, AppSpacing.md)),
-      itemCount: movements.length,
-      itemBuilder: (ctx, index) {
-        final m = movements[index];
-        return _MovementCard(movement: m);
-      },
-    );
-  }
+  ConsumerState<ReportsScreen> createState() => _ReportsScreenState();
 }
 
-// ---- Movement Card Widget ----
-class _MovementCard extends StatelessWidget {
-  final Movement movement;
+class _ReportsScreenState extends ConsumerState<ReportsScreen> {
+  // Single shared date filter for this whole screen: default is "This Month",
+  // and it drives both the metrics grid (Total Sales, Purchases, Service
+  // Value, Expenses, Receivables, Payables) and the Sales Analysis chart.
+  // 'today' | 'this_week' | 'this_month' | 'this_year' | 'custom'
+  String _periodKey = 'this_month';
+  DateTimeRange? _customRange;
 
-  const _MovementCard({required this.movement});
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(reportsProvider.notifier).fetchReportData();
+    });
+  }
+
+  String _fmt2(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  /// The literal date span for the currently selected filter. Used as the
+  /// default when opening the custom-range picker.
+  DateTimeRange _rangeForPeriod(String key) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    switch (key) {
+      case 'today':
+        return DateTimeRange(start: today, end: now);
+      case 'this_week':
+        final monday = today.subtract(Duration(days: today.weekday - 1));
+        return DateTimeRange(start: monday, end: now);
+      case 'this_year':
+        return DateTimeRange(start: DateTime(now.year, 1, 1), end: now);
+      case 'this_month':
+      default:
+        return DateTimeRange(start: DateTime(now.year, now.month, 1), end: now);
+    }
+  }
+
+  /// Applies a newly chosen period/custom-range in one setState.
+  void _applyPeriod(String key, {DateTimeRange? custom}) {
+    setState(() {
+      _periodKey = key;
+      _customRange = custom;
+    });
+  }
+
+  /// The value passed to `reportsOverviewProvider`. Custom ranges are encoded
+  /// as 'custom:YYYY-MM-DD:YYYY-MM-DD' — the datasource decodes this into the
+  /// backend's `period=custom&from=..&to=..` params.
+  String get _overviewRangeParam {
+    if (_periodKey == 'custom' && _customRange != null) {
+      final s = _customRange!.start;
+      final e = _customRange!.end;
+      String iso(DateTime d) =>
+          '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      return 'custom:${iso(s)}:${iso(e)}';
+    }
+    return _periodKey;
+  }
+
+  String get _periodLabel {
+    switch (_periodKey) {
+      case 'today':
+        return 'Today';
+      case 'this_week':
+        return 'This Week';
+      case 'this_year':
+        return 'This Year';
+      case 'custom':
+        if (_customRange == null) return 'Custom Range';
+        return '${_fmt2(_customRange!.start)} - ${_fmt2(_customRange!.end)}';
+      case 'this_month':
+      default:
+        return 'This Month';
+    }
+  }
+
+  Future<void> _showPeriodSheet() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        Widget option(String value, String label, IconData icon) {
+          final selected = _periodKey == value;
+          return ListTile(
+            leading: Icon(
+              icon,
+              color: selected ? AppColors.primary : AppColors.textSecondary,
+              size: 20,
+            ),
+            title: Text(
+              label,
+              style: TextStyle(
+                fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+                color: selected ? AppColors.primary : AppColors.textPrimaryDark,
+                fontSize: 14,
+              ),
+            ),
+            trailing: selected
+                ? const Icon(
+                    Icons.check_circle_rounded,
+                    color: AppColors.primary,
+                    size: 18,
+                  )
+                : null,
+            onTap: () => Navigator.pop(ctx, value),
+          );
+        }
+
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Filter By Date',
+                    style: AppTextStyles.cardValue.copyWith(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              option('today', 'Today', Icons.today_rounded),
+              option('this_week', 'This Week', Icons.view_week_rounded),
+              option(
+                'this_month',
+                'This Month',
+                Icons.calendar_view_month_rounded,
+              ),
+              option('this_year', 'This Year', Icons.calendar_today_rounded),
+              option('custom', 'Custom Date Range', Icons.date_range_rounded),
+              SizedBox(height: R.sp(context, 8)),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (choice == null) return;
+    if (!mounted) return;
+
+    if (choice == 'custom') {
+      final picked = await showDateRangePicker(
+        context: context,
+        firstDate: DateTime(2020),
+        lastDate: DateTime.now(),
+        initialDateRange: _customRange ?? _rangeForPeriod('this_month'),
+      );
+      if (picked != null) {
+        _applyPeriod('custom', custom: picked);
+      }
+    } else {
+      _applyPeriod(choice);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isIn = movement.movementType == 'STOCK_IN';
-    final isOut = movement.movementType == 'STOCK_OUT';
-    final isSale = movement.movementType == 'SALE';
-    final isOpening = movement.movementType == 'OPENING_STOCK';
+    final overviewAsync = ref.watch(
+      reportsOverviewProvider(_overviewRangeParam),
+    );
+    final chartAsync = ref.watch(rangeChartPointsProvider(_overviewRangeParam));
 
-    String typeLabel;
-    Color chipColor;
-    if (isIn) { typeLabel = 'Stock In'; chipColor = AppColors.green; }
-    else if (isOut) { typeLabel = 'Stock Out'; chipColor = AppColors.red; }
-    else if (isSale) { typeLabel = 'Sale'; chipColor = Colors.blue; }
-    else if (isOpening) { typeLabel = 'Opening Stock'; chipColor = Colors.grey; }
-    else { typeLabel = movement.movementType; chipColor = Colors.orange; }
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: PreferredSize(
+        preferredSize: Size.fromHeight(R.sp(context, 52)),
+        child: AppBar(
+          backgroundColor: AppColors.background,
+          elevation: 0,
+          automaticallyImplyLeading: false,
+          titleSpacing: R.sp(context, AppSpacing.screenPadding),
+          title: Text('Reports & Statements', style: AppTextStyles.heading),
+        ),
+      ),
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(reportsOverviewProvider(_overviewRangeParam));
+            ref.invalidate(rangeChartPointsProvider(_overviewRangeParam));
+            await ref.read(reportsProvider.notifier).fetchReportData();
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.symmetric(
+              horizontal: R.sp(context, AppSpacing.screenPadding),
+              vertical: R.sp(context, AppSpacing.sm),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── 1. Sales Analysis Chart Card (shares the screen's date filter) ──
+                _buildChartCard(context, chartAsync),
 
-    final quantity = movement.quantity;
-    final isPositive = quantity > 0;
+                SizedBox(height: R.sp(context, AppSpacing.md)),
 
-    // Reference
-    String reference = '';
-    if (movement.referenceType == 'PURCHASE' && movement.referenceId != null) {
-      reference = 'PO #${movement.referenceId}';
-    } else if (movement.referenceType == 'INVOICE' && movement.referenceId != null) {
-      reference = 'Invoice #${movement.referenceId}';
-    } else if (movement.referenceType == 'MANUAL') {
-      reference = 'Manual';
-    }
+                // ── 2. Middle Section: Metrics Grid (2 Rows x 3 Columns), scoped to the same filter ──
+                overviewAsync.when(
+                  data: (ov) => _buildMetricsGrid(context, ov),
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (_, _) =>
+                      _buildMetricsGrid(context, const ReportOverviewSummary()),
+                ),
 
+                SizedBox(height: R.sp(context, AppSpacing.lg)),
+
+                // ── 3. Bottom Section: Reports Directory Cards ──────────────────
+                Text('Reports Directory', style: AppTextStyles.sectionTitle),
+                SizedBox(height: R.sp(context, AppSpacing.sm)),
+
+                _DirectoryCard(
+                  title: 'Product Sales Reports',
+                  subtitle:
+                      'Invoices, billing details & payment settlement status',
+                  icon: Icons.receipt_long_rounded,
+                  color: const Color(0xFF3B82F6),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const SalesReportsScreen(),
+                    ),
+                  ),
+                ),
+                _DirectoryCard(
+                  title: 'Product Sales Ranking',
+                  subtitle:
+                      'Best selling, high profit margin & remaining stock units',
+                  icon: Icons.leaderboard_rounded,
+                  color: const Color(0xFF10B981),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ProductPerformanceScreen(),
+                    ),
+                  ),
+                ),
+                _DirectoryCard(
+                  title: 'Purchases & Suppliers',
+                  subtitle:
+                      'Vendor sourced products, purchase order logs & balances',
+                  icon: Icons.local_shipping_rounded,
+                  color: const Color(0xFFF59E0B),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const PurchasesSuppliersScreen(),
+                    ),
+                  ),
+                ),
+                _DirectoryCard(
+                  title: 'Inventory & Stock Report',
+                  subtitle:
+                      'Complete stock in, out, opening & adjusted movement logs',
+                  icon: Icons.inventory_2_rounded,
+                  color: const Color(0xFF8B5CF6),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const InventoryStockReportScreen(),
+                    ),
+                  ),
+                ),
+                _DirectoryCard(
+                  title: 'Services Reports',
+                  subtitle:
+                      'Dynamic forms, customer orders, service charges & reprint bill',
+                  icon: Icons.miscellaneous_services_rounded,
+                  color: const Color(0xFF00A8D4),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ServicesReportsScreen(),
+                    ),
+                  ),
+                ),
+                _DirectoryCard(
+                  title: 'Profitability & Expenses',
+                  subtitle:
+                      'Turnover, total purchases vs selling margin & expense items',
+                  icon: Icons.pie_chart_rounded,
+                  color: const Color(0xFFEF4444),
+                  isLast: true,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ProfitabilityMarginsScreen(),
+                    ),
+                  ),
+                ),
+                SizedBox(height: R.sp(context, AppSpacing.lg)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMetricsGrid(BuildContext context, ReportOverviewSummary ov) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _MetricCard(
+                title: 'Total Sales',
+                amount: '₹${_formatCurrency(ov.totalSales)}',
+                subtitle: '${ov.totalUnitsSold.toStringAsFixed(0)} Units Sold',
+                icon: Icons.bar_chart_rounded,
+                color: const Color(0xFF3B82F6),
+              ),
+            ),
+            SizedBox(width: R.sp(context, AppSpacing.xs)),
+            Expanded(
+              child: _MetricCard(
+                title: 'Total Purchases',
+                amount: '₹${_formatCurrency(ov.totalPurchases)}',
+                subtitle:
+                    '${ov.totalUnitsBought.toStringAsFixed(0)} Units Bought',
+                icon: Icons.shopping_cart_rounded,
+                color: const Color(0xFF10B981),
+              ),
+            ),
+            SizedBox(width: R.sp(context, AppSpacing.xs)),
+            Expanded(
+              child: _MetricCard(
+                title: 'Service Value',
+                amount: '₹${_formatCurrency(ov.serviceValue)}',
+                subtitle: '${ov.servicesCount} Jobs Logged',
+                icon: Icons.build_circle_rounded,
+                color: const Color(0xFF00A8D4),
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: R.sp(context, AppSpacing.xs)),
+        Row(
+          children: [
+            Expanded(
+              child: _MetricCard(
+                title: 'Expense Value',
+                amount: '₹${_formatCurrency(ov.expenseValue)}',
+                subtitle: 'Active Overhead',
+                icon: Icons.money_off_rounded,
+                color: const Color(0xFF8B5CF6),
+              ),
+            ),
+            SizedBox(width: R.sp(context, AppSpacing.xs)),
+            Expanded(
+              child: _MetricCard(
+                title: 'Receivables',
+                amount: '₹${_formatCurrency(ov.totalReceivable)}',
+                subtitle: 'From Customers',
+                icon: Icons.person_rounded,
+                color: const Color(0xFFF59E0B),
+              ),
+            ),
+            SizedBox(width: R.sp(context, AppSpacing.xs)),
+            Expanded(
+              child: _MetricCard(
+                title: 'Payables',
+                amount: '₹${_formatCurrency(ov.totalPayable)}',
+                subtitle: 'To Suppliers',
+                icon: Icons.local_shipping_rounded,
+                color: const Color(0xFFEF4444),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // Updated full-number formatter with comma separators and 2 decimal places
+  static String _formatCurrency(double val) {
+    final parts = val.toStringAsFixed(2).split('.');
+    final re = RegExp(r'\d{1,3}(?=(\d{3})+(?!\d))');
+    parts[0] = parts[0].replaceAllMapped(re, (match) => '${match[0]},');
+    return parts.join('.');
+  }
+
+  // ── Sales Analysis Chart Card (Horizontally scrollable with price on top & date at bottom) ──
+  Widget _buildChartCard(
+    BuildContext context,
+    AsyncValue<List<ReportChartPoint>> chartAsync,
+  ) {
     return Container(
-      margin: EdgeInsets.only(bottom: R.sp(context, AppSpacing.sm)),
-      padding: EdgeInsets.all(R.sp(context, AppSpacing.md)),
+      width: double.infinity,
+      padding: EdgeInsets.all(R.sp(context, AppSpacing.cardPadding)),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(R.radius(context, AppSizes.cardRadius)),
+        borderRadius: BorderRadius.circular(
+          R.radius(context, AppSizes.cardRadius),
+        ),
         border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Row 1: Product name + SKU
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Sales Analysis',
+                style: AppTextStyles.cardValue.copyWith(
+                  fontSize: R.fs(context, 15),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: _showPeriodSheet,
+                icon: const Icon(
+                  Icons.calendar_month_rounded,
+                  size: 16,
+                  color: AppColors.primary,
+                ),
+                label: Text(
+                  _periodLabel,
+                  style: const TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  side: const BorderSide(color: AppColors.border),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: R.sp(context, AppSpacing.md)),
+          chartAsync.when(
+            loading: () => SizedBox(
+              height: R.sp(context, 190),
+              child: const Center(
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+            error: (_, _) => SizedBox(
+              height: R.sp(context, 190),
+              child: const Center(child: Text('Failed to load chart data')),
+            ),
+            data: (points) {
+              if (points.isEmpty) {
+                return SizedBox(
+                  height: R.sp(context, 190),
+                  child: Center(
+                    child: Text(
+                      'No sales recorded for this date range',
+                      style: AppTextStyles.small.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              final maxAmount = points
+                  .map((e) => e.amount)
+                  .reduce((a, b) => a > b ? a : b);
+              final ceiling = maxAmount > 0 ? maxAmount * 1.25 : 1000.0;
+
+              return SizedBox(
+                height: R.sp(context, 195),
+                child: Row(
+                  children: [
+                    // Fixed Y-Axis Scale Labels on the Left
+                    SizedBox(
+                      width: R.sp(context, 38),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            _formatYAxisLabel(ceiling),
+                            style: AppTextStyles.small.copyWith(
+                              fontSize: R.fs(context, 8.5),
+                            ),
+                          ),
+                          Text(
+                            _formatYAxisLabel(ceiling * 0.75),
+                            style: AppTextStyles.small.copyWith(
+                              fontSize: R.fs(context, 8.5),
+                            ),
+                          ),
+                          Text(
+                            _formatYAxisLabel(ceiling * 0.5),
+                            style: AppTextStyles.small.copyWith(
+                              fontSize: R.fs(context, 8.5),
+                            ),
+                          ),
+                          Text(
+                            _formatYAxisLabel(ceiling * 0.25),
+                            style: AppTextStyles.small.copyWith(
+                              fontSize: R.fs(context, 8.5),
+                            ),
+                          ),
+                          Text(
+                            '0',
+                            style: AppTextStyles.small.copyWith(
+                              fontSize: R.fs(context, 8.5),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(width: R.sp(context, AppSpacing.xs)),
+                    // Horizontally Scrollable Bars Area
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          const itemWidth = 52.0;
+                          final totalChartWidth =
+                              (points.length * itemWidth) > constraints.maxWidth
+                              ? points.length * itemWidth
+                              : constraints.maxWidth;
+
+                          return SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: SizedBox(
+                              width: totalChartWidth,
+                              child: Stack(
+                                children: [
+                                  // Background Grid Lines spanning the full scroll width
+                                  Column(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: List.generate(
+                                      5,
+                                      (_) => Container(
+                                        height: 1,
+                                        color: AppColors.border,
+                                      ),
+                                    ),
+                                  ),
+                                  // Scrollable Bars Row
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceAround,
+                                    children: points.map((pt) {
+                                      final ratio = (pt.amount / ceiling).clamp(
+                                        0.0,
+                                        1.0,
+                                      );
+                                      final availableHeight =
+                                          constraints.maxHeight - 34;
+                                      final barHeight = availableHeight * ratio;
+
+                                      return SizedBox(
+                                        width: itemWidth,
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.end,
+                                          children: [
+                                            // Price label on top of the bar
+                                            Text(
+                                              _formatBarPrice(pt.amount),
+                                              style: const TextStyle(
+                                                fontSize: 8.5,
+                                                fontWeight: FontWeight.bold,
+                                                color: AppColors.primary,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            // Bar container
+                                            Container(
+                                              width: R.sp(context, 16),
+                                              height: barHeight < 4
+                                                  ? 4
+                                                  : barHeight,
+                                              decoration: const BoxDecoration(
+                                                color: AppColors.primary,
+                                                borderRadius:
+                                                    BorderRadius.vertical(
+                                                      top: Radius.circular(4),
+                                                    ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 6),
+                                            // Bottom date / time label
+                                            SizedBox(
+                                              width: itemWidth,
+                                              child: Text(
+                                                pt.label,
+                                                style: const TextStyle(
+                                                  fontSize: 8.5,
+                                                  color:
+                                                      AppColors.textSecondary,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                                textAlign: TextAlign.center,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatBarPrice(double val) {
+    if (val >= 100000) return '${(val / 100000).toStringAsFixed(1)}L';
+    if (val >= 1000) return '${(val / 1000).toStringAsFixed(1)}k';
+    if (val == 0) return '';
+    return val.toStringAsFixed(0);
+  }
+
+  String _formatYAxisLabel(double val) {
+    if (val >= 100000) return '${(val / 100000).toStringAsFixed(1)}L';
+    if (val >= 1000) return '${(val / 1000).toStringAsFixed(0)}k';
+    return val.toStringAsFixed(0);
+  }
+}
+
+class _MetricCard extends StatelessWidget {
+  final String title;
+  final String amount;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+
+  const _MetricCard({
+    required this.title,
+    required this.amount,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(R.sp(context, 8)),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(
+          R.radius(context, AppSizes.cardRadius),
+        ),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Row(
             children: [
+              Icon(icon, size: R.icon(context, 14), color: color),
+              SizedBox(width: R.sp(context, 4)),
               Expanded(
                 child: Text(
-                  movement.productName,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: R.fs(context, 15),
-                    color: AppColors.textPrimaryDark,
+                  title,
+                  style: AppTextStyles.small.copyWith(
+                    fontSize: R.fs(context, 10),
+                    color: AppColors.textSecondary,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              if (movement.sku.isNotEmpty)
-                Text(
-                  'SKU: ${movement.sku}',
-                  style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 11)),
-                ),
             ],
           ),
-          SizedBox(height: R.sp(context, AppSpacing.xs)),
-          // Row 2: Type chip + Date + Reference
-          Row(
-            children: [
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: R.sp(context, 8), vertical: R.sp(context, 3)),
-                decoration: BoxDecoration(
-                  color: chipColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  typeLabel,
-                  style: TextStyle(
-                    fontSize: R.fs(context, 11),
-                    fontWeight: FontWeight.w600,
-                    color: chipColor,
-                  ),
-                ),
+          SizedBox(height: R.sp(context, 6)),
+          // FittedBox automatically scales down font size if the number has many digits
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              amount,
+              style: AppTextStyles.cardValue.copyWith(
+                fontSize: R.fs(context, 13.5),
+                fontWeight: FontWeight.bold,
               ),
-              SizedBox(width: R.sp(context, AppSpacing.sm)),
-              Text(
-                DateFormat('dd MMM yyyy, HH:mm').format(movement.createdAt),
-                style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 11)),
-              ),
-              if (reference.isNotEmpty) ...[
-                const Spacer(),
-                Text(
-                  reference,
-                  style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 11)),
-                ),
-              ],
-            ],
-          ),
-          SizedBox(height: R.sp(context, AppSpacing.sm)),
-          // Row 3: Quantity + Unit Cost
-          Row(
-            children: [
-              Text(
-                'Qty: ',
-                style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 12)),
-              ),
-              Text(
-                '${isPositive ? '+' : ''}${quantity.toStringAsFixed(0)}',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: R.fs(context, 14),
-                  color: isPositive ? AppColors.green : AppColors.red,
-                ),
-              ),
-              SizedBox(width: R.sp(context, AppSpacing.md)),
-              if (movement.unitCost > 0) ...[
-                Text(
-                  'Unit Cost: ₹${movement.unitCost.toStringAsFixed(2)}',
-                  style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 12)),
-                ),
-              ],
-              if (isOpening) ...[
-                const Spacer(),
-                Text(
-                  'Before: ${movement.stockBefore.toStringAsFixed(0)} → After: ${movement.stockAfter.toStringAsFixed(0)}',
-                  style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 11)),
-                ),
-              ],
-            ],
-          ),
-          // Row 4: Remarks (if any)
-          if (movement.remarks.isNotEmpty) ...[
-            SizedBox(height: R.sp(context, 4)),
-            Text(
-              movement.remarks,
-              style: AppTextStyles.small.copyWith(
-                fontSize: R.fs(context, 11),
-                color: AppColors.textSecondary,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
             ),
-          ],
-          // Row 5: Stock before/after for non-opening? Optional, show if helpful.
-          if (!isOpening) ...[
-            SizedBox(height: R.sp(context, 2)),
-            Row(
-              children: [
-                Text(
-                  'Stock: ${movement.stockBefore.toStringAsFixed(0)} → ${movement.stockAfter.toStringAsFixed(0)}',
-                  style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 10), color: AppColors.textSecondary),
-                ),
-              ],
+          ),
+          SizedBox(height: R.sp(context, 2)),
+          Text(
+            subtitle,
+            style: AppTextStyles.small.copyWith(
+              fontSize: R.fs(context, 9),
+              color: AppColors.textSecondary,
             ),
-          ],
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ],
       ),
     );
   }
 }
 
-// ---- Helper Summary Item ----
-class _SummaryItem {
-  final String label;
-  final String value;
+class _DirectoryCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
   final IconData icon;
   final Color color;
-  _SummaryItem({required this.label, required this.value, required this.icon, required this.color});
+  final VoidCallback onTap;
+  final bool isLast;
+
+  const _DirectoryCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+    this.isLast = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: isLast ? 0 : R.sp(context, AppSpacing.sm),
+      ),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: EdgeInsets.all(R.sp(context, AppSpacing.cardPadding)),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(
+              R.radius(context, AppSizes.cardRadius),
+            ),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: R.sp(context, 38),
+                height: R.sp(context, 38),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: color, size: R.icon(context, 18)),
+              ),
+              SizedBox(width: R.sp(context, AppSpacing.sm)),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTextStyles.cardValue.copyWith(
+                        fontSize: R.fs(context, 13.5),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: R.sp(context, 2)),
+                    Text(
+                      subtitle,
+                      style: AppTextStyles.small.copyWith(
+                        fontSize: R.fs(context, 11),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.textSecondary,
+                size: R.icon(context, 20),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

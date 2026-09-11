@@ -5,6 +5,9 @@ import '../../domain/repositories/settings_repository.dart';
 import '../datasources/settings_remote_datasource.dart';
 import '../models/business_profile_model.dart';
 import '../models/staff_user_model.dart';
+import '../models/user_profile_model.dart';
+import '../../domain/entities/user_profile.dart';
+import 'dart:io';
 
 class SettingsRepositoryImpl implements SettingsRepository {
   SettingsRepositoryImpl(this.remoteDatasource);
@@ -38,6 +41,13 @@ class SettingsRepositoryImpl implements SettingsRepository {
     final current = await getBusinessProfile();
     return saveProfile(_copyProfileField(current, field, value));
   }
+
+  @override
+Future<String> uploadBusinessLogo(File image) {
+  return remoteDatasource.uploadBusinessLogo(image);
+}
+
+
 
   // ── App settings ──────────────────────────────────────────────────────────
 
@@ -113,4 +123,132 @@ class SettingsRepositoryImpl implements SettingsRepository {
         return profile;
     }
   }
+
+@override
+Future<UserProfile> getUserProfile() {
+  return remoteDatasource.getUserProfile();
+}
+
+@override
+Future<UserProfile> saveUserProfile(UserProfile profile) {
+  return remoteDatasource.saveUserProfile(
+    UserProfileModel.fromEntity(profile),
+  );
+}
+
+@override
+Future<String> uploadProfilePicture(File image) {
+  return remoteDatasource.uploadProfilePicture(image);
+}
+// ── Product Categories ─────────────────────────────────────
+
+@override
+Future<List<Map<String, dynamic>>> getCategories() {
+  return remoteDatasource.getCategories();
+}
+
+@override
+Future<List<Map<String, dynamic>>> getAllCategories() {
+  return remoteDatasource.getAllCategories();
+}
+
+@override
+Future<void> addCategory({
+  required String categoryName,
+  required String description,
+  required int displayOrder,
+}) {
+  return remoteDatasource.addCategory(
+    categoryName: categoryName,
+    description: description,
+    displayOrder: displayOrder,
+  );
+}
+
+@override
+Future<void> updateCategory({
+  required int id,
+  required String categoryName,
+  required String description,
+  required int displayOrder,
+}) {
+  return remoteDatasource.updateCategory(
+    id: id,
+    categoryName: categoryName,
+    description: description,
+    displayOrder: displayOrder,
+  );
+}
+
+@override
+Future<void> deleteCategory(int id) {
+  return remoteDatasource.deleteCategory(id);
+}
+
+@override
+Future<void> toggleCategoryStatus({
+  required int id,
+  required String status,
+}) {
+  return remoteDatasource.toggleCategoryStatus(
+    id: id,
+    status: status,
+  );
+}
+
+// ── Product Units ──────────────────────────────────────────
+
+@override
+Future<List<Map<String, dynamic>>> getUnits() {
+  return remoteDatasource.getUnits();
+}
+
+@override
+Future<List<Map<String, dynamic>>> getAllUnits() {
+  return remoteDatasource.getAllUnits();
+}
+
+@override
+Future<void> addUnit({
+  required String unitName,
+  required String shortName,
+  required String description,
+}) {
+  return remoteDatasource.addUnit(
+    unitName: unitName,
+    shortName: shortName,
+    description: description,
+  );
+}
+
+@override
+Future<void> updateUnit({
+  required int id,
+  required String unitName,
+  required String shortName,
+  required String description,
+}) {
+  return remoteDatasource.updateUnit(
+    id: id,
+    unitName: unitName,
+    shortName: shortName,
+    description: description,
+  );
+}
+
+@override
+Future<void> deleteUnit(int id) {
+  return remoteDatasource.deleteUnit(id);
+}
+
+@override
+Future<void> toggleUnitStatus({
+  required int id,
+  required String status,
+}) {
+  return remoteDatasource.toggleUnitStatus(
+    id: id,
+    status: status,
+  );
+}
 }

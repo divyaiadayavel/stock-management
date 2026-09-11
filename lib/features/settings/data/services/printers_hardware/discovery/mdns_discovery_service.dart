@@ -186,11 +186,13 @@ class MdnsDiscoveryService {
 
       final configuration = PrinterConfigurationModel(
         connectionType: PrinterConnectionType.wifi,
+        type: type,
         ipAddress: ipAddress,
         port: port,
         macAddress: null,
         vendorId: null,
         productId: null,
+        discoveryMethod: 'mdns',
       );
 
       final capabilities = _createCapabilities(vendor, type, txtData);
@@ -261,17 +263,26 @@ class MdnsDiscoveryService {
   PrinterType _detectPrinterType(PrinterVendor vendor, String name, String txtData, int port) {
     final searchString = '${name.toLowerCase()} ${txtData.toLowerCase()}';
     
-    if (port == 9100 || searchString.contains('pos') || searchString.contains('thermal')) {
+    if (port == 9100 ||
+        searchString.contains('pos') ||
+        searchString.contains('thermal') ||
+        searchString.contains('receipt') ||
+        searchString.contains('escpos') ||
+        searchString.contains('esc/pos') ||
+        searchString.contains('tm-')) {
       return PrinterType.thermal;
     }
     if (searchString.contains('laserjet') || searchString.contains('officejet') || searchString.contains('pixma')) {
       return PrinterType.document;
     }
     
-    if (vendor == PrinterVendor.epson || vendor == PrinterVendor.star || vendor == PrinterVendor.xprinter) {
+    if (vendor == PrinterVendor.star || vendor == PrinterVendor.xprinter) {
       return PrinterType.thermal;
     }
-    if (vendor == PrinterVendor.hp || vendor == PrinterVendor.canon || vendor == PrinterVendor.brother) {
+    if (vendor == PrinterVendor.hp ||
+        vendor == PrinterVendor.canon ||
+        vendor == PrinterVendor.brother ||
+        vendor == PrinterVendor.epson) {
       return PrinterType.document;
     }
     

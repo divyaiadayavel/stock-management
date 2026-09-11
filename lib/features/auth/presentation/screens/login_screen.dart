@@ -1,18 +1,18 @@
-import 'dart:io';
-
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Added for SystemUiOverlayStyle
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import '../controllers/auth_controller.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_spacing.dart';
-import '../../../../core/storage/db_helper.dart';
+import '../../../../core/utils/validators.dart';
 import 'package:stock_management/features/dashboard/presentation/screens/main_navigation.dart';
 import 'forgot_password_screen.dart';
-import 'package:flutter/foundation.dart';
+import '../../../settings/domain/entities/business_profile.dart';
+import '../../../../core/network/api_config.dart';
+import '../../../settings/presentation/providers/settings_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -25,12 +25,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     with SingleTickerProviderStateMixin {
   final formKey = GlobalKey<FormState>();
 
-  final emailController = TextEditingController(
-  text: kDebugMode ? 'divyabharathi@catalystack.com' : '',
-);
-final passwordController = TextEditingController(
-  text: kDebugMode ? 'Rdivya@0108' : '',
-);
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
+
   final emailFocus = FocusNode();
   final passwordFocus = FocusNode();
 
@@ -38,13 +35,45 @@ final passwordController = TextEditingController(
   bool rememberMe = false;
   bool validateEmailNow = false;
   bool validatePasswordNow = false;
+  bool _businessProfileReady = false;
 
   late AnimationController _floatController;
   late Animation<double> _floatAnimation;
 
-  String storeName = "Catalystack";
-  String tagline = "Smart Billing for Modern Stores";
-  String? logoPath;
+  static const String _fallbackStoreName = "Catalystack";
+  static const String _fallbackTagline = "Smart Billing for Modern Stores";
+
+  BusinessProfile _profile = const BusinessProfile();
+  String? get _logoUrl {
+    return _resolveLogoUrl(_profile.logoPath);
+  }
+
+  String? _resolveLogoUrl(String logoPath) {
+    final trimmedPath = logoPath.trim();
+
+    if (trimmedPath.isEmpty) return null;
+
+    if (trimmedPath.startsWith('http://') ||
+        trimmedPath.startsWith('https://')) {
+      return trimmedPath;
+    }
+
+    final normalizedPath = trimmedPath.startsWith("/")
+        ? trimmedPath.substring(1)
+        : trimmedPath;
+
+    return "${ApiConfig.baseUrl}/$normalizedPath";
+  }
+
+  String get _storeName {
+    final value = _profile.storeName.trim();
+    return value.isEmpty ? _fallbackStoreName : value;
+  }
+
+  String get _tagline {
+    final value = _profile.tagline.trim();
+    return value.isEmpty ? _fallbackTagline : value;
+  }
 
   @override
   void initState() {
@@ -59,7 +88,7 @@ final passwordController = TextEditingController(
       CurvedAnimation(parent: _floatController, curve: Curves.easeInOut),
     );
 
-    loadBranding();
+    loadBusinessProfile();
 
     emailFocus.addListener(() {
       if (!emailFocus.hasFocus) {
@@ -76,17 +105,35 @@ final passwordController = TextEditingController(
     });
   }
 
-  Future<void> loadBranding() async {
+  Future<void> loadBusinessProfile() async {
     try {
-      final data = await DBHelper.getProfile();
-      if (data != null && mounted) {
-        setState(() {
-          storeName = data['storeName'] ?? "Catalystack";
-          tagline = data['tagline'] ?? "Smart Billing for Modern Stores";
-          logoPath = data['logoPath'];
-        });
+      final bundle = await ref.read(settingsControllerProvider.future);
+
+      final profile = bundle.profile;
+      final logoUrl = _resolveLogoUrl(profile.logoPath);
+
+      if (logoUrl != null && mounted) {
+        try {
+          await precacheImage(
+            CachedNetworkImageProvider(logoUrl, cacheKey: logoUrl),
+            context,
+          );
+        } catch (e) {
+          debugPrint("Failed to precache business logo: $e");
+        }
       }
-    } catch (_) {}
+
+      if (!mounted) return;
+
+      setState(() {
+        _profile = profile;
+        _businessProfileReady = true;
+      });
+    } catch (e) {
+      debugPrint("Failed to load business profile: $e");
+      if (!mounted) return;
+      setState(() => _businessProfileReady = true);
+    }
   }
 
   Future<void> loginUser() async {
@@ -250,49 +297,39 @@ final passwordController = TextEditingController(
                         ),
 
                         // Logo circle (fixed, not floating)
-                        CircleAvatar(
-                          radius: 50,
-                          backgroundColor: AppColors.surface2.withOpacity(0.15),
-                          backgroundImage:
-                              (logoPath != null && logoPath!.isNotEmpty)
-                              ? FileImage(File(logoPath!))
-                              : null,
-                          child: (logoPath == null || logoPath!.isEmpty)
-                              ? const Icon(
-                                  Icons.store,
-                                  size: 45,
-                                  color: AppColors.textWhite,
-                                )
-                              : null,
-                        ),
+                        _buildBusinessLogo(),
                       ],
                     ),
                   ),
 
                   const SizedBox(height: AppSpacing.md),
 
-                  Text(
-                    storeName,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.white,
-                    ),
-                  ),
+                  _businessProfileReady
+                      ? Text(
+                          _storeName,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white,
+                          ),
+                        )
+                      : _brandPlaceholder(width: 170, height: 30),
 
                   const SizedBox(height: AppSpacing.sm),
 
-                  Text(
-                    tagline,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                      color: Colors.white70, // or Colors.white
-                      height: 1.5,
-                    ),
-                  ),
+                  _businessProfileReady
+                      ? Text(
+                          _tagline,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                            color: Colors.white70, // or Colors.white
+                            height: 1.5,
+                          ),
+                        )
+                      : _brandPlaceholder(width: 220, height: 16),
                 ],
               ),
             ),
@@ -347,18 +384,8 @@ final passwordController = TextEditingController(
                         autovalidateMode: validateEmailNow
                             ? AutovalidateMode.always
                             : AutovalidateMode.disabled,
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return "Email is required";
-                          }
-                          final emailRegex = RegExp(
-                            r'^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$',
-                          );
-                          if (!emailRegex.hasMatch(value.trim())) {
-                            return "Enter valid email (example@gmail.com)";
-                          }
-                          return null;
-                        },
+                        validator: (value) =>
+                            Validators.validateEmail(value ?? ''),
                         onFieldSubmitted: (_) =>
                             FocusScope.of(context).requestFocus(passwordFocus),
                         decoration: _inputDecoration(
@@ -388,15 +415,8 @@ final passwordController = TextEditingController(
                         autovalidateMode: validatePasswordNow
                             ? AutovalidateMode.always
                             : AutovalidateMode.disabled,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return "Password is required";
-                          }
-                          if (value.length < 6) {
-                            return "Minimum 6 characters required";
-                          }
-                          return null;
-                        },
+                        validator: (value) =>
+                            Validators.validateStrongPassword(value ?? ''),
                         decoration: _inputDecoration(
                           "Enter your password",
                           Icons.lock_outline,
@@ -487,7 +507,7 @@ final passwordController = TextEditingController(
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.cyan.withOpacity(0.3),
+                                color: AppColors.cyanDim.withOpacity(0.3),
                                 blurRadius: AppSpacing.md,
                                 offset: const Offset(0, 4),
                               ),
@@ -530,6 +550,65 @@ final passwordController = TextEditingController(
     );
   }
 
+  Widget _buildBusinessLogo() {
+    final logoUrl = _businessProfileReady ? _logoUrl : null;
+    final cacheSize = (100 * MediaQuery.of(context).devicePixelRatio).round();
+
+    return Container(
+      width: 100,
+      height: 100,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: AppColors.surface2.withValues(alpha: 0.15),
+        shape: BoxShape.circle,
+      ),
+      child: !_businessProfileReady
+          ? _logoFallback(showProgress: true)
+          : logoUrl == null
+          ? _logoFallback()
+          : CachedNetworkImage(
+              imageUrl: logoUrl,
+              cacheKey: logoUrl,
+              memCacheWidth: cacheSize,
+              memCacheHeight: cacheSize,
+              fit: BoxFit.cover,
+              fadeInDuration: Duration.zero,
+              fadeOutDuration: Duration.zero,
+              useOldImageOnUrlChange: true,
+              placeholder: (_, _) => _logoFallback(showProgress: true),
+              errorWidget: (_, _, _) => _logoFallback(),
+            ),
+    );
+  }
+
+  Widget _logoFallback({bool showProgress = false}) {
+    if (showProgress) {
+      return const Center(
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.5,
+            color: AppColors.textWhite,
+          ),
+        ),
+      );
+    }
+
+    return const Icon(Icons.store, size: 45, color: AppColors.textWhite);
+  }
+
+  Widget _brandPlaceholder({required double width, required double height}) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(6),
+      ),
+    );
+  }
+
   InputDecoration _inputDecoration(
     String hint,
     IconData icon, {
@@ -560,12 +639,22 @@ final passwordController = TextEditingController(
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(AppSizes.radiusMd),
-        borderSide: const BorderSide(color: AppColors.cyan, width: 1.5),
+        borderSide: const BorderSide(color: AppColors.cyanDim, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(AppSizes.radiusMd),
-        borderSide: const BorderSide(color: AppColors.red),
+        borderSide: const BorderSide(color: AppColors.red, width: 1.5),
       ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+        borderSide: const BorderSide(color: AppColors.red, width: 1.5),
+      ),
+      errorStyle: const TextStyle(
+        color: AppColors.red,
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+      ),
+      errorMaxLines: 2,
     );
   }
 

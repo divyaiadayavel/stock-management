@@ -43,12 +43,18 @@ final restoreFromDriveProvider = Provider(
 // ── State ─────────────────────────────────────────────────────
 class BackupSyncState {
   final bool isLoading;
+
+  final bool isConnected;
+
   final DriveAccountInfo? account;
+
   final DateTime? lastSync;
+
   final String? statusMessage;
 
   const BackupSyncState({
     this.isLoading = false,
+    this.isConnected = false,
     this.account,
     this.lastSync,
     this.statusMessage,
@@ -56,15 +62,17 @@ class BackupSyncState {
 
   BackupSyncState copyWith({
     bool? isLoading,
+    bool? isConnected,
     DriveAccountInfo? account,
     DateTime? lastSync,
     String? statusMessage,
   }) {
     return BackupSyncState(
       isLoading: isLoading ?? this.isLoading,
-      account: account,
+      isConnected: isConnected ?? this.isConnected,
+      account: account ?? this.account,
       lastSync: lastSync ?? this.lastSync,
-      statusMessage: statusMessage,
+      statusMessage: statusMessage ?? this.statusMessage,
     );
   }
 }
@@ -83,12 +91,17 @@ class BackupSyncController extends StateNotifier<BackupSyncState> {
 
   Future<void> _loadStatus() async {
     final repo = ref.read(backupSyncRepositoryProvider);
-    final account = await repo.getConnectedAccount();
     final status = await repo.getBackupStatus();
+    DriveAccountInfo? account;
+    if (status.googleDriveBackup) {
+      account = await repo.getConnectedAccount();
+    }
     state = BackupSyncState(
+      isLoading: false,
+      isConnected:
+          status.googleDriveBackup, // <-- don't require account != null
       account: account,
       lastSync: status.lastBackupTime,
-      isLoading: false,
       statusMessage: null,
     );
   }
@@ -98,52 +111,108 @@ class BackupSyncController extends StateNotifier<BackupSyncState> {
     final account = await repo.getConnectedAccount();
     final status = await repo.getBackupStatus();
     state = BackupSyncState(
+      isLoading: false,
+      isConnected: status.googleDriveBackup, // <-- same fix
       account: account,
       lastSync: status.lastBackupTime,
-      isLoading: false,
       statusMessage: state.statusMessage,
     );
   }
 
   Future<void> connectDrive() async {
     state = state.copyWith(isLoading: true);
-    final account = await ref.read(connectGoogleDriveProvider)();
 
-    if (account != null) {
-      await ref
-          .read(settingsRepositoryProvider)
-          .saveSetting("googleDriveBackup", "true");
-      await ref
-          .read(backupSyncRepositoryProvider)
-          .saveBackupSettings(settings: {'googleDriveBackup': 'true'});
+    try {
+      final account = await ref.read(connectGoogleDriveProvider)();
+
+      print("ACCOUNT = $account");
+
+      if (account == null) {
+        state = state.copyWith(
+          isLoading: false,
+          isConnected: false,
+          account: null,
+          statusMessage: 'Google Sign In cancelled',
+        );
+        return;
+      }
+
+      try {
+        await ref
+            .read(settingsRepositoryProvider)
+            .saveSetting("googleDriveBackup", "true");
+
+        await ref
+            .read(backupSyncRepositoryProvider)
+            .saveBackupSettings(
+              settings: {
+                'googleDriveBackup': 'true',
+                'googleDriveEmail': account.email,
+                'googleDriveDisplayName': account.displayName ?? '',
+              },
+            );
+      } catch (e) {
+        print("Save backup settings error: $e");
+      }
+
       state = BackupSyncState(
+        isLoading: false,
+        isConnected: true,
         account: account,
         lastSync: state.lastSync,
-        isLoading: false,
         statusMessage: 'Connected successfully',
       );
-    } else {
-      state = state.copyWith(isLoading: false);
+    } catch (e) {
+      print("Google Drive connect error: $e");
+
+      state = state.copyWith(
+        isLoading: false,
+        isConnected: false,
+        account: null,
+        statusMessage: 'Connection failed',
+      );
     }
   }
 
   Future<void> disconnectDrive() async {
     state = state.copyWith(isLoading: true);
-    await ref.read(disconnectGoogleDriveProvider)();
 
-    await ref
-        .read(settingsRepositoryProvider)
-        .saveSetting("googleDriveBackup", "false");
-    await ref
-        .read(backupSyncRepositoryProvider)
-        .saveBackupSettings(settings: {'googleDriveBackup': 'false'});
+    try {
+      await ref.read(disconnectGoogleDriveProvider)();
 
-    state = BackupSyncState(
-      account: null,
-      lastSync: state.lastSync,
-      isLoading: false,
-      statusMessage: 'Disconnected successfully',
-    );
+      try {
+        await ref
+            .read(settingsRepositoryProvider)
+            .saveSetting("googleDriveBackup", "false");
+
+        await ref
+            .read(backupSyncRepositoryProvider)
+            .saveBackupSettings(
+              settings: {
+                'googleDriveBackup': 'false',
+                'googleDriveEmail': '',
+                'googleDriveDisplayName': '',
+              },
+            );
+      } catch (e) {
+        print("Disconnect save settings error: $e");
+      }
+
+      state = BackupSyncState(
+        isLoading: false,
+        isConnected: false,
+        account: null,
+        lastSync: state.lastSync,
+        statusMessage: 'Disconnected successfully',
+      );
+    } catch (e) {
+      print("Disconnect error: $e");
+
+      state = state.copyWith(
+        isLoading: false,
+        statusMessage: 'Disconnect failed',
+      );
+    }
   }
 
   Future<BackupInfo?> backupNow() async {
@@ -159,8 +228,9 @@ class BackupSyncController extends StateNotifier<BackupSyncState> {
       return info;
     } catch (e) {
       state = state.copyWith(
+        isConnected: false,
+        account: null,
         isLoading: false,
-        statusMessage: 'Backup failed: $e',
       );
       return null;
     }

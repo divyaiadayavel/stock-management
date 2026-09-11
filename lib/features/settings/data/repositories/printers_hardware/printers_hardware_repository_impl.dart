@@ -11,6 +11,7 @@ import '../../../domain/entities/printers_hardware/printer/printer_device.dart';
 import '../../../domain/entities/printers_hardware/printer/printer_settings.dart';
 import '../../../domain/entities/printers_hardware/receipt/receipt.dart';
 import '../../../domain/enums/printers_hardware/printer/printer_connection_type.dart';
+import '../../../domain/enums/printers_hardware/printer/printer_type.dart';
 import '../../../domain/repositories/printers_hardware/printers_hardware_repository.dart';
 import '../../datasources/printers_hardware/connection/bluetooth_datasource.dart';
 import '../../datasources/printers_hardware/connection/usb_datasource.dart';
@@ -87,40 +88,30 @@ class PrintersHardwareRepositoryImpl implements PrintersHardwareRepository {
 
   @override
   Future<List<PrinterDevice>> scanUsbPrinters() async {
-    // Issue 6/8: UsbDataSource now returns typed UsbPrinterInfo instead of
-    // a raw Map, and we use the scan index to keep ids unique when two
-    // identical printers (same vendor/product) are plugged in at once.
-    final devices = await _usbDataSource.getUsbDevices();
-    return devices.asMap().entries.map((entry) {
-      final index = entry.key;
-      final info = entry.value;
-      final config = PrinterConfigurationModel(
-        connectionType: PrinterConnectionType.usb,
-        vendorId: info.vendorId,
-        productId: info.productId,
-      );
-      const caps = PrinterCapabilityModel();
-      return PrinterDeviceModel(
-        id: info.idAt(index),
-        name: info.name,
-        configuration: config,
-        capabilities: caps,
-      );
-    }).toList();
+    return const [];
   }
 
   @override
   Future<List<PrinterDevice>> scanWifiPrinters() async {
-    final mdnsPrinters = await _discoveryService.scanPrinters();
-    final networkPrinters = await _wifiDataSource.scanNetwork();
+    final results = await Future.wait<List<PrinterDevice>>([
+      _discoveryService.scanPrinters(),
+      _wifiDataSource.scanNetwork(),
+    ]);
 
     final seen = <String>{};
     final merged = <PrinterDevice>[];
-    for (final printer in [...mdnsPrinters, ...networkPrinters]) {
+    for (final printer in [...results[0], ...results[1]]) {
+      if (!_isThermalWifiCandidate(printer)) continue;
       final key = printer.configuration.ipAddress ?? printer.id;
       if (seen.add(key)) merged.add(printer);
     }
     return merged;
+  }
+
+  bool _isThermalWifiCandidate(PrinterDevice printer) {
+    final config = printer.configuration;
+    if (config.connectionType != PrinterConnectionType.wifi) return false;
+    return config.type == PrinterType.thermal || config.type == PrinterType.unknown;
   }
 
   // --- Connection ---
@@ -155,18 +146,9 @@ class PrintersHardwareRepositoryImpl implements PrintersHardwareRepository {
         }
 
       case PrinterConnectionType.usb:
-        final vendorId = config.vendorId;
-        final productId = config.productId;
-        if (vendorId == null || productId == null) return false;
-        try {
-          return await _usbDataSource.connect(vendorId, productId);
-        } catch (e, st) {
-          // Issue 2: surface *why* it failed (permission denied, unplugged,
-          // vendor mismatch, plugin exception) instead of a bare `false`.
-          developer.log('USB connect failed for $vendorId:$productId',
-              error: e, stackTrace: st, name: 'PrintersHardwareRepository');
-          return false;
-        }
+        developer.log('USB printer support is temporarily unavailable',
+            name: 'PrintersHardwareRepository');
+        return false;
 
       case PrinterConnectionType.ethernet:
         return false;
@@ -188,19 +170,10 @@ class PrintersHardwareRepositoryImpl implements PrintersHardwareRepository {
   /// Call this at app/session startup with the printer looked up from
   /// [getSavedPrinters].
   Future<bool> connectSavedPrinter(PrinterDevice printer) async {
-    if (printer.configuration.connectionType != PrinterConnectionType.usb) {
-      return connectPrinter(printer);
-    }
-    final vendorId = printer.configuration.vendorId;
-    final productId = printer.configuration.productId;
-    if (vendorId == null || productId == null) return false;
-    try {
-      return await _usbDataSource.connectSaved(vendorId, productId);
-    } catch (e, st) {
-      developer.log('Failed to reconnect saved USB printer $vendorId:$productId',
-          error: e, stackTrace: st, name: 'PrintersHardwareRepository');
+    if (printer.configuration.connectionType == PrinterConnectionType.usb) {
       return false;
     }
+    return connectPrinter(printer);
   }
 
   @override
@@ -233,7 +206,7 @@ class PrintersHardwareRepositoryImpl implements PrintersHardwareRepository {
       case PrinterConnectionType.wifi:
         return await _wifiDataSource.isConnected();
       case PrinterConnectionType.usb:
-        return await _usbDataSource.isConnected();
+        return false;
       case PrinterConnectionType.ethernet:
         return false;
       case PrinterConnectionType.system:
@@ -245,29 +218,22 @@ class PrintersHardwareRepositoryImpl implements PrintersHardwareRepository {
     if (bytes.isEmpty) return false;
     try {
       switch (printer.configuration.connectionType) {
-case PrinterConnectionType.bluetooth:
-
-    if (!await _bluetoothDataSource.isConnected()) {
-
-        final mac = printer.configuration.macAddress;
-
-        if (mac == null) {
-            return false;
-        }
-
-        final connected =
-            await _bluetoothDataSource.reconnect(mac);
-
-        if (!connected) {
-            return false;
-        }
-    }
-
-    return await _bluetoothDataSource.printBytes(bytes);
+        case PrinterConnectionType.bluetooth:
+          if (!await _bluetoothDataSource.isConnected()) {
+            final mac = printer.configuration.macAddress;
+            if (mac == null) {
+              return false;
+            }
+            final connected = await _bluetoothDataSource.reconnect(mac);
+            if (!connected) {
+              return false;
+            }
+          }
+          return await _bluetoothDataSource.printBytes(bytes);
         case PrinterConnectionType.wifi:
           return await _wifiDataSource.printBytes(bytes);
         case PrinterConnectionType.usb:
-          return await _usbDataSource.printBytes(bytes);
+          return false;
         case PrinterConnectionType.ethernet:
         case PrinterConnectionType.system:
           return false;
@@ -284,6 +250,11 @@ case PrinterConnectionType.bluetooth:
   @override
   Future<List<PrinterDevice>> getSavedPrinters() async {
     return await _localDataSource.getSavedPrinters();
+  }
+
+  @override
+  Future<PrinterDevice?> getDefaultPrinter() async {
+    return await _localDataSource.getDefaultPrinter();
   }
 
   @override
@@ -342,31 +313,20 @@ case PrinterConnectionType.bluetooth:
       final capabilities = printer.capabilities is PrinterCapabilityModel
           ? printer.capabilities as PrinterCapabilityModel
           : PrinterCapabilityModel.fromEntity(printer.capabilities);
-final bytes =
-    await _receiptBuilder.buildReceiptBytes(
+      final bytes = await _receiptBuilder.buildReceiptBytes(
         receiptModel,
         capabilities,
-    );
+      );
 
-if (!await _isPrinterConnected(printer)) {
+      
 
-    final connected =
-        await connectPrinter(printer);
-
-    if (!connected) {
-        return false;
-    }
-}
-if (!await _isPrinterConnected(printer)) {
-
-    final connected =
-        await connectPrinter(printer);
-
-    if (!connected) {
-        return false;
-    }
-}
-return await _printBytes(printer, bytes);
+      if (!await _isPrinterConnected(printer)) {
+        final connected = await connectPrinter(printer);
+        if (!connected) {
+          return false;
+        }
+      }
+      return await _printBytes(printer, bytes);
     } catch (e, st) {
       developer.log('Print receipt failed',
           error: e, stackTrace: st, name: 'PrintersHardwareRepository');

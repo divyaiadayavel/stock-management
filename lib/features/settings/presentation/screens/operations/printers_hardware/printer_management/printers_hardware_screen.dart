@@ -6,26 +6,30 @@ import '../../../../../../../core/constants/app_sizes.dart';
 import '../../../../../../../core/constants/app_spacing.dart';
 import '../../../../../../../core/constants/app_text_styles.dart';
 import '../../../../../domain/entities/printers_hardware/printer/printer_device.dart';
+import '../../../../../domain/enums/printers_hardware/printer/printer_connection_type.dart';
 import '../../../../providers/printers_hardware/printer_management/printers_hardware_provider.dart';
 import '../../../../providers/printers_hardware/printer_management/printers_hardware_state.dart';
 import '../connection/bluetooth_printer_screen.dart';
 import '../connection/inkjet_printer_screen.dart';
-import '../hardware/cash_drawer_screen.dart';
+import '../connection/wifi_printer_screen.dart';
 import '../history/print_history_screen.dart';
 import '../printer_management/printer_details_screen.dart';
 import '../receipt/receipt_settings_screen.dart';
-import '../hardware/scanner_screen.dart';
-import '../connection/usb_printer_screen.dart';
-import '../connection/wifi_printer_screen.dart';
-import '../../../../../domain/enums/printers_hardware/printer/printer_connection_type.dart';
 
 class PrintersHardwareScreen extends ConsumerWidget {
   const PrintersHardwareScreen({super.key});
+
+  static const LinearGradient brandGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF1B3A8C), Color(0xFF00C8F8)],
+  );
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(printersHardwareProvider);
     final connected = state.connectedPrinter;
+    final activePrinter = connected ?? state.unavailablePrinter;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -64,43 +68,67 @@ class PrintersHardwareScreen extends ConsumerWidget {
             vertical: AppSpacing.md,
           ),
           children: [
-            _sectionLabel('Connected printer'),
-            connected == null
-                ? _noPrinterCard(context)
-                : _connectedPrinterCard(context, ref, connected),
+            _sectionLabel('Active Printer'),
+            activePrinter == null
+                ? _noPrinterCard()
+                : _connectedPrinterCard(
+                    context,
+                    ref,
+                    activePrinter,
+                    isConnected: connected?.id == activePrinter.id,
+                    isReconnecting: state.isReconnecting,
+                  ),
             const SizedBox(height: AppSpacing.xl),
-            _sectionLabel('Quick actions'),
+            _sectionLabel('Quick Actions'),
             _quickActionsGrid(context, ref, hasConnectedPrinter: connected != null),
             const SizedBox(height: AppSpacing.xl),
-            _sectionLabel('Saved printers'),
+            _sectionLabel('Saved Printers'),
             _savedPrintersCard(context, ref, state),
-            const SizedBox(height: AppSpacing.xl),
-            _sectionLabel('Other hardware'),
-            _otherHardwareCard(context),
             const SizedBox(height: AppSpacing.xxl),
           ],
         ),
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(AppSpacing.screenPadding, 8, AppSpacing.screenPadding, AppSpacing.screenPadding),
-          child: SizedBox(
-            width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.screenPadding,
+            8,
+            AppSpacing.screenPadding,
+            AppSpacing.screenPadding,
+          ),
+          child: Container(
             height: 52,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: AppColors.textWhite,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+            decoration: BoxDecoration(
+              gradient: brandGradient,
+              borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF1B3A8C).withValues(alpha: 0.3),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
                 ),
-              ),
-              onPressed: () => _showAddPrinterSheet(context),
-              icon: const Icon(Icons.search_rounded, size: 20),
-              label: Text(
-                'Scan for printer',
-                style: AppTextStyles.button.copyWith(fontWeight: FontWeight.w700, fontSize: 16),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+                onTap: () => _showAddPrinterSheet(context),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.search_rounded, color: Colors.white, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Scan for Printer',
+                      style: AppTextStyles.button.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -122,7 +150,7 @@ class PrintersHardwareScreen extends ConsumerWidget {
         ),
       );
 
-  Widget _noPrinterCard(BuildContext context) {
+  Widget _noPrinterCard() {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.card,
@@ -152,7 +180,7 @@ class PrintersHardwareScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Scan to pair a Bluetooth, Wi-Fi or USB printer',
+                  'Scan to pair a Bluetooth or Wi-Fi printer',
                   style: AppTextStyles.small.copyWith(fontSize: 12, color: AppColors.textSecondary),
                 ),
               ],
@@ -166,9 +194,21 @@ class PrintersHardwareScreen extends ConsumerWidget {
   Widget _connectedPrinterCard(
     BuildContext context,
     WidgetRef ref,
-    PrinterDevice printer,
-  ) {
+    PrinterDevice printer, {
+    required bool isConnected,
+    required bool isReconnecting,
+  }) {
     final type = printer.configuration.connectionType;
+    final statusLabel = isReconnecting
+        ? 'Reconnecting...'
+        : isConnected
+            ? 'Connected'
+            : 'Not responding';
+    final statusColor = isReconnecting
+        ? AppColors.orange
+        : isConnected
+            ? AppColors.green
+            : AppColors.red;
     return Material(
       color: AppColors.card,
       shape: RoundedRectangleBorder(
@@ -210,7 +250,11 @@ class PrintersHardwareScreen extends ConsumerWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
-                        _statusChip('Connected', AppColors.green),
+                        _statusChip(
+                          statusLabel,
+                          statusColor,
+                          isLoading: isReconnecting,
+                        ),
                       ],
                     ),
                   ),
@@ -226,7 +270,9 @@ class PrintersHardwareScreen extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  '${_connectionLabel(type)} · ${printer.capabilities.paperWidthMm} mm',
+                  isConnected
+                      ? '${_connectionLabel(type)} - ${printer.capabilities.paperWidthMm} mm'
+                      : 'Last connected via ${_connectionLabel(type)}',
                   style: AppTextStyles.small.copyWith(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
                 ),
                 TextButton(
@@ -235,15 +281,15 @@ class PrintersHardwareScreen extends ConsumerWidget {
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  onPressed: () async {
-                    final messenger = ScaffoldMessenger.of(context);
-                    final ok = await ref.read(printersHardwareProvider.notifier).printTestReceipt();
-                    if (!context.mounted) return;
-                    messenger.showSnackBar(
-                      SnackBar(content: Text(ok ? 'Test receipt sent' : 'Print failed')),
-                    );
-                  },
-                  child: Text('Test print', style: AppTextStyles.button.copyWith(fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w700)),
+                  onPressed: isReconnecting
+                      ? null
+                      : () => isConnected
+                          ? _triggerTestPrint(context, ref)
+                          : _reconnectPrinter(context, ref, printer),
+                  child: Text(
+                    isConnected ? 'Test print' : 'Reconnect',
+                    style: AppTextStyles.button.copyWith(fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w700),
+                  ),
                 ),
               ],
             ),
@@ -253,17 +299,30 @@ class PrintersHardwareScreen extends ConsumerWidget {
     );
   }
 
-  Widget _statusChip(String label, Color color) {
+  Widget _statusChip(String label, Color color, {bool isLoading = false}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.check_circle_rounded, size: 11, color: color),
+          if (isLoading)
+            SizedBox(
+              width: 11,
+              height: 11,
+              child: CircularProgressIndicator(strokeWidth: 2, color: color),
+            )
+          else
+            Icon(
+              color == AppColors.green
+                  ? Icons.check_circle_rounded
+                  : Icons.error_rounded,
+              size: 11,
+              color: color,
+            ),
           const SizedBox(width: 4),
           Text(
             label,
@@ -274,21 +333,6 @@ class PrintersHardwareScreen extends ConsumerWidget {
     );
   }
 
-  String _connectionLabel(PrinterConnectionType type) {
-    switch (type) {
-      case PrinterConnectionType.bluetooth:
-        return 'Bluetooth';
-      case PrinterConnectionType.wifi:
-        return 'Wi-Fi';
-      case PrinterConnectionType.usb:
-        return 'USB';
-      case PrinterConnectionType.ethernet:
-        return 'Ethernet';
-      case PrinterConnectionType.system:
-        return 'System Print';
-    }
-  }
-
   Widget _quickActionsGrid(BuildContext context, WidgetRef ref, {required bool hasConnectedPrinter}) {
     return GridView.count(
       crossAxisCount: 2,
@@ -296,53 +340,39 @@ class PrintersHardwareScreen extends ConsumerWidget {
       physics: const NeverScrollableScrollPhysics(),
       mainAxisSpacing: AppSpacing.md,
       crossAxisSpacing: AppSpacing.md,
-      childAspectRatio: 2.1,
+      childAspectRatio: 2.2,
       children: [
-        _quickActionTile(
-          icon: Icons.search_rounded,
-          label: 'Scan printer',
-          onTap: () => _showAddPrinterSheet(context),
-        ),
         _quickActionTile(
           icon: Icons.tune_rounded,
           label: 'Receipt settings',
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ReceiptSettingsScreen()),
-            );
-          },
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ReceiptSettingsScreen()),
+          ),
         ),
         _quickActionTile(
           icon: Icons.receipt_long_rounded,
           label: 'Test print',
-          onTap: () async {
+          onTap: () {
             if (!hasConnectedPrinter) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Connect a printer first')),
               );
               return;
             }
-            final messenger = ScaffoldMessenger.of(context);
-            final ok = await ref.read(printersHardwareProvider.notifier).printTestReceipt();
-            if (!context.mounted) return;
-            messenger.showSnackBar(
-              SnackBar(content: Text(ok ? 'Test receipt sent' : 'Print failed')),
-            );
+            _triggerTestPrint(context, ref);
           },
         ),
         _quickActionTile(
           icon: Icons.history_rounded,
           label: 'Print history',
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const PrintHistoryScreen()),
-            );
-          },
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const PrintHistoryScreen()),
+          ),
         ),
         _quickActionTile(
-          icon: Icons.inventory_2_outlined,
+          icon: Icons.settings_applications_outlined,
           label: 'Manage printers',
           onTap: () => _showManagePrintersSheet(context, ref),
         ),
@@ -370,7 +400,7 @@ class PrintersHardwareScreen extends ConsumerWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: AppColors.cyan.withOpacity(0.06),
+                  color: AppColors.cyan.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(AppSizes.radiusMd),
                 ),
                 child: Icon(icon, size: 16, color: AppColors.cyanDim),
@@ -397,11 +427,12 @@ class PrintersHardwareScreen extends ConsumerWidget {
 
   Widget _savedPrintersCard(BuildContext context, WidgetRef ref, PrintersHardwareState state) {
     final connected = state.connectedPrinter;
+    final unavailable = state.unavailablePrinter;
     final printers = state.savedPrinters.isNotEmpty
         ? state.savedPrinters
-        : connected == null
+        : connected == null && unavailable == null
             ? <PrinterDevice>[]
-            : <PrinterDevice>[connected];
+            : <PrinterDevice>[connected ?? unavailable!];
 
     if (printers.isEmpty) {
       return Container(
@@ -431,7 +462,9 @@ class PrintersHardwareScreen extends ConsumerWidget {
             _savedPrinterRow(
               context,
               printers[i],
-              isDefault: connected?.id == printers[i].id || (connected == null && i == 0),
+              isDefault: connected?.id == printers[i].id ||
+                  unavailable?.id == printers[i].id ||
+                  (connected == null && unavailable == null && i == 0),
             ),
           ],
         ],
@@ -461,14 +494,14 @@ class PrintersHardwareScreen extends ConsumerWidget {
         style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 14),
       ),
       subtitle: Text(
-        '${_connectionLabel(type)} · ${printer.capabilities.paperWidthMm} mm',
+        '${_connectionLabel(type)} - ${printer.capabilities.paperWidthMm} mm',
         style: AppTextStyles.small.copyWith(fontSize: 12, color: AppColors.textSecondary),
       ),
       trailing: isDefault
           ? Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.08),
+                color: AppColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
@@ -477,64 +510,6 @@ class PrintersHardwareScreen extends ConsumerWidget {
               ),
             )
           : const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary, size: 20),
-    );
-  }
-
-  IconData _iconForType(PrinterConnectionType type) {
-    switch (type) {
-      case PrinterConnectionType.bluetooth:
-        return Icons.bluetooth_rounded;
-      case PrinterConnectionType.wifi:
-        return Icons.wifi_rounded;
-      case PrinterConnectionType.usb:
-        return Icons.usb_rounded;
-      case PrinterConnectionType.ethernet:
-        return Icons.settings_ethernet_rounded;
-      case PrinterConnectionType.system:
-        return Icons.print_rounded;
-    }
-  }
-
-  Widget _otherHardwareCard(BuildContext context) {
-    return Material(
-      color: AppColors.card,
-      shape: RoundedRectangleBorder(
-        side: const BorderSide(color: AppColors.borderStrong),
-        borderRadius: BorderRadius.circular(AppSizes.cardRadius),
-      ),
-      child: Column(
-        children: [
-          ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.cardPadding, vertical: 2),
-            leading: _hardwareIcon(Icons.qr_code_scanner_rounded, Colors.teal),
-            title: Text('Barcode Scanner', style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 14)),
-            subtitle: Text('Not connected', style: AppTextStyles.small.copyWith(fontSize: 12, color: AppColors.textSecondary)),
-            trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary, size: 20),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ScannerScreen())),
-          ),
-          const Divider(height: 1, indent: 60, color: AppColors.borderStrong),
-          ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.cardPadding, vertical: 2),
-            leading: _hardwareIcon(Icons.point_of_sale_rounded, AppColors.green),
-            title: Text('Cash Drawer', style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 14)),
-            subtitle: Text('Not connected', style: AppTextStyles.small.copyWith(fontSize: 12, color: AppColors.textSecondary)),
-            trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary, size: 20),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CashDrawerScreen())),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _hardwareIcon(IconData icon, Color color) {
-    return Container(
-      width: 38,
-      height: 38,
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
-      ),
-      child: Icon(icon, color: color, size: 18),
     );
   }
 
@@ -564,12 +539,12 @@ class PrintersHardwareScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-                Text('Add a printer', style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 18)),
+                Text('Add a Printer', style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 18)),
                 const SizedBox(height: AppSpacing.lg),
                 _sheetOption(
                   sheetContext,
                   icon: Icons.bluetooth_rounded,
-                  title: 'Bluetooth printer',
+                  title: 'Bluetooth Printer',
                   subtitle: 'Pair a nearby thermal printer',
                   onTap: () {
                     Navigator.pop(sheetContext);
@@ -579,7 +554,7 @@ class PrintersHardwareScreen extends ConsumerWidget {
                 _sheetOption(
                   sheetContext,
                   icon: Icons.wifi_rounded,
-                  title: 'Wi-Fi printer',
+                  title: 'Wi-Fi Printer',
                   subtitle: 'Add a printer by IP address',
                   onTap: () {
                     Navigator.pop(sheetContext);
@@ -588,19 +563,9 @@ class PrintersHardwareScreen extends ConsumerWidget {
                 ),
                 _sheetOption(
                   sheetContext,
-                  icon: Icons.usb_rounded,
-                  title: 'USB printer',
-                  subtitle: 'Connect a wired thermal printer',
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const UsbPrinterScreen()));
-                  },
-                ),
-                _sheetOption(
-                  sheetContext,
                   icon: Icons.print_rounded,
-                  title: 'Inkjet / Laser printer',
-                  subtitle: 'Print half-page (A5) receipts via your OS print system',
+                  title: 'Inkjet / Laser Printer',
+                  subtitle: 'Print A5 / A4 receipts via OS print system',
                   onTap: () {
                     Navigator.pop(sheetContext);
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const InkjetPrinterScreen()));
@@ -632,7 +597,7 @@ class PrintersHardwareScreen extends ConsumerWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: AppColors.cyan.withOpacity(0.08),
+                color: AppColors.cyan.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(AppSizes.radiusMd),
               ),
               child: Icon(icon, color: AppColors.cyanDim, size: 22),
@@ -657,11 +622,13 @@ class PrintersHardwareScreen extends ConsumerWidget {
   void _showManagePrintersSheet(BuildContext context, WidgetRef ref) {
     final state = ref.read(printersHardwareProvider);
     final connected = state.connectedPrinter;
+    final unavailable = state.unavailablePrinter;
     final printers = state.savedPrinters.isNotEmpty
         ? state.savedPrinters
-        : connected == null
+        : connected == null && unavailable == null
             ? <PrinterDevice>[]
-            : <PrinterDevice>[connected];
+            : <PrinterDevice>[connected ?? unavailable!];
+
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.background,
@@ -685,7 +652,7 @@ class PrintersHardwareScreen extends ConsumerWidget {
                     decoration: BoxDecoration(color: AppColors.borderStrong, borderRadius: BorderRadius.circular(99)),
                   ),
                 ),
-                Text('Manage printers', style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 18)),
+                Text('Manage Printers', style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 18)),
                 const SizedBox(height: AppSpacing.lg),
                 if (printers.isEmpty)
                   Padding(
@@ -696,16 +663,15 @@ class PrintersHardwareScreen extends ConsumerWidget {
                     ),
                   )
                 else
-                  ...[
-                    for (int i = 0; i < printers.length; i++) ...[
-                      if (i != 0) const Divider(height: 1),
-                      _savedPrinterRow(
-                        context,
-                        printers[i],
-                        isDefault: connected?.id == printers[i].id ||
-                            (connected == null && i == 0),
-                      ),
-                    ],
+                  for (int i = 0; i < printers.length; i++) ...[
+                    if (i != 0) const Divider(height: 1),
+                    _savedPrinterRow(
+                      context,
+                      printers[i],
+                      isDefault: connected?.id == printers[i].id ||
+                          unavailable?.id == printers[i].id ||
+                          (connected == null && unavailable == null && i == 0),
+                    ),
                   ],
                 const SizedBox(height: 10),
                 SizedBox(
@@ -730,5 +696,58 @@ class PrintersHardwareScreen extends ConsumerWidget {
         );
       },
     );
+  }
+
+  Future<void> _triggerTestPrint(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await ref.read(printersHardwareProvider.notifier).printTestReceipt();
+    if (!context.mounted) return;
+    messenger.showSnackBar(
+      SnackBar(content: Text(ok ? 'Test receipt sent' : 'Print failed')),
+    );
+  }
+
+  Future<void> _reconnectPrinter(
+    BuildContext context,
+    WidgetRef ref,
+    PrinterDevice printer,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok =
+        await ref.read(printersHardwareProvider.notifier).connectToPrinter(printer);
+    if (!context.mounted) return;
+    messenger.showSnackBar(
+      SnackBar(content: Text(ok ? '${printer.name} connected' : 'Reconnect failed')),
+    );
+  }
+
+  String _connectionLabel(PrinterConnectionType type) {
+    switch (type) {
+      case PrinterConnectionType.bluetooth:
+        return 'Bluetooth';
+      case PrinterConnectionType.wifi:
+        return 'Wi-Fi';
+      case PrinterConnectionType.usb:
+        return 'USB';
+      case PrinterConnectionType.ethernet:
+        return 'Ethernet';
+      case PrinterConnectionType.system:
+        return 'System Print';
+    }
+  }
+
+  IconData _iconForType(PrinterConnectionType type) {
+    switch (type) {
+      case PrinterConnectionType.bluetooth:
+        return Icons.bluetooth_rounded;
+      case PrinterConnectionType.wifi:
+        return Icons.wifi_rounded;
+      case PrinterConnectionType.usb:
+        return Icons.usb_rounded;
+      case PrinterConnectionType.ethernet:
+        return Icons.settings_ethernet_rounded;
+      case PrinterConnectionType.system:
+        return Icons.print_rounded;
+    }
   }
 }

@@ -1,14 +1,18 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_text_styles.dart';
+import '../../../../core/network/api_config.dart';
 import '../providers/billing_provider.dart';
 import 'payment_screen.dart';
 import 'add_product_bill_screen.dart';
 import '../../../../core/utils/responsive_helper.dart';
+
 
 class CurrentBillScreen extends ConsumerStatefulWidget {
   const CurrentBillScreen({super.key});
@@ -18,6 +22,100 @@ class CurrentBillScreen extends ConsumerStatefulWidget {
 }
 
 class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
+  // ─── Dynamic Product Image Loader for Cart ────────────────
+  Widget _buildCartItemImage(String? rawImagePath, double size) {
+    if (rawImagePath == null || rawImagePath.trim().isEmpty) {
+      return Container(
+        decoration: BoxDecoration(
+          color: AppColors.surface2,
+          borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+        ),
+        child: Icon(
+          Icons.image_outlined,
+          color: AppColors.textSecondary,
+          size: R.icon(context, 20),
+        ),
+      );
+    }
+
+    String imagePath = rawImagePath.trim();
+
+    // 1. Local Device File Path (e.g., newly selected image)
+    final localFile = File(imagePath);
+    if (!imagePath.startsWith('http') && localFile.existsSync()) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+        child: Image.file(
+          localFile,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            color: AppColors.surface2,
+            child: Icon(
+              Icons.image_outlined,
+              color: AppColors.textSecondary,
+              size: R.icon(context, 20),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // 2. Sanitize legacy ngrok / localhost URLs stored in DB
+    if (imagePath.contains('ngrok') ||
+        imagePath.contains('localhost') ||
+        imagePath.contains('127.0.0.1')) {
+      if (imagePath.contains('uploads/')) {
+        imagePath = 'uploads/' + imagePath.split('uploads/').last;
+      }
+    }
+
+    // 3. Convert Relative Path to Full Live URL
+    String fullImageUrl = imagePath;
+    if (!fullImageUrl.startsWith('http://') &&
+        !fullImageUrl.startsWith('https://')) {
+      if (fullImageUrl.startsWith('/')) {
+        fullImageUrl = fullImageUrl.substring(1);
+      }
+      fullImageUrl = '${ApiConfig.baseUrl}/$fullImageUrl';
+    }
+
+    // Decoding at roughly the on-screen pixel size (rather than full
+    // resolution) means each cached decode is tiny, so a whole bill's worth
+    // of thumbnails comfortably fits in Flutter's image cache at once instead
+    // of pushing each other out and forcing a re-decode on scroll.
+    final targetPx = (size * MediaQuery.of(context).devicePixelRatio).round();
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+      child: CachedNetworkImage(
+        imageUrl: fullImageUrl,
+        cacheKey: fullImageUrl,
+        memCacheWidth: targetPx,
+        memCacheHeight: targetPx,
+        useOldImageOnUrlChange: true,
+        fit: BoxFit.cover,
+        placeholder: (_, __) => Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+            ),
+          ),
+        ),
+        errorWidget: (_, __, ___) => Container(
+          color: AppColors.surface2,
+          child: Icon(
+            Icons.image_outlined,
+            color: AppColors.textSecondary,
+            size: R.icon(context, 20),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final billingState = ref.watch(billingProvider);
@@ -101,10 +199,7 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                   backgroundColor: Colors.transparent,
                   shadowColor: Colors.transparent,
                   elevation: 0,
-                  minimumSize: Size(
-                    double.infinity,
-                    R.sp(context, 48),
-                  ),
+                  minimumSize: Size(double.infinity, R.sp(context, 48)),
                   padding: EdgeInsets.symmetric(
                     vertical: R.sp(context, 4),
                     horizontal: R.sp(context, 18),
@@ -242,9 +337,7 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                                     ),
                                   ),
                                 ),
-                                SizedBox(
-                                  width: R.fluid(context, 32, 40),
-                                ),
+                                SizedBox(width: R.fluid(context, 32, 40)),
                               ],
                             ),
                           ),
@@ -252,6 +345,18 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                           // ── TABLE ROWS ──
                           Expanded(
                             child: ListView.separated(
+                              // ✅ FIX: A bill's cart is a bounded, modest-sized
+                              // list (a handful to a few dozen line items), not
+                              // an endless feed. The default cacheExtent (250px)
+                              // was disposing rows once they scrolled far enough
+                              // off-screen, so scrolling back down past them
+                              // remounted a brand-new CachedNetworkImage widget
+                              // and briefly flashed the placeholder again —
+                              // looking like the image was "reloading". Keeping
+                              // a generous cacheExtent means every row (and its
+                              // decoded image) stays alive for the life of the
+                              // billing session, so it never has to re-resolve.
+                              cacheExtent: 3000,
                               itemCount: billingState.cart.length,
                               separatorBuilder: (_, __) => const Divider(
                                 height: 1,
@@ -262,11 +367,13 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                                 final deleteBtnW = R.fluid(context, 32, 40);
 
                                 return Padding(
+                                  // Stable identity per product so Flutter never
+                                  // confuses one row's element/image state for
+                                  // another's when qty changes or an item is
+                                  // removed from the middle of the cart.
+                                  key: ValueKey(item.productId),
                                   padding: EdgeInsets.symmetric(
-                                    horizontal: R.sp(
-                                      context,
-                                      AppSpacing.sm,
-                                    ),
+                                    horizontal: R.sp(context, AppSpacing.sm),
                                     vertical: R.sp(context, AppSpacing.md),
                                   ),
                                   child: Row(
@@ -281,68 +388,10 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                                             SizedBox(
                                               width: imgSz,
                                               height: imgSz,
-                                              child:
-                                                  item.imagePath != null &&
-                                                      item.imagePath!.isNotEmpty
-                                                  ? ClipRRect(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            AppSizes.radiusSm,
-                                                          ),
-                                                      child: Image.network(
-                                                        item.imagePath!,
-                                                        fit: BoxFit.cover,
-                                                        loadingBuilder: (context, child, progress) {
-                                                          if (progress == null) return child;
-                                                          return Center(
-                                                            child: SizedBox(
-                                                              width: 18,
-                                                              height: 18,
-                                                              child: CircularProgressIndicator(
-                                                                strokeWidth: 2,
-                                                                valueColor: AlwaysStoppedAnimation<Color>(
-                                                                  AppColors.primary,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          );
-                                                        },
-                                                        errorBuilder: (_, __, ___) =>
-                                                            Container(
-                                                              color: AppColors
-                                                                  .surface2,
-                                                              child: Icon(
-                                                                Icons
-                                                                    .image_outlined,
-                                                                color: AppColors
-                                                                    .textSecondary,
-                                                                size: R.icon(
-                                                                  context,
-                                                                  20,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                      ),
-                                                    )
-                                                  : Container(
-                                                      decoration: BoxDecoration(
-                                                        color:
-                                                            AppColors.surface2,
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              AppSizes.radiusSm,
-                                                            ),
-                                                      ),
-                                                      child: Icon(
-                                                        Icons.image_outlined,
-                                                        color: AppColors
-                                                            .textSecondary,
-                                                        size: R.icon(
-                                                          context,
-                                                          20,
-                                                        ),
-                                                      ),
-                                                    ),
+                                              child: _buildCartItemImage(
+                                                item.imagePath,
+                                                imgSz,
+                                              ),
                                             ),
                                             SizedBox(
                                               width: R.sp(
@@ -387,7 +436,8 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                                                           ),
                                                     ),
                                                     child: Text(
-                                                      item.category ?? "General",
+                                                      item.category ??
+                                                          "General",
                                                       style: AppTextStyles.small
                                                           .copyWith(
                                                             color: AppColors
@@ -570,7 +620,9 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                                               ),
                                             );
                                             if (confirm == true) {
-                                              billingNotifier.removeProduct(item.productId);
+                                              billingNotifier.removeProduct(
+                                                item.productId,
+                                              );
                                             }
                                           },
                                         ),
@@ -716,15 +768,17 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                                 );
                               },
                             );
-                            if (confirm == true) {
-                              billingNotifier.clearCart();
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text("Bill cleared successfully"),
-                                ),
-                              );
-                            }
+if (confirm == true) {
+  billingNotifier.clearCart();
+
+  if (mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Bill cleared successfully"),
+      ),
+    );
+  }
+}
                           },
                           style: OutlinedButton.styleFrom(
                             side: const BorderSide(color: AppColors.red),

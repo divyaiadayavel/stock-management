@@ -72,6 +72,47 @@ class CustomerOperations extends StateNotifier<AsyncValue<void>> {
     return false;
   }
 
+  /// Same as [addCustomer], but returns the newly created customer
+  /// (with its server-assigned id) instead of just a bool.
+  ///
+  /// Used by flows (e.g. Payment screen -> Add customer) that need to
+  /// immediately select the customer that was just created, without
+  /// requiring the caller to re-fetch and search the customer list.
+  Future<CustomerModel?> addCustomerAndReturn(CustomerModel customer) async {
+    state = const AsyncValue.loading();
+    try {
+      final newId = await ref.read(customerRemoteSourceProvider).addCustomerToServer(customer);
+      if (newId > 0) {
+        ref.invalidate(rawCustomersProvider);
+        ref.invalidate(allCustomersProvider); // ✅ also invalidate unfiltered
+        state = const AsyncValue.data(null);
+
+        return CustomerModel(
+          id: newId,
+          customerCode: customer.customerCode,
+          customerName: customer.customerName,
+          phone: customer.phone,
+          alternatePhone: customer.alternatePhone,
+          email: customer.email,
+          gstNumber: customer.gstNumber,
+          address: customer.address,
+          city: customer.city,
+          state: customer.state,
+          country: customer.country,
+          postalCode: customer.postalCode,
+          openingBalance: customer.openingBalance,
+          currentBalance: customer.currentBalance,
+          loyaltyPoints: customer.loyaltyPoints,
+          notes: customer.notes,
+          status: customer.status,
+        );
+      }
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    }
+    return null;
+  }
+
   Future<bool> modifyCustomer(CustomerModel customer) async {
     state = const AsyncValue.loading();
     try {

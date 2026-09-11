@@ -11,6 +11,7 @@ import '../../../../../domain/entities/printers_hardware/printer/printer_device.
 import '../../../../providers/printers_hardware/printer_management/printers_hardware_provider.dart';
 import '../../../../providers/printers_hardware/connection/wifi_provider.dart';
 import '../../../../../domain/enums/printers_hardware/printer/printer_connection_type.dart';
+import '../../../../../domain/enums/printers_hardware/printer/printer_type.dart';
 
 enum _WifiMode { scan, manual }
 
@@ -184,14 +185,14 @@ class _WifiPrinterScreenState extends ConsumerState<WifiPrinterScreen> {
             padding: const EdgeInsets.fromLTRB(20, 14, 16, 8),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: Text('Printers found · ${devices.length}', style: AppTextStyles.small.copyWith(fontSize: 12, fontWeight: FontWeight.w700)),
+              child: Text('Printers found - ${devices.length}', style: AppTextStyles.small.copyWith(fontSize: 12, fontWeight: FontWeight.w700)),
             ),
           ),
           Expanded(
             child: ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
               itemCount: devices.length,
-              separatorBuilder: (_, __) => const Divider(height: 1, indent: 56, color: AppColors.borderStrong),
+              separatorBuilder: (_, _) => const Divider(height: 1, indent: 56, color: AppColors.borderStrong),
               itemBuilder: (context, i) => _deviceRow(devices[i]),
             ),
           ),
@@ -219,6 +220,9 @@ class _WifiPrinterScreenState extends ConsumerState<WifiPrinterScreen> {
 
   Widget _deviceRow(PrinterDevice device) {
     final ip = device.configuration.ipAddress ?? '';
+    final method = device.configuration.discoveryMethod == 'mdns'
+        ? 'Found via mDNS'
+        : 'Found via network scan';
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(vertical: 6),
       leading: Container(
@@ -227,9 +231,29 @@ class _WifiPrinterScreenState extends ConsumerState<WifiPrinterScreen> {
         decoration: BoxDecoration(color: AppColors.cyan.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
         child: const Icon(Icons.print_outlined, size: 20, color: AppColors.cyanDim),
       ),
-      title: Text(device.name, style: AppTextStyles.cardValue.copyWith(fontWeight: FontWeight.w700, fontSize: 14)),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            device.name,
+            style: AppTextStyles.cardValue.copyWith(
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            method,
+            style: AppTextStyles.small.copyWith(
+              fontSize: 10,
+              color: AppColors.cyanDim,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
       subtitle: Text(
-        '$ip · port ${device.configuration.port ?? 9100}',
+        '$ip - port ${device.configuration.port ?? 9100}',
         style: AppTextStyles.small.copyWith(fontSize: 11, color: AppColors.textSecondary, fontFamily: 'JetBrains Mono'),
       ),
       trailing: ElevatedButton(
@@ -515,8 +539,10 @@ class _WifiPrinterScreenState extends ConsumerState<WifiPrinterScreen> {
       name: _nameController.text.trim(),
       configuration: PrinterConfiguration(
         connectionType: PrinterConnectionType.wifi,
+        type: PrinterType.thermal,
         ipAddress: _ipController.text.trim(),
         port: int.tryParse(_portController.text.trim()) ?? 9100,
+        discoveryMethod: 'manual',
       ),
       capabilities: PrinterCapability(paperWidthMm: _paperSize == '58 mm' ? 58 : 80),
     );

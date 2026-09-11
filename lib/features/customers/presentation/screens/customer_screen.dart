@@ -6,6 +6,7 @@ import '../provider/customer_provider.dart';
 import 'add_customer_screen.dart';
 import 'customer_details_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../../core/network/no_internet_screen.dart';
 
 class CustomersScreen extends ConsumerStatefulWidget {
   const CustomersScreen({super.key});
@@ -16,6 +17,77 @@ class CustomersScreen extends ConsumerStatefulWidget {
 
 class _CustomersScreenState extends ConsumerState<CustomersScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(customerSearchQueryProvider.notifier).state = "";
+      _refreshData();
+    });
+  }
+
+  @override
+  void dispose() {
+    ref.read(customerSearchQueryProvider.notifier).state = "";
+    _scrollController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  String _capitalizeFirstLetter(String text) {
+    if (text.isEmpty) return text;
+    return text[0].toUpperCase() + text.substring(1);
+  }
+
+  bool _matchesSearch(String name, String phone, String query) {
+    if (query.isEmpty) return true;
+    final q = query.toLowerCase();
+    return name.toLowerCase().contains(q) ||
+        phone.replaceAll(RegExp(r'\s+'), '').contains(q);
+  }
+
+  Widget _highlightedName(String name, String query, TextStyle baseStyle) {
+    final displayName = _capitalizeFirstLetter(name);
+    if (query.isEmpty) {
+      return Text(displayName, style: baseStyle);
+    }
+
+    final lowerName = displayName.toLowerCase();
+    final lowerQuery = query.toLowerCase();
+    final List<TextSpan> spans = [];
+    int start = 0;
+
+    while (true) {
+      final found = lowerName.indexOf(lowerQuery, start);
+      if (found == -1) break;
+
+      if (found > start) {
+        spans.add(TextSpan(text: displayName.substring(start, found)));
+      }
+
+      spans.add(
+        TextSpan(
+          text: displayName.substring(found, found + query.length),
+          style: baseStyle.copyWith(
+            fontWeight: FontWeight.bold,
+            color: AppColors.primary,
+          ),
+        ),
+      );
+
+      start = found + query.length;
+    }
+
+    if (start < displayName.length) {
+      spans.add(TextSpan(text: displayName.substring(start)));
+    }
+
+    return RichText(
+      text: TextSpan(style: baseStyle, children: spans),
+    );
+  }
 
   Future<void> _makeCall(String contactNumber) async {
     final cleaned = contactNumber.replaceAll(RegExp(r'\s+'), '');
@@ -34,7 +106,6 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
     }
   }
 
-  // Exact formatting – no rounding
   String _formatAmountExact(double amount) {
     if (amount == amount.truncateToDouble()) {
       return amount.toInt().toString();
@@ -97,10 +168,14 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.background,
         elevation: 0,
+        scrolledUnderElevation: 0,
         leading: IconButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            ref.read(customerSearchQueryProvider.notifier).state = "";
+            Navigator.pop(context);
+          },
           icon: Icon(
             Icons.arrow_back,
             color: AppColors.textPrimaryDark,
@@ -143,37 +218,51 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
           ),
         ],
         bottom: PreferredSize(
-          preferredSize: Size.fromHeight(1),
+          preferredSize: const Size.fromHeight(1),
           child: Divider(height: 1, color: Colors.grey.shade200),
         ),
       ),
       body: Column(
         children: [
-          // Search field
           Padding(
-            padding: hPad.copyWith(top: R.sp(context, 12), bottom: R.sp(context, 4)),
+            padding: hPad.copyWith(
+              top: R.sp(context, 12),
+              bottom: R.sp(context, 4),
+            ),
             child: TextField(
               controller: _searchController,
-              onChanged: (val) => ref.read(customerSearchQueryProvider.notifier).state = val.trim(),
+              onChanged: (val) =>
+                  ref.read(customerSearchQueryProvider.notifier).state = val
+                      .trim(),
               decoration: InputDecoration(
                 hintText: "Search customer name or phone...",
-                prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
+                prefixIcon: const Icon(
+                  Icons.search,
+                  color: AppColors.textSecondary,
+                ),
                 filled: true,
                 fillColor: Colors.white,
-                contentPadding: EdgeInsets.symmetric(vertical: R.sp(context, 10)),
+                contentPadding: EdgeInsets.symmetric(
+                  vertical: R.sp(context, 10),
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(R.radius(context, 10)),
-                  borderSide: const BorderSide(color: AppColors.border),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(R.radius(context, 10)),
-                  borderSide: const BorderSide(color: AppColors.border),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(R.radius(context, 10)),
+                  borderSide: const BorderSide(
+                    color: AppColors.cyanDim,
+                    width: 1.5,
+                  ),
                 ),
               ),
             ),
           ),
-
-          // Stats cards
           Padding(
             padding: hPad.copyWith(top: R.sp(context, 12)),
             child: Row(
@@ -188,15 +277,20 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
               ],
             ),
           ),
-
           SizedBox(height: R.sp(context, 16)),
-
-          // Customer list
           Expanded(
             child: customersAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
-              error: (err, stack) => Center(child: Text("Error fetching customers: $err")),
-              data: (customersList) {
+              loading: () => const Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              ),
+              error: (err, stack) => NoInternetScreen(onRetry: _refreshData),
+              data: (rawCustomersList) {
+                final query = ref.watch(customerSearchQueryProvider);
+                final customersList = rawCustomersList
+                    .where(
+                      (c) => _matchesSearch(c.customerName, c.phone, query),
+                    )
+                    .toList();
                 if (customersList.isEmpty) {
                   return Center(
                     child: Column(
@@ -226,26 +320,27 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                     _refreshData();
                   },
                   child: ListView.builder(
+                    controller: _scrollController,
                     padding: hPad.copyWith(bottom: R.sp(context, 24)),
                     itemCount: customersList.length,
                     itemBuilder: (context, index) {
                       final c = customersList[index];
-                      final bool hasDue = c.currentBalance > 0;
-                      final name = c.customerName;
+                      final name = _capitalizeFirstLetter(c.customerName);
 
                       final parts = name.trim().split(" ");
                       final initials = parts.length >= 2
                           ? "${parts[0][0]}${parts[1][0]}".toUpperCase()
                           : name.isNotEmpty
-                              ? name[0].toUpperCase()
-                              : "?";
+                          ? name[0].toUpperCase()
+                          : "?";
 
                       return GestureDetector(
                         onTap: () async {
                           final result = await Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => CustomerDetailsScreen(customer: c),
+                              builder: (_) =>
+                                  CustomerDetailsScreen(customer: c),
                             ),
                           );
                           if (result == true) {
@@ -260,7 +355,9 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                           ),
                           decoration: BoxDecoration(
                             color: Colors.white,
-                            borderRadius: BorderRadius.circular(R.radius(context, 12)),
+                            borderRadius: BorderRadius.circular(
+                              R.radius(context, 12),
+                            ),
                             border: Border.all(color: AppColors.border),
                           ),
                           child: Row(
@@ -288,9 +385,10 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
+                                    _highlightedName(
                                       name,
-                                      style: TextStyle(
+                                      query,
+                                      TextStyle(
                                         fontSize: R.fs(context, 14),
                                         fontWeight: FontWeight.w500,
                                         color: AppColors.textPrimaryDark,
@@ -310,17 +408,6 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
-                                  Text(
-                                    hasDue
-                                        ? "due ₹${_formatAmountExact(c.currentBalance)}"
-                                        : "settled",
-                                    style: TextStyle(
-                                      fontSize: R.fs(context, 12),
-                                      fontWeight: FontWeight.w600,
-                                      color: hasDue ? AppColors.orange : AppColors.green,
-                                    ),
-                                  ),
-                                  SizedBox(height: R.sp(context, 6)),
                                   GestureDetector(
                                     onTap: () => _makeCall(c.phone),
                                     child: Container(
@@ -331,7 +418,9 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                                       decoration: BoxDecoration(
                                         color: Colors.white,
                                         borderRadius: BorderRadius.circular(20),
-                                        border: Border.all(color: AppColors.border),
+                                        border: Border.all(
+                                          color: AppColors.border,
+                                        ),
                                       ),
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,

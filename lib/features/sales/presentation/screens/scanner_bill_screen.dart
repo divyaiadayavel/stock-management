@@ -187,11 +187,7 @@ class _ScannerBillScreenState extends ConsumerState<ScannerBillScreen>
       }
     } else {
       if (mounted) {
-        _showCustomNotification(
-          context,
-          'Product not found',
-          isError: true,
-        );
+        _showCustomNotification(context, 'Product not found', isError: true);
       }
     }
 
@@ -322,7 +318,9 @@ class _ScannerBillScreenState extends ConsumerState<ScannerBillScreen>
                                 width: 40,
                                 height: 40,
                                 decoration: BoxDecoration(
-                                  color: AppColors.primary.withValues(alpha: 0.1),
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.1,
+                                  ),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Icon(
@@ -392,10 +390,7 @@ class _ScannerBillScreenState extends ConsumerState<ScannerBillScreen>
                                               .read(billingProvider.notifier)
                                               .increaseQty(item.productId);
                                         },
-                                        child: const Icon(
-                                          Icons.add,
-                                          size: 18,
-                                        ),
+                                        child: const Icon(Icons.add, size: 18),
                                       ),
                                     ),
                                   ],
@@ -409,12 +404,17 @@ class _ScannerBillScreenState extends ConsumerState<ScannerBillScreen>
                   ),
                   Padding(
                     padding: const EdgeInsets.all(16),
-                    child: SizedBox(
+                    child: Container(
                       width: double.infinity,
                       height: 55,
+                      decoration: BoxDecoration(
+                        gradient: AppColors.brandGradient,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),

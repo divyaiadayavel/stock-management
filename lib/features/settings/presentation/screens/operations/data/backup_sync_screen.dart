@@ -49,13 +49,16 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
     await ref
         .read(settingsRepositoryProvider)
         .saveSetting(key, value.toString());
+
     await ref
         .read(backupSyncRepositoryProvider)
         .saveBackupSettings(settings: {key: value.toString()});
-    setState(() {
-      if (key == "googleDriveBackup") googleDrive = value;
-      if (key == "autoBackup") autoBackup = value;
-    });
+
+    await _loadSettings();
+
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -95,22 +98,21 @@ class _BackupSyncScreenState extends ConsumerState<BackupSyncScreen> {
                   _toggleCard(
                     icon: Icons.cloud_queue,
                     iconColor: AppColors.green,
-                    title: backupState.account != null
-                        ? "Google Drive (${backupState.account!.email})"
+                    title: backupState.isConnected
+                        ? "Google Drive (${backupState.account?.email ?? ''})"
                         : "Google Drive Backup",
-                    subtitle: backupState.account == null
-                        ? "Not connected"
-                        : (backupState.lastSync != null
+                    subtitle: backupState.isConnected
+                        ? (backupState.lastSync != null
                               ? "Last backup: ${DateFormat('dd MMM yyyy, hh:mm a').format(backupState.lastSync!)}"
-                              : "Connected (Ready to sync)"),
-                    value: backupState.account != null,
+                              : "Connected (Ready to sync)")
+                        : "Not connected",
+                    value: backupState.isConnected,
                     onChanged: (val) async {
                       if (val) {
                         await backupController.connectDrive();
                       } else {
                         await backupController.disconnectDrive();
                       }
-                      await backupController.refreshStatus();
                     },
                   ),
                   _toggleCard(

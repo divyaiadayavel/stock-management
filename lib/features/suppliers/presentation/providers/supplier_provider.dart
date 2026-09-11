@@ -5,15 +5,16 @@ import '../../data/repositories/supplier_repository_impl.dart';
 import '../../domain/entities/supplier.dart';
 import '../../domain/usecases/delete_supplier.dart';
 import '../../domain/usecases/get_suppliers_paginated.dart';
+import '../../../../core/network/api_config.dart';
 
 // Dependency Injection Setup Providers
 final supplierClientProvider = Provider((ref) => http.Client());
 
 final supplierRemoteDatasourceProvider = Provider((ref) {
   final client = ref.watch(supplierClientProvider);
-  // Set your corporate backend base connection path endpoint here
+
   return SupplierRemoteDatasource(
-    baseUrl: 'https://nonredemptive-gyrational-pauletta.ngrok-free.dev/public_html', 
+    baseUrl: ApiConfig.baseUrl,
     client: client,
   );
 });
@@ -37,72 +38,84 @@ final deleteSupplierProvider = Provider((ref) {
 class SupplierState {
   final List<Supplier> suppliers;
   final bool isLoading;
-  final String error;
-  final int page;
   final bool hasMore;
+  final int page;
   final String searchQuery;
+  final String error;
 
   SupplierState({
     required this.suppliers,
     required this.isLoading,
-    required this.error,
-    required this.page,
     required this.hasMore,
+    required this.page,
     required this.searchQuery,
+    required this.error,
   });
 
   SupplierState copyWith({
     List<Supplier>? suppliers,
     bool? isLoading,
-    String? error,
-    int? page,
     bool? hasMore,
+    int? page,
     String? searchQuery,
+    String? error,
   }) {
     return SupplierState(
       suppliers: suppliers ?? this.suppliers,
       isLoading: isLoading ?? this.isLoading,
-      error: error ?? this.error,
-      page: page ?? this.page,
       hasMore: hasMore ?? this.hasMore,
+      page: page ?? this.page,
       searchQuery: searchQuery ?? this.searchQuery,
+      error: error ?? this.error,
     );
   }
 }
 
-class SupplierNotifier extends StateNotifier<SupplierState> {
+class SuppliersNotifier extends StateNotifier<SupplierState> {
+  static const int _pageSize = 100;
+
   final GetSuppliersPaginated _getSuppliers;
   final DeleteSupplier _deleteSupplier;
 
-  SupplierNotifier({
+  SuppliersNotifier({
     required GetSuppliersPaginated getSuppliers,
     required DeleteSupplier deleteSupplier,
-  })  : _getSuppliers = getSuppliers,
-        _deleteSupplier = deleteSupplier,
-        super(SupplierState(
-          suppliers: [],
-          isLoading: false,
-          error: '',
-          page: 1,
-          hasMore: true,
-          searchQuery: '',
-        ));
+  }) : _getSuppliers = getSuppliers,
+       _deleteSupplier = deleteSupplier,
+       super(
+         SupplierState(
+           suppliers: [],
+           isLoading: false,
+           hasMore: true,
+           page: 1,
+           searchQuery: '',
+           error: '',
+         ),
+       );
 
   Future<void> fetchAllSuppliers({bool refresh = false}) async {
     if (refresh) {
-      state = state.copyWith(page: 1, hasMore: true, suppliers: []);
+      // ✅ FIX: Force isLoading: false so refresh is never blocked by a stale loading flag
+      state = state.copyWith(
+        page: 1,
+        hasMore: true,
+        suppliers: [],
+        isLoading: false,
+      );
     }
 
-    if (!state.hasMore || state.isLoading) return;
+    if (state.isLoading) return;
 
     state = state.copyWith(isLoading: true, error: '');
 
     try {
       final result = await _getSuppliers(
         page: state.page,
-        limit: 15,
+        limit: _pageSize,
         search: state.searchQuery,
         status: 'ACTIVE',
+        sort: 'id',
+        order: 'DESC',
       );
 
       final List<Supplier> fetched = List<Supplier>.from(result['data']);
@@ -110,7 +123,7 @@ class SupplierNotifier extends StateNotifier<SupplierState> {
       state = state.copyWith(
         suppliers: [...state.suppliers, ...fetched],
         page: state.page + 1,
-        hasMore: fetched.isNotEmpty,
+        hasMore: fetched.length == _pageSize,
         isLoading: false,
       );
     } catch (e) {
@@ -137,8 +150,10 @@ class SupplierNotifier extends StateNotifier<SupplierState> {
   }
 }
 
-final suppliersNotifierProvider = StateNotifierProvider<SupplierNotifier, SupplierState>((ref) {
-  final getSuppliers = ref.watch(getSuppliersPaginatedProvider);
-  final deleteSupplier = ref.watch(deleteSupplierProvider);
-  return SupplierNotifier(getSuppliers: getSuppliers, deleteSupplier: deleteSupplier);
-});
+final suppliersNotifierProvider =
+    StateNotifierProvider<SuppliersNotifier, SupplierState>((ref) {
+      return SuppliersNotifier(
+        getSuppliers: ref.watch(getSuppliersPaginatedProvider),
+        deleteSupplier: ref.watch(deleteSupplierProvider),
+      );
+    });

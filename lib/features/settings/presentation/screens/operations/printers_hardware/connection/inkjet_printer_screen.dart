@@ -9,6 +9,7 @@ import '../../../../../domain/entities/printers_hardware/printer/printer_capabil
 import '../../../../../domain/entities/printers_hardware/printer/printer_configuration.dart';
 import '../../../../../domain/entities/printers_hardware/printer/printer_device.dart';
 import '../../../../../domain/enums/printers_hardware/printer/printer_connection_type.dart';
+import '../../../../../domain/enums/printers_hardware/printer/printer_type.dart';
 import '../../../../providers/printers_hardware/printer_management/printers_hardware_provider.dart';
 
 enum _InkjetStage { confirm, connecting, connected, failed }
@@ -26,7 +27,10 @@ class _InkjetPrinterScreenState extends ConsumerState<InkjetPrinterScreen> {
   static const PrinterDevice _device = PrinterDevice(
     id: 'system-printer',
     name: 'Document Printer',
-    configuration: PrinterConfiguration(connectionType: PrinterConnectionType.system),
+    configuration: PrinterConfiguration(
+      connectionType: PrinterConnectionType.system,
+      type: PrinterType.document,
+    ),
     capabilities: PrinterCapability(
       paperWidthMm: 148, // A5 short edge
       supports58mm: false,

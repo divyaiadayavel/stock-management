@@ -1,12 +1,15 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:http/http.dart' as http;
 import 'add_product_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_text_styles.dart';
+import '../../../../core/network/api_config.dart';
 import '../../../../core/utils/responsive_helper.dart';
 import '../../data/models/product_model.dart';
 import '../providers/product_provider.dart';
@@ -17,7 +20,8 @@ class ProductDetailsScreen extends ConsumerStatefulWidget {
   const ProductDetailsScreen({super.key, required this.product});
 
   @override
-  ConsumerState<ProductDetailsScreen> createState() => _ProductDetailsScreenState();
+  ConsumerState<ProductDetailsScreen> createState() =>
+      _ProductDetailsScreenState();
 }
 
 class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
@@ -27,6 +31,11 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
   void initState() {
     super.initState();
     currentProduct = widget.product;
+  }
+
+  String _capitalizeFirstLetter(String text) {
+    if (text.isEmpty) return text;
+    return text[0].toUpperCase() + text.substring(1);
   }
 
   Future<void> refreshProduct() async {
@@ -44,15 +53,72 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
     }
   }
 
+  Widget _buildProductImage(Product product) {
+    String imagePath = product.imagePath.trim();
+
+    if (imagePath.isEmpty) {
+      return Icon(
+        Icons.image_outlined,
+        size: R.icon(context, 90),
+        color: AppColors.textSecondary,
+      );
+    }
+
+    final localFile = File(imagePath);
+    if (!imagePath.startsWith('http') && localFile.existsSync()) {
+      return Image.file(
+        localFile,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Icon(
+          Icons.broken_image,
+          size: R.icon(context, 60),
+          color: Colors.grey,
+        ),
+      );
+    }
+
+    if (imagePath.contains('ngrok') ||
+        imagePath.contains('localhost') ||
+        imagePath.contains('127.0.0.1')) {
+      if (imagePath.contains('uploads/')) {
+        imagePath = 'uploads/' + imagePath.split('uploads/').last;
+      }
+    }
+
+    String fullImageUrl = imagePath;
+    if (!fullImageUrl.startsWith('http://') &&
+        !fullImageUrl.startsWith('https://')) {
+      if (fullImageUrl.startsWith('/')) {
+        fullImageUrl = fullImageUrl.substring(1);
+      }
+      fullImageUrl = '${ApiConfig.baseUrl}/$fullImageUrl';
+    }
+
+    return CachedNetworkImage(
+      imageUrl: fullImageUrl,
+      fit: BoxFit.cover,
+      placeholder: (_, __) =>
+          const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      errorWidget: (_, __, ___) => Icon(
+        Icons.broken_image,
+        size: R.icon(context, 60),
+        color: Colors.grey,
+      ),
+    );
+  }
+
   void _showUpdateStockDialog() {
-    final TextEditingController stockController = TextEditingController(text: "1");
+    final TextEditingController stockController = TextEditingController(
+      text: "1",
+    );
+
     bool isAdding = true;
 
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return StatefulBuilder(
-          builder: (context, setDialogState) {
+          builder: (dialogContext, setDialogState) {
             return AlertDialog(
               backgroundColor: AppColors.card,
               shape: RoundedRectangleBorder(
@@ -60,21 +126,29 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
               ),
               title: Text(
                 "Update Stock",
-                style: AppTextStyles.sectionTitle.copyWith(color: AppColors.textPrimaryDark),
+                style: AppTextStyles.sectionTitle.copyWith(
+                  color: AppColors.textPrimaryDark,
+                ),
               ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     "Current Stock: ${currentProduct.quantity}",
-                    style: AppTextStyles.cardValue,
+                    style: AppTextStyles.cardValue.copyWith(
+                      color: AppColors.textPrimaryDark,
+                    ),
                   ),
                   SizedBox(height: R.sp(context, AppSpacing.lg)),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       IconButton(
-                        onPressed: () => setDialogState(() => isAdding = false),
+                        onPressed: () {
+                          setDialogState(() {
+                            isAdding = false;
+                          });
+                        },
                         icon: Icon(
                           Icons.remove_circle,
                           color: !isAdding ? AppColors.red : Colors.grey,
@@ -89,15 +163,34 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                           controller: stockController,
                           keyboardType: TextInputType.number,
                           textAlign: TextAlign.center,
-                          style: AppTextStyles.cardValue,
+                          style: AppTextStyles.cardValue.copyWith(
+                            color: AppColors.textPrimaryDark,
+                          ),
                           decoration: InputDecoration(
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(AppSizes.radiusMd),
-                              borderSide: const BorderSide(color: AppColors.border),
+                              borderRadius: BorderRadius.circular(
+                                AppSizes.radiusMd,
+                              ),
+                              borderSide: const BorderSide(
+                                color: AppColors.border,
+                              ),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(AppSizes.radiusMd),
-                              borderSide: const BorderSide(color: AppColors.border),
+                              borderRadius: BorderRadius.circular(
+                                AppSizes.radiusMd,
+                              ),
+                              borderSide: const BorderSide(
+                                color: AppColors.border,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                AppSizes.radiusMd,
+                              ),
+                              borderSide: const BorderSide(
+                                color: AppColors.cyanDim,
+                                width: 1.5,
+                              ),
                             ),
                             contentPadding: EdgeInsets.zero,
                           ),
@@ -105,7 +198,11 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                       ),
                       SizedBox(width: R.sp(context, AppSpacing.sm)),
                       IconButton(
-                        onPressed: () => setDialogState(() => isAdding = true),
+                        onPressed: () {
+                          setDialogState(() {
+                            isAdding = true;
+                          });
+                        },
                         icon: Icon(
                           Icons.add_circle,
                           color: isAdding ? AppColors.green : Colors.grey,
@@ -116,7 +213,9 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                   ),
                   SizedBox(height: R.sp(context, AppSpacing.md)),
                   Text(
-                    isAdding ? "Action: Add to Stock" : "Action: Remove from Stock",
+                    isAdding
+                        ? "Action: Add to Stock"
+                        : "Action: Remove from Stock",
                     style: AppTextStyles.small.copyWith(
                       color: isAdding ? AppColors.green : AppColors.red,
                       fontWeight: FontWeight.w500,
@@ -126,27 +225,62 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                  },
                   child: Text(
                     "Cancel",
-                    style: AppTextStyles.button.copyWith(color: AppColors.textSecondary),
+                    style: AppTextStyles.button.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ),
-                ElevatedButton(
-                  onPressed: () async {
-                    int amount = int.tryParse(stockController.text) ?? 0;
-                    if (amount > 0 && currentProduct.id != null) {
-                      int finalChange = isAdding ? amount : -amount;
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: AppColors.brandGradient,
+                    borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+                  ),
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final amount = int.tryParse(stockController.text.trim());
 
-                      final mutatedStockProduct = Product(
+                      if (amount == null || amount <= 0) {
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(
+                          const SnackBar(
+                            content: Text("Please enter a valid quantity"),
+                          ),
+                        );
+                        return;
+                      }
+
+                      if (currentProduct.id == null) {
+                        return;
+                      }
+
+                      final newQuantity = isAdding
+                          ? currentProduct.quantity + amount
+                          : currentProduct.quantity - amount;
+
+                      if (newQuantity < 0) {
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(
+                          const SnackBar(
+                            content: Text("Stock cannot be less than 0"),
+                          ),
+                        );
+                        return;
+                      }
+
+                      final updatedProduct = Product(
                         id: currentProduct.id,
                         name: currentProduct.name,
                         category: currentProduct.category,
+                        categoryId: currentProduct.categoryId,
                         hsnCode: currentProduct.hsnCode,
                         purchasePrice: currentProduct.purchasePrice,
                         sellingPrice: currentProduct.sellingPrice,
-                        quantity: currentProduct.quantity + finalChange,
+                        quantity: newQuantity,
                         unit: currentProduct.unit,
+                        unitId: currentProduct.unitId,
                         description: currentProduct.description,
                         imagePath: currentProduct.imagePath,
                         barcode: currentProduct.barcode,
@@ -155,27 +289,74 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                         discount: currentProduct.discount,
                         expiryDate: currentProduct.expiryDate,
                         supplier: currentProduct.supplier,
+                        supplierId: currentProduct.supplierId,
                         lsl: currentProduct.lsl,
+                        status: currentProduct.status,
                       );
 
-                      final success = await ref.read(productOperationsProvider.notifier).modifyProduct(mutatedStockProduct);
-                      if (success) {
-                        await refreshProduct();
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("Stock Updated Successfully")),
+final success = await ref
+                          .read(productOperationsProvider.notifier)
+                          .modifyProduct(updatedProduct);
+
+                      if (!success) {
+                        if (dialogContext.mounted) {
+                          ScaffoldMessenger.of(dialogContext).showSnackBar(
+                            const SnackBar(
+                              content: Text("Failed to update stock"),
+                            ),
                           );
                         }
+                        return;
                       }
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: AppColors.textWhite,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
+
+// Trigger Stock Notification using the correct Riverpod provider
+                      try {
+                        final actionType = isAdding ? "restock" : "sale";
+                        final dataSource = ref.read(productRemoteSourceProvider);
+                        
+                        await dataSource.triggerStockNotification(
+                          productId: currentProduct.id ?? 0,
+                          actionType: actionType,
+                          changeQty: amount,
+                        );
+                      } catch (e) {
+                        debugPrint("Stock notification trigger failed: $e");
+                      }
+
+                      if (dialogContext.mounted) {
+                        Navigator.pop(dialogContext);
+                      }
+
+                      await refreshProduct();
+
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              isAdding
+                                  ? "Stock added successfully. New stock: $newQuantity"
+                                  : "Stock removed successfully. New stock: $newQuantity",
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      foregroundColor: AppColors.textWhite,
+                      shadowColor: Colors.transparent,
+                      surfaceTintColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+                      ),
+                    ),
+                    child: Text(
+                      "Update",
+                      style: AppTextStyles.button.copyWith(
+                        color: AppColors.textWhite,
+                      ),
+                    ),
                   ),
-                  child: Text("Update", style: AppTextStyles.button),
                 ),
               ],
             );
@@ -191,8 +372,15 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
       builder: (context) {
         return AlertDialog(
           backgroundColor: AppColors.card,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusLg)),
-          title: Text("Delete Product", style: AppTextStyles.sectionTitle.copyWith(color: AppColors.textPrimaryDark)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppSizes.radiusLg),
+          ),
+          title: Text(
+            "Delete Product",
+            style: AppTextStyles.sectionTitle.copyWith(
+              color: AppColors.textPrimaryDark,
+            ),
+          ),
           content: Text(
             "Are you sure you want to delete ${currentProduct.name}? This action cannot be undone.",
             style: AppTextStyles.small.copyWith(color: AppColors.textSecondary),
@@ -200,16 +388,28 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: Text("Cancel", style: AppTextStyles.button.copyWith(color: AppColors.textSecondary)),
+              child: Text(
+                "Cancel",
+                style: AppTextStyles.button.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.red,
                 elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+                ),
               ),
               onPressed: () => Navigator.pop(context, true),
-              child: Text("Delete", style: AppTextStyles.button.copyWith(color: AppColors.textWhite)),
+              child: Text(
+                "Delete",
+                style: AppTextStyles.button.copyWith(
+                  color: AppColors.textWhite,
+                ),
+              ),
             ),
           ],
         );
@@ -217,7 +417,9 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
     );
 
     if (confirm == true && currentProduct.id != null) {
-      final softDone = await ref.read(productOperationsProvider.notifier).deleteProduct(currentProduct.id!);
+      final softDone = await ref
+          .read(productOperationsProvider.notifier)
+          .deleteProduct(currentProduct.id!);
       if (softDone && mounted) {
         Navigator.pop(context, true);
       }
@@ -229,8 +431,16 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
     final qty = currentProduct.quantity;
     final bool isOut = qty == 0;
     final bool isLow = !isOut && qty <= currentProduct.lsl;
-    final String status = isOut ? "Out of Stock" : isLow ? "Low Stock" : "In Stock";
-    final Color statusColor = isOut ? AppColors.red : isLow ? AppColors.orange : AppColors.green;
+    final String status = isOut
+        ? "Out of Stock"
+        : isLow
+        ? "Low Stock"
+        : "In Stock";
+    final Color statusColor = isOut
+        ? AppColors.red
+        : isLow
+        ? AppColors.orange
+        : AppColors.green;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -246,7 +456,9 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
         ),
         title: Text(
           "Product Details",
-          style: AppTextStyles.sectionTitle.copyWith(color: AppColors.textPrimaryDark),
+          style: AppTextStyles.sectionTitle.copyWith(
+            color: AppColors.textPrimaryDark,
+          ),
         ),
         actions: [
           IconButton(
@@ -267,48 +479,23 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
             ),
             child: Column(
               children: [
-                // Photo
-Hero(
-  tag: 'product_${currentProduct.id}',
-  child: ClipRRect(
-    borderRadius: BorderRadius.circular(
-      R.radius(context, AppSizes.radiusLg),
-    ),
-    child: Container(
-      width: double.infinity,
-      height: R.fluid(context, 220, 280),
-      color: AppColors.surface2,
-      child: currentProduct.imagePath.isNotEmpty
-          ? (currentProduct.imagePath.startsWith('http')
-              ? CachedNetworkImage(
-                  imageUrl: currentProduct.imagePath,
-                  fit: BoxFit.cover,
-                  placeholder: (_, __) => const Center(
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                Hero(
+                  tag: 'product_${currentProduct.id}',
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(
+                      R.radius(context, AppSizes.radiusLg),
+                    ),
+                    child: Container(
+                      width: double.infinity,
+                      height: R.fluid(context, 220, 280),
+                      color: AppColors.surface2,
+                      child: _buildProductImage(currentProduct),
+                    ),
                   ),
-                  errorWidget: (_, __, ___) => Icon(
-                    Icons.broken_image,
-                    size: R.icon(context, 60),
-                    color: Colors.grey,
-                  ),
-                )
-              : Image.file(
-                  File(currentProduct.imagePath),
-                  fit: BoxFit.cover,
-                ))
-          : Icon(
-              Icons.image_outlined,
-              size: R.icon(context, 90),
-              color: AppColors.textSecondary,
-            ),
-    ),
-  ),
-),
+                ),
                 SizedBox(height: R.sp(context, AppSpacing.md)),
-
-                // Name + category
                 Text(
-                  currentProduct.name,
+                  _capitalizeFirstLetter(currentProduct.name),
                   textAlign: TextAlign.center,
                   style: AppTextStyles.sectionTitle.copyWith(
                     color: AppColors.textPrimaryDark,
@@ -318,16 +505,20 @@ Hero(
                 SizedBox(height: R.sp(context, 4)),
                 Text(
                   currentProduct.category,
-                  style: AppTextStyles.small.copyWith(color: AppColors.textSecondary),
+                  style: AppTextStyles.small.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 SizedBox(height: R.sp(context, AppSpacing.lg)),
-
-                // Price / Stock / Status summary strip
                 Container(
-                  padding: EdgeInsets.symmetric(vertical: R.sp(context, AppSpacing.md)),
+                  padding: EdgeInsets.symmetric(
+                    vertical: R.sp(context, AppSpacing.md),
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.card,
-                    borderRadius: BorderRadius.circular(R.radius(context, AppSizes.cardRadius)),
+                    borderRadius: BorderRadius.circular(
+                      R.radius(context, AppSizes.cardRadius),
+                    ),
                     border: Border.all(color: AppColors.border, width: 1),
                   ),
                   child: Row(
@@ -335,7 +526,8 @@ Hero(
                       Expanded(
                         child: _summaryCell(
                           label: "Selling Price",
-                          value: "₹${currentProduct.sellingPrice.toStringAsFixed(0)}",
+                          value:
+                              "₹${currentProduct.sellingPrice.toStringAsFixed(0)}",
                         ),
                       ),
                       _verticalDivider(),
@@ -357,8 +549,6 @@ Hero(
                   ),
                 ),
                 SizedBox(height: R.sp(context, AppSpacing.md)),
-
-                // Update stock + Edit, same row
                 Row(
                   children: [
                     Expanded(
@@ -366,11 +556,24 @@ Hero(
                         height: R.sp(context, AppSizes.buttonHeight),
                         child: OutlinedButton.icon(
                           onPressed: _showUpdateStockDialog,
-                          icon: Icon(Icons.inventory_2_outlined, size: R.icon(context, AppSizes.iconMd), color: AppColors.primary),
-                          label: Text("Update Stock", style: AppTextStyles.button.copyWith(color: AppColors.primary)),
+                          icon: Icon(
+                            Icons.inventory_2_outlined,
+                            size: R.icon(context, AppSizes.iconMd),
+                            color: AppColors.primary,
+                          ),
+                          label: Text(
+                            "Update Stock",
+                            style: AppTextStyles.button.copyWith(
+                              color: AppColors.primary,
+                            ),
+                          ),
                           style: OutlinedButton.styleFrom(
                             side: const BorderSide(color: AppColors.primary),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd))),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                R.radius(context, AppSizes.radiusMd),
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -383,7 +586,10 @@ Hero(
                         onPressed: () async {
                           final checkDone = await Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => AddProductScreen(product: currentProduct)),
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  AddProductScreen(product: currentProduct),
+                            ),
                           );
                           if (checkDone == true) {
                             await refreshProduct();
@@ -392,16 +598,22 @@ Hero(
                         style: OutlinedButton.styleFrom(
                           padding: EdgeInsets.zero,
                           side: const BorderSide(color: AppColors.border),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd))),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(
+                              R.radius(context, AppSizes.radiusMd),
+                            ),
+                          ),
                         ),
-                        child: Icon(Icons.edit_outlined, size: R.icon(context, AppSizes.iconMd), color: AppColors.textPrimaryDark),
+                        child: Icon(
+                          Icons.edit_outlined,
+                          size: R.icon(context, AppSizes.iconMd),
+                          color: AppColors.textPrimaryDark,
+                        ),
                       ),
                     ),
                   ],
                 ),
                 SizedBox(height: R.sp(context, AppSpacing.xl)),
-
-                // Details card
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
@@ -414,23 +626,34 @@ Hero(
                 ),
                 SizedBox(height: R.sp(context, AppSpacing.sm)),
                 Container(
-                  padding: EdgeInsets.symmetric(horizontal: R.sp(context, AppSpacing.cardPadding)),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: R.sp(context, AppSpacing.cardPadding),
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.card,
-                    borderRadius: BorderRadius.circular(R.radius(context, AppSizes.cardRadius)),
+                    borderRadius: BorderRadius.circular(
+                      R.radius(context, AppSizes.cardRadius),
+                    ),
                     border: Border.all(color: AppColors.border, width: 1),
                   ),
                   child: Column(
                     children: [
-_infoRow("Category", currentProduct.category),
-_infoRow("HSN Code", currentProduct.hsnCode),
-_infoRow("Product Code", currentProduct.barcode),
-_infoRow("Purchase Price", "₹${currentProduct.purchasePrice.toStringAsFixed(0)}"),
-_infoRow("Quantity", "$qty"),
-_infoRow("Unit", currentProduct.unit),
-_infoRow("Supplier", currentProduct.supplier),
-_infoRow("Expiry Date", currentProduct.expiryDate),
-_infoRow("Description", currentProduct.description, isLast: true),
+                      _infoRow("Category", currentProduct.category),
+                      _infoRow("HSN Code", currentProduct.hsnCode),
+                      _infoRow("Product Code", currentProduct.barcode),
+                      _infoRow(
+                        "Purchase Price",
+                        "₹${currentProduct.purchasePrice.toStringAsFixed(0)}",
+                      ),
+                      _infoRow("Quantity", "$qty"),
+                      _infoRow("Unit", currentProduct.unit),
+                      _infoRow("Supplier", currentProduct.supplier),
+                      _infoRow("Expiry Date", currentProduct.expiryDate),
+                      _infoRow(
+                        "Description",
+                        currentProduct.description,
+                        isLast: true,
+                      ),
                     ],
                   ),
                 ),
@@ -442,10 +665,17 @@ _infoRow("Description", currentProduct.description, isLast: true),
     );
   }
 
-  Widget _summaryCell({required String label, required String value, Color? valueColor}) {
+  Widget _summaryCell({
+    required String label,
+    required String value,
+    Color? valueColor,
+  }) {
     return Column(
       children: [
-        Text(label, style: AppTextStyles.small.copyWith(color: AppColors.textSecondary)),
+        Text(
+          label,
+          style: AppTextStyles.small.copyWith(color: AppColors.textSecondary),
+        ),
         SizedBox(height: R.sp(context, 4)),
         Text(
           value,
@@ -467,7 +697,9 @@ _infoRow("Description", currentProduct.description, isLast: true),
   }
 
   Widget _infoRow(String title, dynamic value, {bool isLast = false}) {
-    final displayValue = (value == null || value.toString().trim().isEmpty) ? "-" : value.toString();
+    final displayValue = (value == null || value.toString().trim().isEmpty)
+        ? "-"
+        : value.toString();
     return Column(
       children: [
         Padding(
@@ -477,20 +709,28 @@ _infoRow("Description", currentProduct.description, isLast: true),
             children: [
               Expanded(
                 flex: 4,
-                child: Text(title, style: AppTextStyles.small.copyWith(color: AppColors.textSecondary)),
+                child: Text(
+                  title,
+                  style: AppTextStyles.small.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
               ),
               Expanded(
                 flex: 5,
                 child: Text(
                   displayValue,
                   textAlign: TextAlign.right,
-                  style: AppTextStyles.cardValue.copyWith(color: AppColors.textPrimaryDark),
+                  style: AppTextStyles.cardValue.copyWith(
+                    color: AppColors.textPrimaryDark,
+                  ),
                 ),
               ),
             ],
           ),
         ),
-        if (!isLast) Divider(height: 1, color: AppColors.border.withValues(alpha: 0.6)),
+        if (!isLast)
+          Divider(height: 1, color: AppColors.border.withValues(alpha: 0.6)),
       ],
     );
   }

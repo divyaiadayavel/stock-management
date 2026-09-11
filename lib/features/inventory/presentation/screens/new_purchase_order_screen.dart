@@ -11,7 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
-
+import '../../../../core/network/no_internet_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_spacing.dart';
@@ -20,6 +20,19 @@ import '../../../../core/network/api_config.dart';
 import '../../../../core/utils/responsive_helper.dart';
 import '../../../suppliers/presentation/screens/suppliers_screen.dart';
 import '../providers/inventory_filter_provider.dart';
+import 'receive_order_screen.dart';
+
+// ── Helper to Capitalize First Letter of Each Word ──
+String _capitalize(String text) {
+  if (text.isEmpty) return text;
+  return text
+      .split(' ')
+      .map((word) {
+        if (word.isEmpty) return word;
+        return word[0].toUpperCase() + word.substring(1).toLowerCase();
+      })
+      .join(' ');
+}
 
 // ── Helper ──
 num _safeNum(dynamic value) {
@@ -29,19 +42,21 @@ num _safeNum(dynamic value) {
   return 0;
 }
 
-// ── Helpers for int/double parsing (already in receive_order_screen, but we redefine or import) ──
-// We'll copy the helpers here for self‑containment.
+// ── Helpers for int/double parsing ──
 int asInt(dynamic value, [int fallback = 0]) {
   if (value == null) return fallback;
   if (value is int) return value;
   if (value is double) return value.toInt();
-  if (value is String) return int.tryParse(value) ?? double.tryParse(value)?.toInt() ?? fallback;
+  if (value is String)
+    return int.tryParse(value) ?? double.tryParse(value)?.toInt() ?? fallback;
   return fallback;
 }
+
 String asStr(dynamic value, [String fallback = '']) {
   if (value == null) return fallback;
   return value.toString();
 }
+
 double asDouble(dynamic value, [double fallback = 0.0]) {
   if (value == null) return fallback;
   if (value is double) return value;
@@ -54,7 +69,8 @@ class NewPurchaseOrderScreen extends ConsumerStatefulWidget {
   const NewPurchaseOrderScreen({super.key});
 
   @override
-  ConsumerState<NewPurchaseOrderScreen> createState() => _NewPurchaseOrderScreenState();
+  ConsumerState<NewPurchaseOrderScreen> createState() =>
+      _NewPurchaseOrderScreenState();
 }
 
 class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
@@ -69,9 +85,12 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
   Map<String, dynamic>? _selectedSupplier;
   List<Map<String, dynamic>> _suppliers = [];
   List<Map<String, dynamic>> _items = [];
-  final DateTime _expectedDelivery = DateTime.now().add(const Duration(days: 3));
-  bool _loading = false;
-  bool _saving = false;
+  final DateTime _expectedDelivery = DateTime.now().add(
+    const Duration(days: 3),
+  );
+bool _loading = false;
+bool _saving = false;
+bool _networkError = false;
 
   // ── History Tab State ──
   List<Map<String, dynamic>> _ordersHistory = [];
@@ -112,16 +131,23 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
         if (resData['success'] == true && resData['data'] is List) {
           if (mounted) {
             setState(() {
-              _suppliers = List<Map<String, dynamic>>.from(resData['data']);
-              _loading = false;
+_suppliers = List<Map<String, dynamic>>.from(resData['data']);
+_loading = false;
+_networkError = false;
             });
           }
           return;
         }
       }
     } catch (e) {
-      debugPrint('Error loading suppliers: $e');
-    }
+  debugPrint('Error loading suppliers: $e');
+
+  if (mounted) {
+    setState(() {
+      _networkError = true;
+    });
+  }
+}
     if (mounted) setState(() => _loading = false);
   }
 
@@ -139,6 +165,7 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
             _historyDetailCache.clear();
             _loadingHistoryDetail.clear();
             _expandedHistoryPoId = null;
+            _networkError = false;
           });
         } else {
           _showError(res['message'] ?? 'Failed to load history');
@@ -147,8 +174,12 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
         _showError('Server error: ${response.statusCode}');
       }
     } catch (e) {
-      _showError('Network error: $e');
-    } finally {
+  if (mounted) {
+    setState(() {
+      _networkError = true;
+    });
+  }
+} finally {
       if (mounted) setState(() => _loadingHistory = false);
     }
   }
@@ -157,22 +188,24 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
   // New Order Helpers
   // --------------------------------------------------------------------------
   double get _total => _items.fold(
-        0.0,
-        (sum, item) => sum + ((item['qty'] as num) * (item['unitPrice'] as num)),
-      );
+    0.0,
+    (sum, item) => sum + ((item['qty'] as num) * (item['unitPrice'] as num)),
+  );
 
   Future<void> _openItemPicker(Map<String, dynamic> supplier) async {
     setState(() => _loading = true);
 
     final supplierId = (supplier['id'] as num).toInt();
-    final supplierName =
-        supplier['supplier_name'] ?? supplier['company_name'] ?? 'Supplier';
+    final supplierName = _capitalize(
+      supplier['supplier_name'] ?? supplier['company_name'] ?? 'Supplier',
+    );
 
     List<Map<String, dynamic>> supplierProducts = [];
 
     try {
       final uri = Uri.parse(
-          '${ApiConfig.purchases}?action=supplier_products&supplier_id=$supplierId');
+        '${ApiConfig.purchases}?action=supplier_products&supplier_id=$supplierId',
+      );
       final response = await http.get(uri, headers: ApiConfig.jsonHeaders);
       if (response.statusCode == 200) {
         final res = json.decode(response.body);
@@ -214,7 +247,9 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
       isScrollControlled: true,
       backgroundColor: AppColors.card,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppSizes.radiusXl)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppSizes.radiusXl),
+        ),
       ),
       builder: (ctx) {
         return StatefulBuilder(
@@ -248,7 +283,9 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
                     left: R.sp(ctx, AppSpacing.lg),
                     right: R.sp(ctx, AppSpacing.lg),
                     top: R.sp(ctx, AppSpacing.md),
-                    bottom: MediaQuery.of(ctx).viewInsets.bottom + R.sp(ctx, AppSpacing.md),
+                    bottom:
+                        MediaQuery.of(ctx).viewInsets.bottom +
+                        R.sp(ctx, AppSpacing.md),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,7 +294,9 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
                         child: Container(
                           width: R.sp(ctx, 40),
                           height: R.sp(ctx, 4),
-                          margin: EdgeInsets.only(bottom: R.sp(ctx, AppSpacing.md)),
+                          margin: EdgeInsets.only(
+                            bottom: R.sp(ctx, AppSpacing.md),
+                          ),
                           decoration: BoxDecoration(
                             color: AppColors.border,
                             borderRadius: BorderRadius.circular(4),
@@ -279,25 +318,41 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
                         children: [
                           Text(
                             '$selectedCount selected',
-                            style: AppTextStyles.small.copyWith(fontSize: R.fs(ctx, 12)),
+                            style: AppTextStyles.small.copyWith(
+                              fontSize: R.fs(ctx, 12),
+                            ),
                           ),
                           Text(
                             '₹${runningTotal.toStringAsFixed(0)}',
-                            style: AppTextStyles.cardValue.copyWith(fontSize: R.fs(ctx, 14)),
+                            style: AppTextStyles.cardValue.copyWith(
+                              fontSize: R.fs(ctx, 14),
+                            ),
                           ),
                         ],
                       ),
                       SizedBox(height: R.sp(ctx, AppSpacing.md)),
                       Row(
                         children: [
-                          _filterChip(ctx, 'All stock', filter == 'all',
-                              () => setSheetState(() => filter = 'all')),
+                          _filterChip(
+                            ctx,
+                            'All stock',
+                            filter == 'all',
+                            () => setSheetState(() => filter = 'all'),
+                          ),
                           SizedBox(width: R.sp(ctx, AppSpacing.sm)),
-                          _filterChip(ctx, 'Low stock', filter == 'low',
-                              () => setSheetState(() => filter = 'low')),
+                          _filterChip(
+                            ctx,
+                            'Low stock',
+                            filter == 'low',
+                            () => setSheetState(() => filter = 'low'),
+                          ),
                           SizedBox(width: R.sp(ctx, AppSpacing.sm)),
-                          _filterChip(ctx, 'Out of stock', filter == 'out',
-                              () => setSheetState(() => filter = 'out')),
+                          _filterChip(
+                            ctx,
+                            'Out of stock',
+                            filter == 'out',
+                            () => setSheetState(() => filter = 'out'),
+                          ),
                         ],
                       ),
                       SizedBox(height: R.sp(ctx, AppSpacing.md)),
@@ -306,71 +361,120 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
                             ? Center(
                                 child: Text(
                                   'No products in this filter',
-                                  style: AppTextStyles.small.copyWith(fontSize: R.fs(ctx, 13)),
+                                  style: AppTextStyles.small.copyWith(
+                                    fontSize: R.fs(ctx, 13),
+                                  ),
                                 ),
                               )
                             : ListView.separated(
                                 controller: scrollController,
                                 itemCount: filtered.length,
-                                separatorBuilder: (_, __) => SizedBox(height: R.sp(ctx, AppSpacing.sm)),
+                                separatorBuilder: (_, __) =>
+                                    SizedBox(height: R.sp(ctx, AppSpacing.sm)),
                                 itemBuilder: (_, i) {
                                   final p = filtered[i];
                                   final id = (p['id'] as num).toInt();
-                                  final qty = (p['current_stock'] as num).toInt();
+                                  final qty = (p['current_stock'] as num)
+                                      .toInt();
                                   final isOut = p['is_out'] == true;
                                   final isLow = p['is_low'] == true;
                                   final isSelected = selectedMap[id] ?? false;
 
                                   return Container(
-                                    padding: EdgeInsets.all(R.sp(ctx, AppSpacing.md)),
+                                    padding: EdgeInsets.all(
+                                      R.sp(ctx, AppSpacing.md),
+                                    ),
                                     decoration: BoxDecoration(
                                       color: isSelected
-                                          ? AppColors.primary.withValues(alpha: 0.05)
+                                          ? AppColors.primary.withValues(
+                                              alpha: 0.05,
+                                            )
                                           : AppColors.card,
-                                      borderRadius: BorderRadius.circular(R.radius(ctx, AppSizes.radiusLg)),
+                                      borderRadius: BorderRadius.circular(
+                                        R.radius(ctx, AppSizes.radiusLg),
+                                      ),
                                       border: Border.all(
-                                          color: isSelected
-                                              ? AppColors.primary.withValues(alpha: 0.4)
-                                              : AppColors.border),
+                                        color: isSelected
+                                            ? AppColors.primary.withValues(
+                                                alpha: 0.4,
+                                              )
+                                            : AppColors.border,
+                                      ),
                                     ),
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Row(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Checkbox(
                                               value: isSelected,
                                               activeColor: AppColors.primary,
-                                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                              onChanged: (v) => setSheetState(() => selectedMap[id] = v ?? false),
+                                              materialTapTargetSize:
+                                                  MaterialTapTargetSize
+                                                      .shrinkWrap,
+                                              onChanged: (v) => setSheetState(
+                                                () => selectedMap[id] =
+                                                    v ?? false,
+                                              ),
                                             ),
-                                            SizedBox(width: R.sp(ctx, AppSpacing.xs)),
+                                            SizedBox(
+                                              width: R.sp(ctx, AppSpacing.xs),
+                                            ),
                                             Expanded(
                                               child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
                                                 children: [
                                                   Text(
-                                                    p['product_name'].toString(),
+                                                    _capitalize(
+                                                      p['product_name']
+                                                          .toString(),
+                                                    ),
                                                     maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
                                                     style: TextStyle(
-                                                        fontSize: R.fs(ctx, 13.5),
-                                                        fontWeight: FontWeight.w600,
-                                                        color: AppColors.textPrimaryDark),
+                                                      fontSize: R.fs(ctx, 13.5),
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: AppColors
+                                                          .textPrimaryDark,
+                                                    ),
                                                   ),
-                                                  SizedBox(height: R.sp(ctx, 3)),
+                                                  SizedBox(
+                                                    height: R.sp(ctx, 3),
+                                                  ),
                                                   Row(
                                                     children: [
                                                       Text(
                                                         '$qty on hand',
-                                                        style: AppTextStyles.small.copyWith(fontSize: R.fs(ctx, 11)),
+                                                        style: AppTextStyles
+                                                            .small
+                                                            .copyWith(
+                                                              fontSize: R.fs(
+                                                                ctx,
+                                                                11,
+                                                              ),
+                                                            ),
                                                       ),
                                                       if (isOut || isLow) ...[
-                                                        SizedBox(width: R.sp(ctx, AppSpacing.xs)),
+                                                        SizedBox(
+                                                          width: R.sp(
+                                                            ctx,
+                                                            AppSpacing.xs,
+                                                          ),
+                                                        ),
                                                         _StatusTag(
-                                                          label: isOut ? 'Out' : 'Low',
-                                                          color: isOut ? AppColors.red : AppColors.orange,
+                                                          label: isOut
+                                                              ? 'Out'
+                                                              : 'Low',
+                                                          color: isOut
+                                                              ? AppColors.red
+                                                              : AppColors
+                                                                    .orange,
                                                         ),
                                                       ],
                                                     ],
@@ -380,9 +484,13 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
                                             ),
                                           ],
                                         ),
-                                        SizedBox(height: R.sp(ctx, AppSpacing.sm)),
+                                        SizedBox(
+                                          height: R.sp(ctx, AppSpacing.sm),
+                                        ),
                                         Padding(
-                                          padding: EdgeInsets.only(left: R.sp(ctx, AppSpacing.xs)),
+                                          padding: EdgeInsets.only(
+                                            left: R.sp(ctx, AppSpacing.xs),
+                                          ),
                                           child: Row(
                                             children: [
                                               Expanded(
@@ -390,20 +498,28 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
                                                   label: 'QTY',
                                                   controller: qtyCtrls[id]!,
                                                   enabled: isSelected,
-                                                  keyboardType: TextInputType.number,
-                                                  onChanged: (_) => setSheetState(() {}),
+                                                  keyboardType:
+                                                      TextInputType.number,
+                                                  onChanged: (_) =>
+                                                      setSheetState(() {}),
                                                 ),
                                               ),
-                                              SizedBox(width: R.sp(ctx, AppSpacing.md)),
+                                              SizedBox(
+                                                width: R.sp(ctx, AppSpacing.md),
+                                              ),
                                               Expanded(
                                                 flex: 2,
                                                 child: _PoFieldWithLabel(
                                                   label: 'UNIT PRICE (₹)',
                                                   controller: priceCtrls[id]!,
                                                   enabled: isSelected,
-                                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                                  keyboardType:
+                                                      const TextInputType.numberWithOptions(
+                                                        decimal: true,
+                                                      ),
                                                   prefixText: '₹ ',
-                                                  onChanged: (_) => setSheetState(() {}),
+                                                  onChanged: (_) =>
+                                                      setSheetState(() {}),
                                                 ),
                                               ),
                                             ],
@@ -422,32 +538,51 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
                         child: DecoratedBox(
                           decoration: BoxDecoration(
                             gradient: AppColors.brandGradient,
-                            borderRadius: BorderRadius.circular(R.radius(ctx, AppSizes.radiusMd)),
+                            borderRadius: BorderRadius.circular(
+                              R.radius(ctx, AppSizes.radiusMd),
+                            ),
                           ),
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                                elevation: 0,
-                                backgroundColor: Colors.transparent,
-                                shadowColor: Colors.transparent,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(R.radius(ctx, AppSizes.radiusMd)))),
+                              elevation: 0,
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  R.radius(ctx, AppSizes.radiusMd),
+                                ),
+                              ),
+                            ),
                             onPressed: selectedCount == 0
                                 ? null
                                 : () {
-                                    final selectedItems = <Map<String, dynamic>>[];
+                                    final selectedItems =
+                                        <Map<String, dynamic>>[];
                                     for (final p in supplierProducts) {
                                       final id = (p['id'] as num).toInt();
                                       if (selectedMap[id] == true) {
-                                        final qtyVal = int.tryParse(qtyCtrls[id]!.text.trim()) ?? 1;
-                                        final unitPrice = double.tryParse(priceCtrls[id]!.text.trim()) ??
-                                            (p['purchase_price'] as num).toDouble();
+                                        final qtyVal =
+                                            int.tryParse(
+                                              qtyCtrls[id]!.text.trim(),
+                                            ) ??
+                                            1;
+                                        final unitPrice =
+                                            double.tryParse(
+                                              priceCtrls[id]!.text.trim(),
+                                            ) ??
+                                            (p['purchase_price'] as num)
+                                                .toDouble();
                                         selectedItems.add({
                                           'productId': id,
-                                          'name': p['product_name'],
+                                          'name': _capitalize(
+                                            p['product_name'].toString(),
+                                          ),
                                           'unit': p['unit_name'] ?? 'pcs',
                                           'qty': qtyVal < 1 ? 1 : qtyVal,
                                           'unitPrice': unitPrice,
-                                          'suggested': p['is_low'] == true || p['is_out'] == true,
+                                          'suggested':
+                                              p['is_low'] == true ||
+                                              p['is_out'] == true,
                                         });
                                       }
                                     }
@@ -455,7 +590,9 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
                                   },
                             child: Text(
                               'Add $selectedCount item${selectedCount == 1 ? '' : 's'} to PO',
-                              style: AppTextStyles.button.copyWith(fontSize: R.fs(ctx, 14)),
+                              style: AppTextStyles.button.copyWith(
+                                fontSize: R.fs(ctx, 14),
+                              ),
                             ),
                           ),
                         ),
@@ -494,7 +631,9 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
 
       final payload = {
         'supplier_id': _selectedSupplier!['id'],
-        'purchase_date': DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
+        'purchase_date': DateFormat(
+          'yyyy-MM-dd HH:mm:ss',
+        ).format(DateTime.now()),
         'status': status,
         'items': itemsPayload,
       };
@@ -550,7 +689,9 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
     }
 
     final phone =
-        (_selectedSupplier!['phone'] ?? _selectedSupplier!['contactNumber'] ?? '')
+        (_selectedSupplier!['phone'] ??
+                _selectedSupplier!['contactNumber'] ??
+                '')
             .toString();
 
     setState(() => _saving = true);
@@ -567,6 +708,12 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
         _selectedSupplier = null;
       });
       _fetchHistory();
+
+      // Navigate to Receive Order screen to list and receive stock
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => ReceiveOrderScreen(poId: poId)),
+      );
     }
   }
 
@@ -576,14 +723,20 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
     final poNumber = 'PO-${poId.toString().padLeft(4, '0')}';
 
     final lines = _items
-        .map((i) =>
-            '• ${i['name']} — ${i['qty']} ${i['unit']} × ₹${(i['unitPrice'] as num).toStringAsFixed(0)}')
+        .map(
+          (i) =>
+              '• ${_capitalize(i['name'])} — ${i['qty']} ${i['unit']} × ₹${(i['unitPrice'] as num).toStringAsFixed(0)}',
+        )
         .join('\n');
 
-    final supplierName =
-        _selectedSupplier!['supplier_name'] ?? _selectedSupplier!['company_name'] ?? '';
+    final supplierName = _capitalize(
+      _selectedSupplier!['supplier_name'] ??
+          _selectedSupplier!['company_name'] ??
+          '',
+    );
 
-    final textMessage = 'Hi $supplierName, sending our purchase order $poNumber:\n\n'
+    final textMessage =
+        'Hi $supplierName, sending our purchase order $poNumber:\n\n'
         '$lines\n\n'
         'Total (incl GST): ₹${_total.toStringAsFixed(0)}\n'
         'Expected delivery: ${DateFormat('d MMM').format(_expectedDelivery)}\n\n'
@@ -591,7 +744,9 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
 
     final encodedMessage = Uri.encodeComponent(textMessage);
 
-    final Uri appUri = Uri.parse('whatsapp://send?phone=$digits&text=$encodedMessage');
+    final Uri appUri = Uri.parse(
+      'whatsapp://send?phone=$digits&text=$encodedMessage',
+    );
     final Uri webUri = Uri.parse('https://wa.me/$digits?text=$encodedMessage');
 
     try {
@@ -611,12 +766,22 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
   // --------------------------------------------------------------------------
   // Send existing order from History
   // --------------------------------------------------------------------------
-  Future<void> _sendExistingOrder(int orderId, String poNumber, String supplier, String phone) async {
+  Future<void> _sendExistingOrder(
+    int orderId,
+    String poNumber,
+    String supplier,
+    String phone,
+  ) async {
     setState(() => _deleting = true);
     try {
       // 1. Fetch order detail
-      final detailUri = Uri.parse('${ApiConfig.purchases}?action=purchase_detail&id=$orderId');
-      final detailRes = await http.get(detailUri, headers: ApiConfig.jsonHeaders);
+      final detailUri = Uri.parse(
+        '${ApiConfig.purchases}?action=purchase_detail&id=$orderId',
+      );
+      final detailRes = await http.get(
+        detailUri,
+        headers: ApiConfig.jsonHeaders,
+      );
       if (detailRes.statusCode != 200) {
         _showError('Failed to load order details');
         return;
@@ -634,24 +799,31 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
       }
 
       // 2. Build WhatsApp message
-      final lines = items.map((i) {
-        final name = i['name']?.toString() ?? 'Product';
-        final qty = _safeNum(i['orderedQty']).toInt();
-        final unit = i['unit']?.toString() ?? 'pcs';
-        final price = _safeNum(i['unitPrice']);
-        return '• $name — $qty $unit × ₹${price.toStringAsFixed(0)}';
-      }).join('\n');
+      final lines = items
+          .map((i) {
+            final name = _capitalize(i['name']?.toString() ?? 'Product');
+            final qty = _safeNum(i['orderedQty']).toInt();
+            final unit = i['unit']?.toString() ?? 'pcs';
+            final price = _safeNum(i['unitPrice']);
+            return '• $name — $qty $unit × ₹${price.toStringAsFixed(0)}';
+          })
+          .join('\n');
 
       final total = _safeNum(orderData['grand_total']);
-      final supplierName = supplier.isNotEmpty ? supplier : 'Supplier';
-      final msg = 'Hi $supplierName, sending our purchase order $poNumber:\n\n'
+      final supplierName = supplier.isNotEmpty
+          ? _capitalize(supplier)
+          : 'Supplier';
+      final msg =
+          'Hi $supplierName, sending our purchase order $poNumber:\n\n'
           '$lines\n\n'
           'Total (incl GST): ₹${total.toStringAsFixed(0)}\n'
           'Expected delivery: ${DateFormat('d MMM').format(_expectedDelivery)}\n\n'
           'Please confirm. Thank you!';
 
       // 3. Update status to ORDERED
-      final updateUri = Uri.parse('${ApiConfig.purchases}?action=update_purchase_status');
+      final updateUri = Uri.parse(
+        '${ApiConfig.purchases}?action=update_purchase_status',
+      );
       final updateRes = await http.post(
         updateUri,
         headers: ApiConfig.jsonHeaders,
@@ -681,9 +853,14 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
         _showError('No phone number for supplier', isError: true);
       }
 
-      // 5. Refresh history
+      // 5. Refresh history and navigate to Receive Order screen
       await _fetchHistory();
       _showError('Order sent to supplier!', isError: false);
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => ReceiveOrderScreen(poId: orderId)),
+      );
     } catch (e) {
       _showError('Error: $e');
     } finally {
@@ -698,13 +875,20 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusLg)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSizes.radiusLg),
+        ),
         title: const Text('Cancel Order'),
-        content: const Text('Are you sure you want to cancel this order? It cannot be undone.'),
+        content: const Text(
+          'Are you sure you want to cancel this order? It cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Keep order', style: TextStyle(color: AppColors.textSecondary)),
+            child: Text(
+              'Keep order',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -748,29 +932,42 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
           content: Text(msg),
           backgroundColor: isError ? AppColors.red : AppColors.green,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+          ),
         ),
       );
     }
   }
 
-  Widget _filterChip(BuildContext ctx, String label, bool active, VoidCallback onTap) {
+  Widget _filterChip(
+    BuildContext ctx,
+    String label,
+    bool active,
+    VoidCallback onTap,
+  ) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: R.sp(ctx, AppSpacing.md), vertical: R.sp(ctx, AppSpacing.sm)),
+        padding: EdgeInsets.symmetric(
+          horizontal: R.sp(ctx, AppSpacing.md),
+          vertical: R.sp(ctx, AppSpacing.sm),
+        ),
         decoration: BoxDecoration(
           gradient: active ? AppColors.brandGradient : null,
           color: active ? null : AppColors.card,
           borderRadius: BorderRadius.circular(100),
-          border: Border.all(color: active ? Colors.transparent : AppColors.border),
+          border: Border.all(
+            color: active ? Colors.transparent : AppColors.border,
+          ),
         ),
         child: Text(
           label,
           style: TextStyle(
-              fontSize: R.fs(ctx, 12),
-              fontWeight: FontWeight.w600,
-              color: active ? Colors.white : AppColors.textPrimaryDark),
+            fontSize: R.fs(ctx, 12),
+            fontWeight: FontWeight.w600,
+            color: active ? Colors.white : AppColors.textPrimaryDark,
+          ),
         ),
       ),
     );
@@ -781,8 +978,24 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
   // --------------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
-    super.build(context);
-    return Scaffold(
+super.build(context);
+
+if (_networkError) {
+  return Scaffold(
+    body: NoInternetScreen(
+      onRetry: () async {
+        setState(() {
+          _networkError = false;
+        });
+
+        await _loadSuppliers();
+        await _fetchHistory();
+      },
+    ),
+  );
+}
+
+return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         elevation: 0,
@@ -796,8 +1009,14 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
           indicatorWeight: 2.5,
           labelColor: AppColors.primary,
           unselectedLabelColor: AppColors.textSecondary,
-          labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
-          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13.5),
+          labelStyle: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 13.5,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontWeight: FontWeight.w500,
+            fontSize: 13.5,
+          ),
           tabs: const [
             Tab(text: 'New Order'),
             Tab(text: 'History'),
@@ -806,12 +1025,11 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          _buildNewOrderTab(),
-          _buildHistoryTab(),
-        ],
+        children: [_buildNewOrderTab(), _buildHistoryTab()],
       ),
-      bottomNavigationBar: _tabController.index == 0 ? _buildNewOrderBottomBar() : null,
+      bottomNavigationBar: _tabController.index == 0
+          ? _buildNewOrderBottomBar()
+          : null,
     );
   }
 
@@ -824,8 +1042,12 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
     return _loading
         ? const Center(child: CircularProgressIndicator())
         : SingleChildScrollView(
-            padding: R.hPad(context, base: AppSpacing.lg).copyWith(
-                top: R.sp(context, AppSpacing.lg), bottom: R.sp(context, 120)),
+            padding: R
+                .hPad(context, base: AppSpacing.lg)
+                .copyWith(
+                  top: R.sp(context, AppSpacing.lg),
+                  bottom: R.sp(context, 120),
+                ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -839,21 +1061,27 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
                           onTap: () {
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (_) => const SuppliersScreen()),
+                              MaterialPageRoute(
+                                builder: (_) => const SuppliersScreen(),
+                              ),
                             ).then((_) => _loadSuppliers());
                           },
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.add_circle_outline,
-                                  size: R.icon(context, 15), color: AppColors.primary),
+                              Icon(
+                                Icons.add_circle_outline,
+                                size: R.icon(context, 15),
+                                color: AppColors.primary,
+                              ),
                               SizedBox(width: R.sp(context, 4)),
                               Text(
                                 'Add supplier',
                                 style: TextStyle(
-                                    fontSize: R.fs(context, 12),
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.primary),
+                                  fontSize: R.fs(context, 12),
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primary,
+                                ),
                               ),
                             ],
                           ),
@@ -865,41 +1093,68 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
                         isExpanded: true,
                         menuMaxHeight: 250,
                         dropdownColor: AppColors.card,
-                        icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textSecondary),
+                        icon: Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          color: AppColors.textSecondary,
+                        ),
                         style: TextStyle(
-                            fontSize: R.fs(context, 14),
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.textPrimaryDark),
+                          fontSize: R.fs(context, 14),
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textPrimaryDark,
+                        ),
                         decoration: InputDecoration(
                           hintText: 'Select supplier',
                           hintStyle: TextStyle(color: AppColors.textSecondary),
-                          prefixIcon: Icon(Icons.storefront_outlined,
-                              color: AppColors.textSecondary, size: R.icon(context, 20)),
+                          prefixIcon: Icon(
+                            Icons.storefront_outlined,
+                            color: AppColors.textSecondary,
+                            size: R.icon(context, 20),
+                          ),
                           filled: true,
                           fillColor: AppColors.background,
-                          contentPadding: EdgeInsets.symmetric(horizontal: R.sp(context, AppSpacing.md)),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: R.sp(context, AppSpacing.md),
+                          ),
                           border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
-                              borderSide: BorderSide(color: AppColors.border)),
+                            borderRadius: BorderRadius.circular(
+                              R.radius(context, AppSizes.radiusMd),
+                            ),
+                            borderSide: BorderSide(color: AppColors.border),
+                          ),
                           enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
-                              borderSide: BorderSide(color: AppColors.border)),
+                            borderRadius: BorderRadius.circular(
+                              R.radius(context, AppSizes.radiusMd),
+                            ),
+                            borderSide: BorderSide(color: AppColors.border),
+                          ),
                           focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
-                              borderSide: BorderSide(color: AppColors.primary, width: 1.4)),
+                            borderRadius: BorderRadius.circular(
+                              R.radius(context, AppSizes.radiusMd),
+                            ),
+                            borderSide: BorderSide(
+                              color: AppColors.primary,
+                              width: 1.4,
+                            ),
+                          ),
                         ),
                         items: _suppliers.map((e) {
                           final id = (e['id'] as num).toInt();
-                          final name = e['supplier_name'] ?? e['company_name'] ?? 'Supplier #$id';
+                          final name = _capitalize(
+                            e['supplier_name'] ??
+                                e['company_name'] ??
+                                'Supplier #$id',
+                          );
                           return DropdownMenuItem<int>(
                             value: id,
-                            child: Text(name.toString()),
+                            child: Text(name),
                           );
                         }).toList(),
                         onChanged: (selectedId) {
                           if (selectedId != null) {
                             final match = _suppliers.firstWhere(
-                                (element) => (element['id'] as num).toInt() == selectedId);
+                              (element) =>
+                                  (element['id'] as num).toInt() == selectedId,
+                            );
                             setState(() {
                               _selectedSupplier = match;
                               _items = [];
@@ -920,13 +1175,17 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
                         'ITEMS',
                         trailing: _selectedSupplier != null
                             ? GestureDetector(
-                                onTap: () => _openItemPicker(_selectedSupplier!),
+                                onTap: () =>
+                                    _openItemPicker(_selectedSupplier!),
                                 child: Text(
-                                  _items.isEmpty ? 'Select items' : 'Edit items',
+                                  _items.isEmpty
+                                      ? 'Select items'
+                                      : 'Edit items',
                                   style: TextStyle(
-                                      color: AppColors.primary,
-                                      fontSize: R.fs(context, 12),
-                                      fontWeight: FontWeight.w600),
+                                    color: AppColors.primary,
+                                    fontSize: R.fs(context, 12),
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               )
                             : null,
@@ -934,27 +1193,38 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
                       SizedBox(height: R.sp(context, AppSpacing.sm)),
                       if (_selectedSupplier == null)
                         Padding(
-                          padding: EdgeInsets.symmetric(vertical: R.sp(context, AppSpacing.sm)),
+                          padding: EdgeInsets.symmetric(
+                            vertical: R.sp(context, AppSpacing.sm),
+                          ),
                           child: Text(
                             'Choose a supplier above to start adding items.',
-                            style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 12)),
+                            style: AppTextStyles.small.copyWith(
+                              fontSize: R.fs(context, 12),
+                            ),
                           ),
                         )
                       else if (_items.isEmpty)
                         Padding(
-                          padding: EdgeInsets.symmetric(vertical: R.sp(context, AppSpacing.sm)),
+                          padding: EdgeInsets.symmetric(
+                            vertical: R.sp(context, AppSpacing.sm),
+                          ),
                           child: Text(
                             'No items selected yet. Tap "Select items" above.',
-                            style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 12)),
+                            style: AppTextStyles.small.copyWith(
+                              fontSize: R.fs(context, 12),
+                            ),
                           ),
                         )
                       else
                         Column(
                           children: _items
-                              .map((item) => _PoItemTile(
-                                    item: item,
-                                    onRemove: () => setState(() => _items.remove(item)),
-                                  ))
+                              .map(
+                                (item) => _PoItemTile(
+                                  item: item,
+                                  onRemove: () =>
+                                      setState(() => _items.remove(item)),
+                                ),
+                              )
                               .toList(),
                         ),
                     ],
@@ -965,8 +1235,11 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
                   width: double.infinity,
                   padding: EdgeInsets.all(R.sp(context, AppSpacing.lg)),
                   decoration: BoxDecoration(
-                      color: AppColors.surface2,
-                      borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusLg))),
+                    color: AppColors.surface2,
+                    borderRadius: BorderRadius.circular(
+                      R.radius(context, AppSizes.radiusLg),
+                    ),
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -976,19 +1249,25 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
                           Text(
                             'Total · incl GST',
                             style: TextStyle(
-                                fontSize: R.fs(context, 13),
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textPrimaryDark),
+                              fontSize: R.fs(context, 13),
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimaryDark,
+                            ),
                           ),
                           SizedBox(height: R.sp(context, 4)),
                           Row(
                             children: [
-                              Icon(Icons.local_shipping_outlined,
-                                  size: R.icon(context, 13), color: AppColors.textSecondary),
+                              Icon(
+                                Icons.local_shipping_outlined,
+                                size: R.icon(context, 13),
+                                color: AppColors.textSecondary,
+                              ),
                               SizedBox(width: R.sp(context, 4)),
                               Text(
                                 'Expected ${DateFormat('d MMM').format(_expectedDelivery)} · $leadDays-day lead',
-                                style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 11.5)),
+                                style: AppTextStyles.small.copyWith(
+                                  fontSize: R.fs(context, 11.5),
+                                ),
                               ),
                             ],
                           ),
@@ -996,7 +1275,9 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
                       ),
                       Text(
                         '₹${_total.toStringAsFixed(0)}',
-                        style: AppTextStyles.cardValue.copyWith(fontSize: R.fs(context, 18)),
+                        style: AppTextStyles.cardValue.copyWith(
+                          fontSize: R.fs(context, 18),
+                        ),
                       ),
                     ],
                   ),
@@ -1015,7 +1296,11 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.history, size: 48, color: AppColors.textSecondary.withValues(alpha: 0.4)),
+            Icon(
+              Icons.history,
+              size: 48,
+              color: AppColors.textSecondary.withValues(alpha: 0.4),
+            ),
             SizedBox(height: R.sp(context, AppSpacing.sm)),
             Text(
               'No purchase orders yet',
@@ -1029,14 +1314,20 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
       color: AppColors.primary,
       onRefresh: _fetchHistory,
       child: ListView.builder(
-        padding: R.hPad(context, base: AppSpacing.lg).copyWith(
-            top: R.sp(context, AppSpacing.md), bottom: R.sp(context, AppSpacing.md)),
+        padding: R
+            .hPad(context, base: AppSpacing.lg)
+            .copyWith(
+              top: R.sp(context, AppSpacing.md),
+              bottom: R.sp(context, AppSpacing.md),
+            ),
         itemCount: _ordersHistory.length,
         itemBuilder: (context, index) {
           final order = _ordersHistory[index];
           final poId = (order['id'] as num).toInt();
           final poNumber = order['purchase_number']?.toString() ?? 'PO-$poId';
-          final supplier = order['supplier_name']?.toString() ?? 'Supplier';
+          final supplier = _capitalize(
+            order['supplier_name']?.toString() ?? 'Supplier',
+          );
           final phone = order['supplier_phone']?.toString() ?? '';
           return _PoHistoryCard(
             order: order,
@@ -1050,7 +1341,8 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
                 } else {
                   _expandedHistoryPoId = poId;
                   // Load detail if not cached
-                  if (!_historyDetailCache.containsKey(poId) && !(_loadingHistoryDetail[poId] ?? false)) {
+                  if (!_historyDetailCache.containsKey(poId) &&
+                      !(_loadingHistoryDetail[poId] ?? false)) {
                     _loadHistoryDetail(poId);
                   }
                 }
@@ -1069,7 +1361,9 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
     if (_historyDetailCache.containsKey(poId)) return;
     setState(() => _loadingHistoryDetail[poId] = true);
     try {
-      final uri = Uri.parse('${ApiConfig.purchases}?action=purchase_detail&id=$poId');
+      final uri = Uri.parse(
+        '${ApiConfig.purchases}?action=purchase_detail&id=$poId',
+      );
       final response = await http.get(uri, headers: ApiConfig.jsonHeaders);
       if (response.statusCode == 200) {
         final res = json.decode(response.body);
@@ -1096,8 +1390,12 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
           color: AppColors.card,
           border: Border(top: BorderSide(color: AppColors.border)),
         ),
-        padding: R.hPad(context, base: AppSpacing.lg)
-            .copyWith(top: R.sp(context, AppSpacing.md), bottom: R.sp(context, AppSpacing.md)),
+        padding: R
+            .hPad(context, base: AppSpacing.lg)
+            .copyWith(
+              top: R.sp(context, AppSpacing.md),
+              bottom: R.sp(context, AppSpacing.md),
+            ),
         child: Row(
           children: [
             Expanded(
@@ -1109,11 +1407,18 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
                     foregroundColor: AppColors.textPrimaryDark,
                     side: BorderSide(color: AppColors.border),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd))),
+                      borderRadius: BorderRadius.circular(
+                        R.radius(context, AppSizes.radiusMd),
+                      ),
+                    ),
                   ),
-                  child: Text('Save draft',
-                      style: AppTextStyles.button
-                          .copyWith(fontSize: R.fs(context, 14), color: AppColors.textPrimaryDark)),
+                  child: Text(
+                    'Save draft',
+                    style: AppTextStyles.button.copyWith(
+                      fontSize: R.fs(context, 14),
+                      color: AppColors.textPrimaryDark,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -1124,25 +1429,44 @@ class _NewPurchaseOrderScreenState extends ConsumerState<NewPurchaseOrderScreen>
                 height: R.btnH(context),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                      gradient: AppColors.brandGradient,
-                      borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd))),
+                    gradient: AppColors.brandGradient,
+                    borderRadius: BorderRadius.circular(
+                      R.radius(context, AppSizes.radiusMd),
+                    ),
+                  ),
                   child: ElevatedButton.icon(
                     onPressed: _saving ? null : _sendToSupplier,
                     icon: _saving
                         ? SizedBox(
                             width: R.icon(context, 16),
                             height: R.icon(context, 16),
-                            child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            child: const CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
                           )
-                        : Icon(Icons.chat, color: Colors.white, size: R.icon(context, 18)),
-                    label: Text('Send PO to supplier',
-                        style: AppTextStyles.button.copyWith(fontSize: R.fs(context, 14))),
+                        : Icon(
+                            Icons.chat,
+                            color: Colors.white,
+                            size: R.icon(context, 18),
+                          ),
+                    label: Text(
+                      'Send PO to supplier',
+                      style: AppTextStyles.button.copyWith(
+                        fontSize: R.fs(context, 14),
+                        color: Colors.white,
+                      ),
+                    ),
                     style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)))),
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                          R.radius(context, AppSizes.radiusMd),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1193,7 +1517,9 @@ class _SectionCard extends StatelessWidget {
       padding: EdgeInsets.all(R.sp(context, AppSpacing.lg)),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusLg)),
+        borderRadius: BorderRadius.circular(
+          R.radius(context, AppSizes.radiusLg),
+        ),
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
@@ -1216,15 +1542,23 @@ class _StatusTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: R.sp(context, 6), vertical: R.sp(context, 1)),
+      padding: EdgeInsets.symmetric(
+        horizontal: R.sp(context, 6),
+        vertical: R.sp(context, 1),
+      ),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusSm)),
+        borderRadius: BorderRadius.circular(
+          R.radius(context, AppSizes.radiusSm),
+        ),
       ),
       child: Text(
         label,
         style: TextStyle(
-            fontSize: R.fs(context, 9), color: color, fontWeight: FontWeight.w700),
+          fontSize: R.fs(context, 9),
+          color: color,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -1257,7 +1591,9 @@ class _PoFieldWithLabel extends StatelessWidget {
           style: AppTextStyles.cardTitle.copyWith(
             fontSize: R.fs(context, 10),
             fontWeight: FontWeight.w700,
-            color: enabled ? AppColors.textSecondary : AppColors.textSecondary.withValues(alpha: 0.5),
+            color: enabled
+                ? AppColors.textSecondary
+                : AppColors.textSecondary.withValues(alpha: 0.5),
           ),
         ),
         SizedBox(height: R.sp(context, 4)),
@@ -1267,25 +1603,39 @@ class _PoFieldWithLabel extends StatelessWidget {
           keyboardType: keyboardType,
           onChanged: onChanged,
           style: TextStyle(
-              fontSize: R.fs(context, 13.5),
-              fontWeight: FontWeight.w600,
-              color: enabled ? AppColors.textPrimaryDark : AppColors.textSecondary),
+            fontSize: R.fs(context, 13.5),
+            fontWeight: FontWeight.w600,
+            color: enabled
+                ? AppColors.textPrimaryDark
+                : AppColors.textSecondary,
+          ),
           decoration: InputDecoration(
             isDense: true,
             prefixText: prefixText,
             filled: true,
             fillColor: enabled ? AppColors.card : AppColors.background,
             contentPadding: EdgeInsets.symmetric(
-                horizontal: R.sp(context, AppSpacing.md), vertical: R.sp(context, 11)),
+              horizontal: R.sp(context, AppSpacing.md),
+              vertical: R.sp(context, 11),
+            ),
             border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
-                borderSide: BorderSide(color: AppColors.border)),
+              borderRadius: BorderRadius.circular(
+                R.radius(context, AppSizes.radiusMd),
+              ),
+              borderSide: BorderSide(color: AppColors.border),
+            ),
             enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
-                borderSide: BorderSide(color: AppColors.border)),
+              borderRadius: BorderRadius.circular(
+                R.radius(context, AppSizes.radiusMd),
+              ),
+              borderSide: BorderSide(color: AppColors.border),
+            ),
             focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
-                borderSide: BorderSide(color: AppColors.primary, width: 1.3)),
+              borderRadius: BorderRadius.circular(
+                R.radius(context, AppSizes.radiusMd),
+              ),
+              borderSide: BorderSide(color: AppColors.primary, width: 1.3),
+            ),
           ),
         ),
       ],
@@ -1311,7 +1661,9 @@ class _PoItemTile extends StatelessWidget {
       padding: EdgeInsets.all(R.sp(context, AppSpacing.md)),
       decoration: BoxDecoration(
         color: AppColors.background,
-        borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
+        borderRadius: BorderRadius.circular(
+          R.radius(context, AppSizes.radiusMd),
+        ),
         border: Border.all(color: AppColors.border),
       ),
       child: Row(
@@ -1322,20 +1674,23 @@ class _PoItemTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item['name']?.toString() ?? '',
+                  _capitalize(item['name']?.toString() ?? ''),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                      fontSize: R.fs(context, 14),
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimaryDark),
+                    fontSize: R.fs(context, 14),
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimaryDark,
+                  ),
                 ),
                 SizedBox(height: R.sp(context, 4)),
                 Row(
                   children: [
                     Text(
                       '$qty $unit × ₹${unitPrice.toStringAsFixed(0)}',
-                      style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 12)),
+                      style: AppTextStyles.small.copyWith(
+                        fontSize: R.fs(context, 12),
+                      ),
                     ),
                     if (suggested) ...[
                       SizedBox(width: R.sp(context, AppSpacing.xs)),
@@ -1353,13 +1708,18 @@ class _PoItemTile extends StatelessWidget {
             children: [
               Text(
                 '₹${total.toStringAsFixed(0)}',
-                style: AppTextStyles.cardValue.copyWith(fontSize: R.fs(context, 14)),
+                style: AppTextStyles.cardValue.copyWith(
+                  fontSize: R.fs(context, 14),
+                ),
               ),
               SizedBox(height: R.sp(context, 4)),
               GestureDetector(
                 onTap: onRemove,
-                child: Icon(Icons.close_rounded,
-                    size: R.icon(context, 16), color: AppColors.textSecondary),
+                child: Icon(
+                  Icons.close_rounded,
+                  size: R.icon(context, 16),
+                  color: AppColors.textSecondary,
+                ),
               ),
             ],
           ),
@@ -1398,7 +1758,8 @@ class _PoHistoryCard extends StatefulWidget {
 }
 
 class _PoHistoryCardState extends State<_PoHistoryCard> {
-  String get _status => widget.order['status']?.toString().toUpperCase() ?? 'DRAFT';
+  String get _status =>
+      widget.order['status']?.toString().toUpperCase() ?? 'DRAFT';
 
   Color get _statusColor {
     switch (_status) {
@@ -1415,9 +1776,15 @@ class _PoHistoryCardState extends State<_PoHistoryCard> {
   Widget build(BuildContext context) {
     final poId = (widget.order['id'] as num).toInt();
     final poNumber = widget.order['purchase_number']?.toString() ?? 'PO-$poId';
-    final supplier = widget.order['supplier_name']?.toString() ?? 'Supplier';
-    final date = (widget.order['purchase_date'] ?? widget.order['created_at'] ?? '').toString();
-    final total = widget.order['grand_total'] != null ? '₹${widget.order['grand_total']}' : '₹0';
+    final supplier = _capitalize(
+      widget.order['supplier_name']?.toString() ?? 'Supplier',
+    );
+    final date =
+        (widget.order['purchase_date'] ?? widget.order['created_at'] ?? '')
+            .toString();
+    final total = widget.order['grand_total'] != null
+        ? '₹${widget.order['grand_total']}'
+        : '₹0';
     final isReceived = _status == 'RECEIVED';
     final isCancelled = _status == 'CANCELLED';
     final isDraft = _status == 'DRAFT';
@@ -1425,15 +1792,18 @@ class _PoHistoryCardState extends State<_PoHistoryCard> {
     final color = _statusColor;
     final hasPartial = widget.order['has_partial'] == true;
     final parentPoNumber = widget.order['parent_po_number'];
-    
 
     return Container(
       margin: EdgeInsets.only(bottom: R.sp(context, AppSpacing.sm)),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusLg)),
+        borderRadius: BorderRadius.circular(
+          R.radius(context, AppSizes.radiusLg),
+        ),
         border: Border.all(
-          color: widget.isExpanded ? AppColors.primary.withValues(alpha: 0.35) : AppColors.border,
+          color: widget.isExpanded
+              ? AppColors.primary.withValues(alpha: 0.35)
+              : AppColors.border,
         ),
         boxShadow: [
           BoxShadow(
@@ -1451,7 +1821,9 @@ class _PoHistoryCardState extends State<_PoHistoryCard> {
             color: Colors.transparent,
             child: InkWell(
               onTap: widget.onToggle,
-              borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusLg)),
+              borderRadius: BorderRadius.circular(
+                R.radius(context, AppSizes.radiusLg),
+              ),
               child: Padding(
                 padding: EdgeInsets.all(R.sp(context, AppSpacing.lg)),
                 child: Column(
@@ -1489,10 +1861,14 @@ class _PoHistoryCardState extends State<_PoHistoryCard> {
                         SizedBox(width: R.sp(context, AppSpacing.sm)),
                         Container(
                           padding: EdgeInsets.symmetric(
-                              horizontal: R.sp(context, AppSpacing.sm), vertical: R.sp(context, 3)),
+                            horizontal: R.sp(context, AppSpacing.sm),
+                            vertical: R.sp(context, 3),
+                          ),
                           decoration: BoxDecoration(
                             color: color.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusSm)),
+                            borderRadius: BorderRadius.circular(
+                              R.radius(context, AppSizes.radiusSm),
+                            ),
                           ),
                           child: Text(
                             _status,
@@ -1509,24 +1885,34 @@ class _PoHistoryCardState extends State<_PoHistoryCard> {
                     SizedBox(height: R.sp(context, AppSpacing.xs)),
                     Row(
                       children: [
-                        Icon(Icons.storefront_outlined,
-                            size: R.icon(context, 13), color: AppColors.textSecondary),
+                        Icon(
+                          Icons.storefront_outlined,
+                          size: R.icon(context, 13),
+                          color: AppColors.textSecondary,
+                        ),
                         SizedBox(width: R.sp(context, 4)),
                         Flexible(
                           child: Text(
                             supplier,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 12)),
+                            style: AppTextStyles.small.copyWith(
+                              fontSize: R.fs(context, 12),
+                            ),
                           ),
                         ),
                         SizedBox(width: R.sp(context, AppSpacing.md)),
-                        Icon(Icons.calendar_today_outlined,
-                            size: R.icon(context, 12), color: AppColors.textSecondary),
+                        Icon(
+                          Icons.calendar_today_outlined,
+                          size: R.icon(context, 12),
+                          color: AppColors.textSecondary,
+                        ),
                         SizedBox(width: R.sp(context, 4)),
                         Text(
                           date,
-                          style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 11.5)),
+                          style: AppTextStyles.small.copyWith(
+                            fontSize: R.fs(context, 11.5),
+                          ),
                         ),
                       ],
                     ),
@@ -1540,15 +1926,20 @@ class _PoHistoryCardState extends State<_PoHistoryCard> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('TOTAL',
-                                style: AppTextStyles.cardTitle.copyWith(
-                                    fontSize: R.fs(context, 10),
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.5)),
+                            Text(
+                              'TOTAL',
+                              style: AppTextStyles.cardTitle.copyWith(
+                                fontSize: R.fs(context, 10),
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
                             SizedBox(height: R.sp(context, 2)),
                             Text(
                               total,
-                              style: AppTextStyles.cardValue.copyWith(fontSize: R.fs(context, 15)),
+                              style: AppTextStyles.cardValue.copyWith(
+                                fontSize: R.fs(context, 15),
+                              ),
                             ),
                           ],
                         ),
@@ -1557,35 +1948,62 @@ class _PoHistoryCardState extends State<_PoHistoryCard> {
                             if (isDraft)
                               OutlinedButton.icon(
                                 onPressed: widget.onSend,
-                                icon: Icon(Icons.send, size: R.icon(context, 14)),
-                                label: Text('Send', style: TextStyle(fontSize: R.fs(context, 12))),
+                                icon: Icon(
+                                  Icons.send,
+                                  size: R.icon(context, 14),
+                                ),
+                                label: Text(
+                                  'Send',
+                                  style: TextStyle(fontSize: R.fs(context, 12)),
+                                ),
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: AppColors.primary,
                                   side: BorderSide(color: AppColors.primary),
                                   padding: EdgeInsets.symmetric(
-                                      horizontal: R.sp(context, AppSpacing.sm),
-                                      vertical: R.sp(context, 4)),
+                                    horizontal: R.sp(context, AppSpacing.sm),
+                                    vertical: R.sp(context, 4),
+                                  ),
                                   shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(R.radius(context, AppSizes.radiusSm))),
+                                    borderRadius: BorderRadius.circular(
+                                      R.radius(context, AppSizes.radiusSm),
+                                    ),
+                                  ),
                                 ),
                               ),
                             if (canDelete) ...[
-                              if (isDraft) SizedBox(width: R.sp(context, AppSpacing.sm)),
+                              if (isDraft)
+                                SizedBox(width: R.sp(context, AppSpacing.sm)),
                               OutlinedButton.icon(
-                                onPressed: widget.deleting ? null : widget.onDelete,
-                                icon: Icon(Icons.close_rounded, size: R.icon(context, 14)),
-                                label: Text('Cancel',
-                                    style: TextStyle(fontSize: R.fs(context, 12), fontWeight: FontWeight.w600)),
+                                onPressed: widget.deleting
+                                    ? null
+                                    : widget.onDelete,
+                                icon: Icon(
+                                  Icons.close_rounded,
+                                  size: R.icon(context, 14),
+                                ),
+                                label: Text(
+                                  'Cancel',
+                                  style: TextStyle(
+                                    fontSize: R.fs(context, 12),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: AppColors.red,
-                                  side: BorderSide(color: AppColors.red.withValues(alpha: 0.35)),
+                                  side: BorderSide(
+                                    color: AppColors.red.withValues(
+                                      alpha: 0.35,
+                                    ),
+                                  ),
                                   padding: EdgeInsets.symmetric(
-                                      horizontal: R.sp(context, AppSpacing.sm),
-                                      vertical: R.sp(context, 4)),
+                                    horizontal: R.sp(context, AppSpacing.sm),
+                                    vertical: R.sp(context, 4),
+                                  ),
                                   shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(R.radius(context, AppSizes.radiusSm))),
+                                    borderRadius: BorderRadius.circular(
+                                      R.radius(context, AppSizes.radiusSm),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ],
@@ -1594,7 +2012,9 @@ class _PoHistoryCardState extends State<_PoHistoryCard> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
-                                    isReceived ? Icons.check_circle_outline : Icons.block,
+                                    isReceived
+                                        ? Icons.check_circle_outline
+                                        : Icons.block,
                                     size: R.icon(context, 15),
                                     color: color,
                                   ),
@@ -1602,21 +2022,30 @@ class _PoHistoryCardState extends State<_PoHistoryCard> {
                                   Text(
                                     isReceived ? 'Received' : 'Cancelled',
                                     style: TextStyle(
-                                        fontSize: R.fs(context, 12),
-                                        fontWeight: FontWeight.w600,
-                                        color: color),
+                                      fontSize: R.fs(context, 12),
+                                      fontWeight: FontWeight.w600,
+                                      color: color,
+                                    ),
                                   ),
                                 ],
                               ),
                             if (isReceived && hasPartial)
                               Padding(
-                                padding: EdgeInsets.only(left: R.sp(context, AppSpacing.sm)),
+                                padding: EdgeInsets.only(
+                                  left: R.sp(context, AppSpacing.sm),
+                                ),
                                 child: Container(
                                   padding: EdgeInsets.symmetric(
-                                      horizontal: R.sp(context, AppSpacing.sm), vertical: R.sp(context, 3)),
+                                    horizontal: R.sp(context, AppSpacing.sm),
+                                    vertical: R.sp(context, 3),
+                                  ),
                                   decoration: BoxDecoration(
-                                    color: AppColors.orange.withValues(alpha: 0.2),
-                                    borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusSm)),
+                                    color: AppColors.orange.withValues(
+                                      alpha: 0.2,
+                                    ),
+                                    borderRadius: BorderRadius.circular(
+                                      R.radius(context, AppSizes.radiusSm),
+                                    ),
                                   ),
                                   child: Text(
                                     'Partial',
@@ -1641,13 +2070,17 @@ class _PoHistoryCardState extends State<_PoHistoryCard> {
           if (widget.isExpanded)
             Padding(
               padding: EdgeInsets.fromLTRB(
-                  R.sp(context, AppSpacing.lg),
-                  0,
-                  R.sp(context, AppSpacing.lg),
-                  R.sp(context, AppSpacing.lg)),
+                R.sp(context, AppSpacing.lg),
+                0,
+                R.sp(context, AppSpacing.lg),
+                R.sp(context, AppSpacing.lg),
+              ),
               child: Column(
                 children: [
-                  Divider(color: AppColors.border, height: R.sp(context, AppSpacing.md)),
+                  Divider(
+                    color: AppColors.border,
+                    height: R.sp(context, AppSpacing.md),
+                  ),
                   if (widget.isLoadingDetail)
                     const Padding(
                       padding: EdgeInsets.all(8.0),
@@ -1675,7 +2108,7 @@ class _PoHistoryCardState extends State<_PoHistoryCard> {
       ];
     }
     return items.map((item) {
-      final name = asStr(item['name']);
+      final name = _capitalize(asStr(item['name']));
       final qty = asInt(item['orderedQty']);
       final unit = asStr(item['unit'], 'pcs');
       final price = asDouble(item['unitPrice']);
@@ -1684,14 +2117,17 @@ class _PoHistoryCardState extends State<_PoHistoryCard> {
       final receivedPrice = asDouble(item['actualReceivedUnitPrice'] ?? price);
       final receivedTotal = receivedQty * receivedPrice;
       final isReceived = receivedQty > 0;
-      final displayTotal = isReceived ? receivedTotal : total;
 
       return Container(
         margin: EdgeInsets.only(bottom: R.sp(context, AppSpacing.sm)),
         padding: EdgeInsets.all(R.sp(context, AppSpacing.md)),
         decoration: BoxDecoration(
-          color: isReceived ? AppColors.green.withValues(alpha: 0.05) : AppColors.background,
-          borderRadius: BorderRadius.circular(R.radius(context, AppSizes.radiusMd)),
+          color: isReceived
+              ? AppColors.green.withValues(alpha: 0.05)
+              : AppColors.background,
+          borderRadius: BorderRadius.circular(
+            R.radius(context, AppSizes.radiusMd),
+          ),
           border: Border.all(color: AppColors.border),
         ),
         child: Column(
@@ -1712,67 +2148,66 @@ class _PoHistoryCardState extends State<_PoHistoryCard> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-Text(
-  '₹${(isReceived ? receivedTotal : total).toStringAsFixed(2)}',
-  style: TextStyle(
-    fontWeight: FontWeight.bold,
-    fontSize: R.fs(context, 13),
-    color: AppColors.textPrimaryDark,
-  ),
-),
+                Text(
+                  '₹${(isReceived ? receivedTotal : total).toStringAsFixed(2)}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: R.fs(context, 13),
+                    color: AppColors.textPrimaryDark,
+                  ),
+                ),
               ],
             ),
             SizedBox(height: R.sp(context, 4)),
-Row(
-  crossAxisAlignment: CrossAxisAlignment.start,
-  children: [
-    Expanded(
-      child: Wrap(
-        spacing: R.sp(context, AppSpacing.sm),
-        runSpacing: R.sp(context, 4),
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          Text(
-            '$qty $unit × ₹${price.toStringAsFixed(2)}',
-            style: AppTextStyles.small.copyWith(
-              fontSize: R.fs(context, 12),
-            ),
-          ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Wrap(
+                    spacing: R.sp(context, AppSpacing.sm),
+                    runSpacing: R.sp(context, 4),
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        '$qty $unit × ₹${price.toStringAsFixed(2)}',
+                        style: AppTextStyles.small.copyWith(
+                          fontSize: R.fs(context, 12),
+                        ),
+                      ),
 
-          if (isReceived)
-            Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: R.sp(context, 6),
-                vertical: R.sp(context, 1),
-              ),
-              decoration: BoxDecoration(
-                color: AppColors.green.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                '$receivedQty received @ ₹${receivedPrice.toStringAsFixed(2)}',
-                style: TextStyle(
-                  fontSize: R.fs(context, 10),
-                  color: AppColors.green,
-                  fontWeight: FontWeight.w600,
+                      if (isReceived)
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: R.sp(context, 6),
+                            vertical: R.sp(context, 1),
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.green.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            '$receivedQty received @ ₹${receivedPrice.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              fontSize: R.fs(context, 10),
+                              color: AppColors.green,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+
+                      if (isReceived && (receivedPrice - price).abs() > 0.01)
+                        Text(
+                          '(Ordered @ ₹${price.toStringAsFixed(2)})',
+                          style: AppTextStyles.small.copyWith(
+                            fontSize: R.fs(context, 10),
+                            color: AppColors.orange,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ),
-
-          if (isReceived &&
-              (receivedPrice - price).abs() > 0.01)
-            Text(
-              '(Ordered @ ₹${price.toStringAsFixed(2)})',
-              style: AppTextStyles.small.copyWith(
-                fontSize: R.fs(context, 10),
-                color: AppColors.orange,
-              ),
-            ),
-        ],
-      ),
-    ),
-  ],
-),
           ],
         ),
       );

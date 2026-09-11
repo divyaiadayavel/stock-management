@@ -1,83 +1,179 @@
 import 'dart:convert';
-import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
-import 'package:mailer/mailer.dart';
-import 'package:mailer/smtp_server.dart';
 
 import '../../../../core/network/api_config.dart';
-import '../../../../core/storage/db_helper.dart';
+import '../../../../core/auth/auth_session_storage.dart';
+
 import 'auth_state.dart';
 
-final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
+import '../../../../core/audit/audit_constants.dart';
+import '../../../../core/audit/audit_logger.dart';
+import '../../../../core/audit/audit_session.dart';
+import '../../../../core/services/notification_service.dart';
+
+final authControllerProvider =
+    StateNotifierProvider<AuthController, AuthState>(
   (ref) => AuthController(),
 );
 
 class AuthController extends StateNotifier<AuthState> {
   AuthController() : super(AuthState());
 
+  // ============================================================
+  // LOGIN
+  // ============================================================
+
   Future<bool> login(String email, String password) async {
     final normalizedEmail = email.trim();
     final normalizedPassword = password.trim();
 
-    state = state.copyWith(isLoading: true, error: null, user: null);
+    state = state.copyWith(
+      isLoading: true,
+      error: null,
+      user: null,
+    );
 
     try {
-      final localUser = await DBHelper.login(
+      final loginResult = await _loginStaffUser(
         normalizedEmail,
         normalizedPassword,
       );
 
-      if (localUser != null) {
+      if (loginResult == null) {
+        AuditLogger.log(
+          module: AuditConstants.auth,
+          event: AuditConstants.login,
+          action: 'Login Failed',
+          description: 'Invalid email or password.',
+          status: AuditConstants.failed,
+        );
+
         state = state.copyWith(
           isLoading: false,
-          user: {
-            ...localUser,
-            'source': 'local',
-            'role': localUser['role'] ?? 'admin',
-          },
+          error: 'Invalid email or password',
         );
-        return true;
+
+        return false;
       }
 
-      final staffUser = await _loginStaffUser(
-        normalizedEmail,
-        normalizedPassword,
+      final staffUser = loginResult.user;
+      final sessionId = loginResult.sessionId;
+
+      // ----------------------------------------------------------
+      // SAVE BACKEND SESSION
+      // ----------------------------------------------------------
+
+      await AuthSessionStorage.saveSessionId(sessionId);
+
+      // ----------------------------------------------------------
+      // NORMALIZE USER ID
+      // ----------------------------------------------------------
+
+      final dynamic rawUserId = staffUser['id'];
+
+      final int? userId = rawUserId is int
+          ? rawUserId
+          : int.tryParse(
+              rawUserId?.toString() ?? '',
+            );
+
+      // ----------------------------------------------------------
+      // START AUDIT SESSION
+      // ----------------------------------------------------------
+
+      AuditSession.start(
+        userId: userId,
+        userName: staffUser['name']?.toString() ?? '',
+        userRole: staffUser['role']?.toString() ?? 'staff',
       );
 
-      if (staffUser != null) {
-        state = state.copyWith(isLoading: false, user: staffUser);
-        return true;
+      // ----------------------------------------------------------
+      // REGISTER FCM TOKEN
+      // ----------------------------------------------------------
+
+      if (userId != null && userId > 0) {
+        try {
+          await NotificationService.registerFcmToken(userId);
+
+          debugPrint(
+            'FCM token registered successfully for user: $userId',
+          );
+        } catch (e) {
+          debugPrint(
+            'FCM token registration failed for user $userId: $e',
+          );
+        }
       }
+
+      // ----------------------------------------------------------
+      // AUDIT LOGIN
+      // ----------------------------------------------------------
+
+      AuditLogger.log(
+        module: AuditConstants.auth,
+        event: AuditConstants.login,
+        action: 'User Login',
+        description:
+            '${staffUser['name']} logged into the application.',
+        status: AuditConstants.success,
+      );
+
+      // ----------------------------------------------------------
+      // UPDATE STATE
+      // ----------------------------------------------------------
 
       state = state.copyWith(
         isLoading: false,
-        error: 'Invalid email or password',
+        user: staffUser,
       );
-      return false;
+
+      return true;
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: _cleanError(e));
+      AuditLogger.log(
+        module: AuditConstants.auth,
+        event: AuditConstants.error,
+        action: 'Login Exception',
+        description: e.toString(),
+        status: AuditConstants.failed,
+      );
+
+      state = state.copyWith(
+        isLoading: false,
+        error: _cleanError(e),
+      );
+
       return false;
     }
   }
 
-  Future<Map<String, dynamic>?> _loginStaffUser(
+  // ============================================================
+  // BACKEND LOGIN
+  // ============================================================
+
+  Future<_LoginResult?> _loginStaffUser(
     String email,
     String password,
   ) async {
     final response = await http.post(
       Uri.parse(ApiConfig.staffLogin),
       headers: ApiConfig.jsonHeaders,
-      body: jsonEncode({'email': email, 'password': password}),
+      body: jsonEncode({
+        'email': email,
+        'password': password,
+      }),
     );
 
     final Object? decoded;
+
     try {
       decoded = jsonDecode(response.body);
     } on FormatException {
       throw Exception('Invalid staff login response');
     }
+
     if (decoded is! Map) {
       throw Exception('Invalid staff login response');
     }
@@ -85,7 +181,9 @@ class AuthController extends StateNotifier<AuthState> {
     final json = Map<String, dynamic>.from(decoded);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(json['message'] ?? 'Staff login failed');
+      throw Exception(
+        json['message'] ?? 'Staff login failed',
+      );
     }
 
     if (!_readSuccess(json)) {
@@ -93,121 +191,491 @@ class AuthController extends StateNotifier<AuthState> {
     }
 
     final data = _readData(json);
-    final rawUser = data['user'] ?? data['staff'] ?? data;
+
+    // ----------------------------------------------------------
+    // READ SESSION ID
+    // ----------------------------------------------------------
+
+    final sessionId = data['session_id']?.toString().trim();
+
+    if (sessionId == null || sessionId.isEmpty) {
+      throw Exception(
+        'Login response missing session ID',
+      );
+    }
+
+    // ----------------------------------------------------------
+    // READ USER
+    // ----------------------------------------------------------
+
+    final rawUser =
+        data['user'] ??
+        data['staff'] ??
+        data;
 
     if (rawUser is! Map) {
-      throw Exception('Staff login response missing user data');
+      throw Exception(
+        'Staff login response missing user data',
+      );
     }
 
     final user = Map<String, dynamic>.from(rawUser)
       ..remove('password')
       ..remove('password_hash');
 
-    return {
+    final staffUser = <String, dynamic>{
       'id': user['id'],
-      'name': user['name'] ?? user['full_name'] ?? 'Staff User',
-      'email': user['email'] ?? email,
-      'phone': user['phone'] ?? user['phone_number'] ?? '',
-      'role': user['role'] ?? 'staff',
-      'isActive': user['isActive'] ?? user['is_active'] ?? true,
+      'name':
+          user['name'] ??
+          user['full_name'] ??
+          'Staff User',
+      'email':
+          user['email'] ??
+          email,
+      'phone':
+          user['phone'] ??
+          user['phone_number'] ??
+          '',
+      'role':
+          user['role'] ??
+          'staff',
+      'isActive':
+          user['isActive'] ??
+          user['is_active'] ??
+          true,
       'source': 'staff',
     };
+
+    return _LoginResult(
+      sessionId: sessionId,
+      user: staffUser,
+    );
   }
 
-  Map<String, dynamic> _readData(Map<String, dynamic> json) {
+  // ============================================================
+  // RESTORE SESSION
+  // ============================================================
+
+  Future<bool> restoreSession() async {
+    state = state.copyWith(
+      isLoading: true,
+      error: null,
+    );
+
+    try {
+      final sessionId =
+          await AuthSessionStorage.getSessionId();
+
+      if (sessionId == null) {
+        state = state.copyWith(
+          isLoading: false,
+          user: null,
+        );
+
+        return false;
+      }
+
+      final response = await http.post(
+        Uri.parse(ApiConfig.validateSession),
+        headers: {
+          ...ApiConfig.jsonHeaders,
+          'X-Session-ID': sessionId,
+        },
+      );
+
+      final Object? decoded;
+
+      try {
+        decoded = jsonDecode(response.body);
+      } on FormatException {
+        throw Exception(
+          'Invalid session validation response',
+        );
+      }
+
+      if (decoded is! Map) {
+        throw Exception(
+          'Invalid session validation response',
+        );
+      }
+
+      final json = Map<String, dynamic>.from(decoded);
+
+      if (response.statusCode != 200 ||
+          !_readSuccess(json)) {
+        await AuthSessionStorage.clearSessionId();
+
+        AuditSession.end();
+
+        state = state.copyWith(
+          isLoading: false,
+          user: null,
+        );
+
+        return false;
+      }
+
+      final data = _readData(json);
+
+      final rawUser =
+          data['user'] ??
+          data['staff'] ??
+          data;
+
+      if (rawUser is! Map) {
+        throw Exception(
+          'Session validation response missing user',
+        );
+      }
+
+      final user = Map<String, dynamic>.from(rawUser)
+        ..remove('password')
+        ..remove('password_hash');
+
+      final restoredUser = <String, dynamic>{
+        'id': user['id'],
+        'name':
+            user['name'] ??
+            user['full_name'] ??
+            'Staff User',
+        'email':
+            user['email'] ?? '',
+        'phone':
+            user['phone'] ??
+            user['phone_number'] ??
+            '',
+        'role':
+            user['role'] ??
+            'staff',
+        'isActive':
+            user['isActive'] ??
+            user['is_active'] ??
+            true,
+        'source': 'staff',
+      };
+
+      final dynamic rawUserId =
+          restoredUser['id'];
+
+      final int? userId = rawUserId is int
+          ? rawUserId
+          : int.tryParse(
+              rawUserId?.toString() ?? '',
+            );
+
+      // Restore audit session.
+      AuditSession.start(
+        userId: userId,
+        userName:
+            restoredUser['name']?.toString() ?? '',
+        userRole:
+            restoredUser['role']?.toString() ?? 'staff',
+      );
+
+      // Re-register FCM token after app restart.
+      if (userId != null && userId > 0) {
+        try {
+          await NotificationService.registerFcmToken(
+            userId,
+          );
+        } catch (e) {
+          debugPrint(
+            'FCM registration during session restore failed: $e',
+          );
+        }
+      }
+
+      state = state.copyWith(
+        isLoading: false,
+        user: restoredUser,
+      );
+
+      return true;
+    } catch (e) {
+      debugPrint(
+        'Session restore failed: $e',
+      );
+
+      await AuthSessionStorage.clearSessionId();
+
+      AuditSession.end();
+
+      state = state.copyWith(
+        isLoading: false,
+        user: null,
+        error: null,
+      );
+
+      return false;
+    }
+  }
+
+  // ============================================================
+  // MANUAL LOGOUT ONLY
+  // ============================================================
+
+  Future<void> logout() async {
+    final sessionId =
+        await AuthSessionStorage.getSessionId();
+
+    try {
+      if (sessionId != null) {
+        await http.post(
+          Uri.parse(ApiConfig.staffLogout),
+          headers: {
+            ...ApiConfig.jsonHeaders,
+            'X-Session-ID': sessionId,
+          },
+        );
+      }
+    } catch (e) {
+      debugPrint(
+        'Backend logout failed: $e',
+      );
+    } finally {
+      await AuthSessionStorage.clearSessionId();
+
+      AuditLogger.log(
+        module: AuditConstants.auth,
+        event: AuditConstants.logout,
+        action: 'User Logout',
+        description:
+            '${AuditSession.userName} logged out.',
+        status: AuditConstants.success,
+      );
+
+      AuditSession.end();
+
+      state = AuthState();
+    }
+  }
+
+  // ============================================================
+  // OTP
+  // ============================================================
+
+  Future<bool> sendOtp(String email) async {
+    state = state.copyWith(
+      isLoading: true,
+      error: null,
+    );
+
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.sendOtp),
+        headers: ApiConfig.jsonHeaders,
+        body: jsonEncode({
+          'email': email,
+        }),
+      );
+
+      final data =
+          jsonDecode(response.body)
+              as Map<String, dynamic>;
+
+      if (response.statusCode == 200 &&
+          data['success'] == true) {
+        state = state.copyWith(
+          isLoading: false,
+        );
+
+        return true;
+      }
+
+      throw Exception(
+        data['message'] ??
+            'Failed to send OTP',
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: _cleanError(e),
+      );
+
+      return false;
+    }
+  }
+
+  // ============================================================
+  // VERIFY OTP
+  // ============================================================
+
+  Future<bool> verifyOtp(
+    String email,
+    String otp,
+  ) async {
+    state = state.copyWith(
+      isLoading: true,
+      error: null,
+    );
+
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.verifyOtp),
+        headers: ApiConfig.jsonHeaders,
+        body: jsonEncode({
+          'email': email,
+          'otp': otp,
+        }),
+      );
+
+      final data =
+          jsonDecode(response.body)
+              as Map<String, dynamic>;
+
+      if (response.statusCode == 200 &&
+          data['success'] == true) {
+        state = state.copyWith(
+          isLoading: false,
+        );
+
+        return true;
+      }
+
+      throw Exception(
+        data['message'] ??
+            'Invalid OTP',
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: _cleanError(e),
+      );
+
+      return false;
+    }
+  }
+
+  // ============================================================
+  // RESET PASSWORD
+  // ============================================================
+
+  Future<bool> resetPassword(
+    String email,
+    String newPassword,
+  ) async {
+    state = state.copyWith(
+      isLoading: true,
+      error: null,
+    );
+
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.resetPassword),
+        headers: ApiConfig.jsonHeaders,
+        body: jsonEncode({
+          'email': email,
+          'password': newPassword,
+        }),
+      );
+
+      final data =
+          jsonDecode(response.body)
+              as Map<String, dynamic>;
+
+      if (response.statusCode == 200 &&
+          data['success'] == true) {
+        state = state.copyWith(
+          isLoading: false,
+        );
+
+        return true;
+      }
+
+      throw Exception(
+        data['message'] ??
+            'Password reset failed',
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: _cleanError(e),
+      );
+
+      return false;
+    }
+  }
+
+  // ============================================================
+  // REGISTER
+  // ============================================================
+
+  Future<bool> register(
+    String name,
+    String email,
+    String password,
+  ) async {
+    return false;
+  }
+
+  // ============================================================
+  // HELPERS
+  // ============================================================
+
+  Map<String, dynamic> _readData(
+    Map<String, dynamic> json,
+  ) {
     final data = json['data'];
-    if (data is Map<String, dynamic>) return data;
-    if (data is Map) return Map<String, dynamic>.from(data);
+
+    if (data is Map<String, dynamic>) {
+      return data;
+    }
+
+    if (data is Map) {
+      return Map<String, dynamic>.from(data);
+    }
+
     return <String, dynamic>{};
   }
 
-  bool _readSuccess(Map<String, dynamic> json) {
-    final value = json['success'] ?? json['status'];
-    if (value is bool) return value;
-    if (value is num) return value == 1;
-    return value?.toString().toLowerCase() == 'true';
+  bool _readSuccess(
+    Map<String, dynamic> json,
+  ) {
+    final value =
+        json['success'] ??
+        json['status'];
+
+    if (value is bool) {
+      return value;
+    }
+
+    if (value is num) {
+      return value == 1;
+    }
+
+    return value
+            ?.toString()
+            .toLowerCase() ==
+        'true';
   }
 
   String _cleanError(Object error) {
-    final message = error.toString().replaceFirst('Exception: ', '');
+    final message = error
+        .toString()
+        .replaceFirst(
+          'Exception: ',
+          '',
+        );
+
     if (message.contains('SocketException') ||
         message.contains('ClientException')) {
       return 'Unable to connect to staff login service';
     }
+
     return message;
   }
+}
 
-  Future<bool> sendOtp(String email) async {
-    try {
-      state = state.copyWith(isLoading: true, error: null);
+// ============================================================
+// LOGIN RESULT
+// ============================================================
 
-      final otp = (100000 + Random().nextInt(900000)).toString();
+class _LoginResult {
+  const _LoginResult({
+    required this.sessionId,
+    required this.user,
+  });
 
-      const username = 'divyaidayavel2001@gmail.com';
-      const password = 'dobt wzzc ugli xlum';
-
-      final smtpServer = gmail(username, password);
-
-      final message = Message()
-        ..from = Address(username, 'Stock Management')
-        ..recipients.add(email)
-        ..subject = 'OTP Verification'
-        ..text = 'Your OTP is: $otp';
-
-      await send(message, smtpServer);
-
-      state = state.copyWith(isLoading: false, otp: otp, otpEmail: email);
-
-      return true;
-    } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
-      return false;
-    }
-  }
-
-  bool verifyOtp(String email, String otp) {
-    return state.otp == otp && state.otpEmail == email;
-  }
-
-  Future<bool> resetPassword(String email, String newPassword) async {
-    try {
-      state = state.copyWith(isLoading: true, error: null);
-
-      final updated = await DBHelper.updatePassword(email, newPassword);
-
-      if (updated) {
-        state = state.copyWith(isLoading: false, otp: null, otpEmail: null);
-        return true;
-      }
-
-      state = state.copyWith(isLoading: false, error: 'User not found');
-      return false;
-    } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
-      return false;
-    }
-  }
-
-  Future<bool> register(String name, String email, String password) async {
-    state = state.copyWith(isLoading: true, error: null);
-
-    try {
-      final success = await DBHelper.registerUser(name, email, password);
-
-      if (success) {
-        state = state.copyWith(isLoading: false);
-        return true;
-      }
-
-      state = state.copyWith(isLoading: false, error: 'User already exists');
-      return false;
-    } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
-      return false;
-    }
-  }
-
-  void logout() {
-    state = AuthState();
-  }
+  final String sessionId;
+  final Map<String, dynamic> user;
 }

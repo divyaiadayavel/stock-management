@@ -14,27 +14,36 @@ import '../../../../core/utils/responsive_helper.dart';
 import '../providers/inventory_provider.dart'; // contains repository provider, summary, refresh, etc.
 import '../../../products/data/models/product_model.dart';
 import '../../domain/entities/stock_movement.dart'; // ✅ StockMovement entity
-import 'stock_in_screen.dart';
-import 'stock_out_screen.dart';
 import '../providers/inventory_filter_provider.dart';
 // ── Providers (can be moved to inventory_provider.dart later) ──
 
+/// Capitalize every word in string
+String _capitalize(String text) {
+  if (text.isEmpty) return text;
+  return text
+      .split(' ')
+      .map((word) {
+        if (word.isEmpty) return word;
+        return word[0].toUpperCase() + word.substring(1).toLowerCase();
+      })
+      .join(' ');
+}
+
 /// Fetches a product by ID using the repository.
-final productDetailProvider = FutureProvider.family.autoDispose<Product?, int>(
-  (ref, productId) async {
-    final repo = ref.watch(inventoryRepositoryProvider);
-    return repo.getProductById(productId);
-  },
-);
+final productDetailProvider = FutureProvider.family.autoDispose<Product?, int>((
+  ref,
+  productId,
+) async {
+  final repo = ref.watch(inventoryRepositoryProvider);
+  return repo.getProductById(productId);
+});
 
 /// Fetches stock movements for a given product.
-final movementsProvider = FutureProvider.family.autoDispose<
-    List<StockMovement>, int>(
-  (ref, productId) async {
-    final repo = ref.watch(inventoryRepositoryProvider);
-    return repo.getStockMovements(productId: productId);
-  },
-);
+final movementsProvider = FutureProvider.family
+    .autoDispose<List<StockMovement>, int>((ref, productId) async {
+      final repo = ref.watch(inventoryRepositoryProvider);
+      return repo.getStockMovements(productId: productId);
+    });
 
 // ─── Screen ─────────────────────────────────────────────────
 
@@ -76,7 +85,6 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
     final qty = product.quantity;
     final purchasePrice = product.purchasePrice; // non‑nullable
 
-
     // "Committed" = qty reserved for open orders — we use lsl as a proxy
     final committed = 0;
     final available = qty - committed;
@@ -96,22 +104,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          product.name,
+          _capitalize(product.name),
           style: AppTextStyles.heading.copyWith(fontSize: R.fs(context, 18)),
         ),
-        actions: [
-          IconButton(
-            icon: Icon(
-              Icons.edit_outlined,
-              color: AppColors.textSecondary,
-              size: R.icon(context, AppSizes.iconMd),
-            ),
-            onPressed: () {
-              // TODO: navigate to EditProductScreen(product: product)
-            },
-          ),
-          SizedBox(width: R.sp(context, AppSpacing.xs)),
-        ],
       ),
       body: Column(
         children: [
@@ -148,12 +143,12 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
                     value: '$committed',
                     valueColor: AppColors.textPrimaryDark,
                   ),
-                  _vDivider(),
-                  _StatCell(
-                    label: 'Available',
-                    value: '$available',
-                    valueColor: AppColors.green,
-                  ),
+                  // _vDivider(),
+                  // _StatCell(
+                  //   label: 'Available',
+                  //   value: '$available',
+                  //   valueColor: AppColors.green,
+                  // ),
                   _vDivider(),
                   _StatCell(
                     label: 'Value',
@@ -230,103 +225,15 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
           ),
         ],
       ),
-
-      // ── Bottom buttons ──────────────────────────────────────
-      bottomNavigationBar: SafeArea(
-        child: Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: R.sp(context, AppSpacing.screenPadding),
-            vertical: R.sp(context, AppSpacing.sm),
-          ),
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            border: Border(top: BorderSide(color: AppColors.border)),
-          ),
-          child: Row(
-            children: [
-              // Adjust stock
-              Expanded(
-                child: SizedBox(
-                  height: R.sp(context, AppSizes.buttonHeight),
-                  child: OutlinedButton(
-                    onPressed: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const StockOutScreen(),
-                        ),
-                      );
-                      _refreshAfterAction();
-                    },
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: AppColors.border),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(
-                          R.radius(context, AppSizes.radiusMd),
-                        ),
-                      ),
-                    ),
-                    child: Text(
-                      'Adjust stock',
-                      style: AppTextStyles.button.copyWith(
-                        color: AppColors.textPrimaryDark,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(width: R.sp(context, AppSpacing.sm)),
-              // Reorder
-              Expanded(
-                flex: 2,
-                child: Container(
-                  height: R.sp(context, AppSizes.buttonHeight),
-                  decoration: BoxDecoration(
-                    gradient: AppColors.brandGradient,
-                    borderRadius: BorderRadius.circular(
-                      R.radius(context, AppSizes.radiusMd),
-                    ),
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(
-                        R.radius(context, AppSizes.radiusMd),
-                      ),
-                      onTap: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const StockInScreen(),
-                          ),
-                        );
-                        _refreshAfterAction();
-                      },
-                      child: Center(
-                        child: Text(
-                          'Reorder',
-                          style: AppTextStyles.button.copyWith(
-                            color: AppColors.textWhite,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
-void _refreshAfterAction() {
-  ref.read(inventoryRefreshProvider.notifier).state++;
+  void _refreshAfterAction() {
+    ref.read(inventoryRefreshProvider.notifier).state++;
 
-  ref.invalidate(productDetailProvider(_productId));
-  ref.invalidate(movementsProvider(_productId));
-}
+    ref.invalidate(productDetailProvider(_productId));
+    ref.invalidate(movementsProvider(_productId));
+  }
 
   Widget _vDivider() {
     return Container(
@@ -397,7 +304,10 @@ class _DetailsTab extends StatelessWidget {
       _DetailRow('Category', product.category),
       _DetailRow('Unit', product.unit),
       _DetailRow('Barcode', product.barcode.isEmpty ? '—' : product.barcode),
-      _DetailRow('Supplier', product.supplier.isEmpty ? '—' : product.supplier),
+      _DetailRow(
+        'Supplier',
+        product.supplier.isEmpty ? '—' : _capitalize(product.supplier),
+      ),
       _DetailRow(
         'Expiry date',
         product.expiryDate.isEmpty ? '—' : product.expiryDate,
@@ -414,14 +324,8 @@ class _DetailsTab extends StatelessWidget {
         'Discount',
         product.discount != 0 ? '${product.discount}%' : '—',
       ),
-      _DetailRow(
-        'SGST',
-        product.sgst != 0 ? '${product.sgst}%' : '—',
-      ),
-      _DetailRow(
-        'CGST',
-        product.cgst != 0 ? '${product.cgst}%' : '—',
-      ),
+      _DetailRow('SGST', product.sgst != 0 ? '${product.sgst}%' : '—'),
+      _DetailRow('CGST', product.cgst != 0 ? '${product.cgst}%' : '—'),
       _DetailRow('HSN Code', product.hsnCode.isEmpty ? '—' : product.hsnCode),
       _DetailRow('Reorder level', '${product.lsl}'),
       _DetailRow(
@@ -549,21 +453,19 @@ class _MovementTile extends StatelessWidget {
     String typeLabel;
     String qtyDisplay;
 
-if (type == 'STOCK_IN' || type == 'PURCHASE') {
-  dot = AppColors.green;
-  typeLabel = reason.isEmpty ? 'Stock In' : reason;
-  qtyDisplay = '+$qty';
-} else if (type == 'STOCK_OUT' ||
-    type == 'SALE' ||
-    type == 'DAMAGE') {
-  dot = AppColors.red;
-  typeLabel = reason.isEmpty ? 'Stock Out' : reason;
-  qtyDisplay = '-$qty';
-} else {
-  dot = AppColors.orange;
-  typeLabel = reason.isEmpty ? 'Adjustment' : reason;
-  qtyDisplay = '$qty';
-}
+    if (type == 'STOCK_IN' || type == 'PURCHASE') {
+      dot = AppColors.green;
+      typeLabel = reason.isEmpty ? 'Stock In' : reason;
+      qtyDisplay = '+$qty';
+    } else if (type == 'STOCK_OUT' || type == 'SALE' || type == 'DAMAGE') {
+      dot = AppColors.red;
+      typeLabel = reason.isEmpty ? 'Stock Out' : reason;
+      qtyDisplay = '-$qty';
+    } else {
+      dot = AppColors.orange;
+      typeLabel = reason.isEmpty ? 'Adjustment' : reason;
+      qtyDisplay = '$qty';
+    }
 
     final subParts = <String>[];
     if (reference.isNotEmpty) subParts.add(reference);
@@ -607,12 +509,12 @@ if (type == 'STOCK_IN' || type == 'PURCHASE') {
                         style: AppTextStyles.cardValue.copyWith(
                           fontSize: R.fs(context, 13),
                           color: (type == 'STOCK_IN' || type == 'PURCHASE')
-    ? AppColors.green
-    : (type == 'STOCK_OUT' ||
-            type == 'SALE' ||
-            type == 'DAMAGE')
-        ? AppColors.red
-        : AppColors.orange,
+                              ? AppColors.green
+                              : (type == 'STOCK_OUT' ||
+                                    type == 'SALE' ||
+                                    type == 'DAMAGE')
+                              ? AppColors.red
+                              : AppColors.orange,
                         ),
                       ),
                     ],
@@ -641,7 +543,7 @@ if (type == 'STOCK_IN' || type == 'PURCHASE') {
       'Sep',
       'Oct',
       'Nov',
-      'Dec'
+      'Dec',
     ];
     return '${date.day} ${months[date.month - 1]}';
   }
@@ -667,12 +569,11 @@ class _StatsTab extends ConsumerWidget {
 
         for (final m in movements) {
           final qty = m.quantity;
-          if (m.movementType == 'STOCK_IN' ||
-    m.movementType == 'PURCHASE') {
+          if (m.movementType == 'STOCK_IN' || m.movementType == 'PURCHASE') {
             totalIn += qty;
           } else if (m.movementType == 'STOCK_OUT' ||
-         m.movementType == 'SALE' ||
-         m.movementType == 'DAMAGE') {
+              m.movementType == 'SALE' ||
+              m.movementType == 'DAMAGE') {
             totalOut += qty;
           }
         }

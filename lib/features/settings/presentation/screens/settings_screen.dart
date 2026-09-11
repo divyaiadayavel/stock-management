@@ -1,32 +1,23 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
+// import 'package:path_provider/path_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
-import '../../domain/entities/business_profile.dart';
-
+import '../../../notifications/presentation/screens/notification_settings_screen.dart';
 import '../providers/settings_provider.dart';
-
-// business/
 import 'business/business_profile_screen.dart';
 import 'business/invoice_tax_screen.dart';
 import 'business/customize_screen.dart';
-
-// staff/
-import 'staff/roles_permissions_screen.dart';
-
-// operations/data/
 import 'operations/data/backup_sync_screen.dart';
-import 'operations/data/notifications_screen.dart';
-
-// operations/inventory/
 import 'operations/printers_hardware/printer_management/printers_hardware_screen.dart';
+import '../../service_management/presentation/screens/services_categories_screen.dart';
+import '../../domain/entities/user_profile.dart';
+import '../../../../core/network/api_config.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -39,31 +30,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    loadProfile();
+    loadUserProfile();
   }
 
-  Future<void> loadProfile() async {
+  Future<void> loadUserProfile() async {
     try {
       final profile = await ref
           .read(settingsRepositoryProvider)
-          .getBusinessProfile();
+          .getUserProfile();
 
       if (!mounted) return;
-
-      ref.read(storeNameProvider.notifier).state = profile.storeName;
-      ref.read(taglineProvider.notifier).state = profile.tagline;
-      ref.read(logoPathProvider.notifier).state = profile.logoPath;
+      ref.read(profileNameProvider.notifier).state = profile.name;
+      ref.read(profileRoleProvider.notifier).state = profile.role;
+      ref.read(profilePictureProvider.notifier).state = profile.profilePicture;
     } catch (e) {
       debugPrint("Error loading profile: $e");
     }
   }
 
   void openEditDialog() {
-    final storeName = ref.read(storeNameProvider);
-    final tagline = ref.read(taglineProvider);
+    final storeName = ref.read(profileNameProvider);
+    final tagline = ref.read(profileRoleProvider);
     final nameCtrl = TextEditingController(text: storeName);
     final taglineCtrl = TextEditingController(text: tagline);
-    String? tempLogo = ref.read(logoPathProvider);
+    String? tempLogo = ref.read(profilePictureProvider);
 
     showDialog(
       context: context,
@@ -74,7 +64,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppSizes.radiusXl),
               ),
-              title: const Text("Edit Branding"),
+              title: const Text("Edit Profile"),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -99,29 +89,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           bottom: 0,
                           right: 0,
                           child: GestureDetector(
-                            onTap: () async {
-                              final picker = ImagePicker();
-                              final file = await picker.pickImage(
-                                source: ImageSource.gallery,
-                              );
+onTap: () async {
+  final picker = ImagePicker();
 
-                              if (file != null) {
-                                final timestamp =
-                                    DateTime.now().millisecondsSinceEpoch;
-                                final dir =
-                                    await getApplicationDocumentsDirectory();
-                                final newPath =
-                                    "${dir.path}/logo_$timestamp.png";
+  final file = await picker.pickImage(
+    source: ImageSource.gallery,
+  );
 
-                                final savedImage = await File(
-                                  file.path,
-                                ).copy(newPath);
+  if (file == null) return;
 
-                                setPopupState(() {
-                                  tempLogo = savedImage.path;
-                                });
-                              }
-                            },
+  setPopupState(() {
+    tempLogo = file.path;
+  });
+},
                             child: Container(
                               padding: const EdgeInsets.all(7),
                               decoration: const BoxDecoration(
@@ -129,7 +109,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(
-                                Icons.edit,
+                                Icons.camera_enhance_outlined,
                                 color: AppColors.textWhite,
                                 size: 18,
                               ),
@@ -142,7 +122,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     TextField(
                       controller: nameCtrl,
                       decoration: InputDecoration(
-                        labelText: "App Name",
+                        labelText: "Name",
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(
                             AppSizes.radiusLg,
@@ -154,7 +134,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     TextField(
                       controller: taglineCtrl,
                       decoration: InputDecoration(
-                        labelText: "Tagline",
+                        labelText: "Role",
+                        enabled: false,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(
                             AppSizes.radiusLg,
@@ -172,42 +153,96 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   },
                   child: const Text("Cancel"),
                 ),
-                ElevatedButton(
-                  onPressed: () async {
-                    try {
-                      await ref
-                          .read(settingsRepositoryProvider)
-                          .saveProfile(
-                            BusinessProfile(
-                              storeName: nameCtrl.text.trim(),
-                              tagline: taglineCtrl.text.trim(),
-                              logoPath: tempLogo ?? "",
-                            ),
-                          );
+ElevatedButton(
+  onPressed: () async {
+    try {
+      String? serverProfilePicture;
 
-                      if (!context.mounted) return;
-                      Navigator.pop(context);
+      // --------------------------------------------------
+      // 1. Upload newly selected profile picture
+      // --------------------------------------------------
 
-                      await loadProfile();
+      if (tempLogo != null &&
+          tempLogo!.trim().isNotEmpty) {
+        final localFile = File(tempLogo!);
 
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(this.context).showSnackBar(
-                        const SnackBar(
-                          content: Text("Profile Saved Successfully"),
-                        ),
-                      );
-                    } catch (e) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(this.context).showSnackBar(
-                        SnackBar(
-                          content: Text("Failed to save: $e"),
-                          backgroundColor: AppColors.red,
-                        ),
-                      );
-                    }
-                  },
-                  child: const Text("Save"),
-                ),
+        if (await localFile.exists()) {
+          serverProfilePicture = await ref
+              .read(
+                settingsControllerProvider.notifier,
+              )
+              .uploadProfilePicture(localFile);
+        } else {
+          // Existing server image path.
+          serverProfilePicture = tempLogo;
+        }
+      }
+
+      // --------------------------------------------------
+      // 2. Keep existing server picture if no new image
+      // --------------------------------------------------
+
+      final profilePicture =
+          serverProfilePicture ??
+          ref.read(profilePictureProvider) ??
+          "";
+
+      // --------------------------------------------------
+      // 3. Save profile name + role
+      // --------------------------------------------------
+
+      await ref
+          .read(
+            settingsControllerProvider.notifier,
+          )
+          .saveUserProfile(
+            UserProfile(
+              id: 1,
+              name: nameCtrl.text.trim(),
+              role: taglineCtrl.text.trim(),
+              profilePicture: profilePicture,
+            ),
+          );
+
+      // --------------------------------------------------
+      // 4. Close dialog
+      // --------------------------------------------------
+
+      if (!context.mounted) return;
+
+      Navigator.pop(context);
+
+      // --------------------------------------------------
+      // 5. Reload from server
+      // --------------------------------------------------
+
+      await loadUserProfile();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(this.context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Profile Saved Successfully",
+          ),
+        ),
+      );
+
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(this.context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Failed to save: $e",
+          ),
+          backgroundColor: AppColors.red,
+        ),
+      );
+    }
+  },
+  child: const Text("Save"),
+),
               ],
             );
           },
@@ -247,11 +282,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
   }
 
-  // ── Samsung-style profile header (top card) ──
   Widget profileHeader() {
-    final storeName = ref.watch(storeNameProvider);
-    final tagline = ref.watch(taglineProvider);
-    final logoPath = ref.watch(logoPathProvider);
+    final storeName = ref.watch(profileNameProvider);
+    final tagline = ref.watch(profileRoleProvider);
+    final logoPath = ref.watch(profilePictureProvider);
 
     return _groupCard(
       child: InkWell(
@@ -266,7 +300,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      storeName.isEmpty ? "Your Store Name" : storeName,
+                      storeName.isEmpty ? "Your Name" : storeName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.cardValue.copyWith(
@@ -276,18 +310,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Container(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      decoration: const BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(color: AppColors.border, width: 1),
-                        ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        tagline.isEmpty ? "Tap to edit branding" : tagline,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        tagline.isEmpty ? "Administrator" : tagline,
                         style: AppTextStyles.small.copyWith(
                           color: AppColors.primary,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
@@ -303,7 +338,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     backgroundImage: _logoImageProvider(logoPath),
                     child: (logoPath == null || logoPath.isEmpty)
                         ? const Icon(
-                            Icons.store,
+                            Icons.person,
                             size: 26,
                             color: AppColors.primary,
                           )
@@ -320,7 +355,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         border: Border.all(color: AppColors.card, width: 2),
                       ),
                       child: const Icon(
-                        Icons.edit,
+                        Icons.camera_enhance_outlined,
                         color: AppColors.textWhite,
                         size: 12,
                       ),
@@ -335,7 +370,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // ── Samsung-style grouped card wrapper ──
   Widget _groupCard({required Widget child}) {
     return Container(
       width: double.infinity,
@@ -350,9 +384,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // ── Samsung-style group: tiles + a divider inset evenly on BOTH sides ──
-  // (matches the reference — the line doesn't start after the icon,
-  // it sits centered inside the card's horizontal padding)
   Widget _group(List<Widget> tiles) {
     final children = <Widget>[];
     for (var i = 0; i < tiles.length; i++) {
@@ -415,7 +446,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         builder: (context) => const BusinessProfileScreen(),
                       ),
                     );
-                    loadProfile();
+                    loadUserProfile();
                   },
                 ),
                 _tile(
@@ -463,19 +494,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     );
                   },
                 ),
-              ]),
-
-              _group([
                 _tile(
-                  Icons.people,
-                  "User Roles & Permissions",
-                  "Manage staff and access",
-                  iconBg: AppColors.primaryHover,
+                  Icons.miscellaneous_services,
+                  "Service Management",
+                  "Categories, services, questions",
+                  iconBg: AppColors.primary,
                   onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const UserRolesScreen(),
+                        builder: (context) => const ServicesCategoriesScreen(),
                       ),
                     );
                   },
@@ -506,7 +534,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const NotificationsScreen(),
+                        builder: (context) =>
+                            const NotificationSettingsScreen(),
                       ),
                     );
                   },
@@ -515,7 +544,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
               const SizedBox(height: AppSpacing.xl),
 
-              // ── Logout pinned at the bottom of the list ──
               _group([
                 _tile(
                   Icons.logout,
@@ -535,7 +563,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // ── Samsung-style tile: solid colored circle + white icon, flat row ──
   Widget _tile(
     IconData icon,
     String title,
@@ -594,13 +621,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   ImageProvider? _logoImageProvider(String? logoPath) {
-    if (logoPath == null || logoPath.isEmpty) return null;
+    if (logoPath == null || logoPath.trim().isEmpty) {
+      return null;
+    }
 
-    final uri = Uri.tryParse(logoPath);
-    if (uri != null && uri.hasScheme && uri.scheme.startsWith('http')) {
+    if (logoPath.startsWith("http")) {
       return NetworkImage(logoPath);
     }
 
-    return FileImage(File(logoPath));
+    if (logoPath.startsWith("uploads/")) {
+      return NetworkImage('${ApiConfig.baseUrl}/$logoPath');
+    }
+
+    if (File(logoPath).existsSync()) {
+      return FileImage(File(logoPath));
+    }
+
+    return null;
   }
 }

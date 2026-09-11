@@ -9,6 +9,8 @@ import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/utils/responsive_helper.dart';
 import '../providers/inventory_provider.dart';
+import '../../../../core/network/no_internet_screen.dart';
+import '../../../products/presentation/providers/product_provider.dart';
 import 'low_stock_screen.dart';
 import 'new_purchase_order_screen.dart';
 import 'receive_order_screen.dart';
@@ -31,6 +33,7 @@ class InventoryScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final inventoryAsync = ref.watch(inventoryProductsProvider);
     // ── 1. STOCK SECTION CARDS ───────────────────────────────
     final stockCards = <_InventoryCardData>[
       _InventoryCardData(
@@ -48,7 +51,6 @@ class InventoryScreen extends ConsumerWidget {
         subtitle: 'Add received stock',
         icon: Icons.arrow_downward_rounded,
         color: _Accent.green,
-
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const StockInScreen()),
@@ -94,7 +96,6 @@ class InventoryScreen extends ConsumerWidget {
         icon: Icons.local_shipping_rounded,
         color: _Accent.teal,
         onTap: () {
-          // 🔥 Simply navigate to the receive order screen – selection handled inside
           Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const ReceiveOrderScreen()),
@@ -103,87 +104,101 @@ class InventoryScreen extends ConsumerWidget {
       ),
     ];
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(R.sp(context, 48)),
-        child: AppBar(
-          backgroundColor: AppColors.background,
-          elevation: 0,
-          automaticallyImplyLeading: false,
-          titleSpacing: R.sp(context, AppSpacing.screenPadding),
-          title: Text('Inventory', style: AppTextStyles.heading),
+    return inventoryAsync.when(
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
+
+      error: (error, stack) => Scaffold(
+        body: NoInternetScreen(
+          onRetry: () {
+            ref.invalidate(inventoryProductsProvider);
+          },
         ),
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: R.sp(context, AppSpacing.screenPadding),
-            vertical: R.sp(context, AppSpacing.sm),
+
+      data: (_) => Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: PreferredSize(
+          preferredSize: Size.fromHeight(R.sp(context, 48)),
+          child: AppBar(
+            backgroundColor: AppColors.background,
+            elevation: 0,
+            automaticallyImplyLeading: false,
+            titleSpacing: R.sp(context, AppSpacing.screenPadding),
+            title: Text('Inventory', style: AppTextStyles.heading),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── HERO STAT CARD ──
-              const _InventoryHeroCard(),
-              SizedBox(height: R.sp(context, AppSpacing.md)),
+        ),
+        body: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: R.sp(context, AppSpacing.screenPadding),
+              vertical: R.sp(context, AppSpacing.sm),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── HERO STAT CARD ──
+                const _InventoryHeroCard(),
+                SizedBox(height: R.sp(context, AppSpacing.md)),
 
-              // ── STOCK SECTION ──
-              Text('Stock', style: AppTextStyles.sectionTitle),
-              SizedBox(height: R.sp(context, AppSpacing.md)),
-
-              // ── STOCK SECTION ──
-              // Removed Expanded(flex: 2) and used a hard limit on the Column container instead
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    height: R.sp(context, 100), // Fixed height for Row 1
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(child: _InventoryCard(data: stockCards[0])),
-                        SizedBox(width: R.sp(context, AppSpacing.sm)),
-                        Expanded(child: _InventoryCard(data: stockCards[1])),
-                      ],
-                    ),
+                // ── STOCK SECTION ──
+                Text('Stock', style: AppTextStyles.sectionTitle),
+                SizedBox(height: R.sp(context, AppSpacing.xs)),
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _InventoryCard(data: stockCards[0]),
+                            ),
+                            SizedBox(width: R.sp(context, AppSpacing.sm)),
+                            Expanded(
+                              child: _InventoryCard(data: stockCards[1]),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: R.sp(context, AppSpacing.sm)),
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _InventoryCard(data: stockCards[2]),
+                            ),
+                            SizedBox(width: R.sp(context, AppSpacing.sm)),
+                            Expanded(
+                              child: _InventoryCard(data: stockCards[3]),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  SizedBox(height: R.sp(context, AppSpacing.md)),
-                  SizedBox(
-                    height: R.sp(context, 100), // Fixed height for Row 2
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(child: _InventoryCard(data: stockCards[2])),
-                        SizedBox(width: R.sp(context, AppSpacing.sm)),
-                        Expanded(child: _InventoryCard(data: stockCards[3])),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: R.sp(context, AppSpacing.md)),
-
-              // ── PURCHASE SECTION ──
-              Text('Purchase', style: AppTextStyles.sectionTitle),
-              SizedBox(height: R.sp(context, AppSpacing.md)),
-              SizedBox(
-                height: R.sp(context, 100), // Fixed height for Purchase Row
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(child: _InventoryCard(data: purchaseCards[0])),
-                    SizedBox(width: R.sp(context, AppSpacing.sm)),
-                    Expanded(child: _InventoryCard(data: purchaseCards[1])),
-                  ],
                 ),
-              ),
+                SizedBox(height: R.sp(context, AppSpacing.md)),
 
-              SizedBox(height: R.sp(context, AppSpacing.xl)),
+                // ── PURCHASE SECTION ──
+                Text('Purchase', style: AppTextStyles.sectionTitle),
+                SizedBox(height: R.sp(context, AppSpacing.xs)),
+                Expanded(
+                  flex: 1,
+                  child: Row(
+                    children: [
+                      Expanded(child: _InventoryCard(data: purchaseCards[0])),
+                      SizedBox(width: R.sp(context, AppSpacing.sm)),
+                      Expanded(child: _InventoryCard(data: purchaseCards[1])),
+                    ],
+                  ),
+                ),
+                SizedBox(height: R.sp(context, AppSpacing.md)),
 
-              // ── PROMO BANNER ──
-              const _InventoryPromoBanner(),
-            ],
+                // ── PROMO BANNER ──
+                const _InventoryPromoBanner(),
+              ],
+            ),
           ),
         ),
       ),
@@ -248,7 +263,7 @@ class _InventoryCard extends StatelessWidget {
                 size: R.icon(context, 16),
               ),
             ),
-            SizedBox(width: R.sp(context, AppSpacing.md)),
+            SizedBox(width: R.sp(context, AppSpacing.xs)),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -296,124 +311,148 @@ class _InventoryCard extends StatelessWidget {
   }
 }
 
-class _InventoryHeroCard extends ConsumerWidget {
+class _InventoryHeroCard extends ConsumerStatefulWidget {
   const _InventoryHeroCard();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final summary = ref.watch(inventorySummaryProvider);
+  ConsumerState<_InventoryHeroCard> createState() => _InventoryHeroCardState();
+}
 
-    return summary.when(
-      data: (data) {
-        final totalItems = data.totalStockUnits;
-        final totalValue = data.inventoryValue;
+class _InventoryHeroCardState extends ConsumerState<_InventoryHeroCard> {
+  @override
+  void initState() {
+    super.initState();
+    // 🌐 Reads products from the same provider/state the Products screen
+    // uses, so "Total Products" here always matches the Products screen.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final state = ref.read(productListProvider);
+      if (state.items.isEmpty && !state.isInitialLoading) {
+        ref.read(productListProvider.notifier).loadProducts();
+      }
+    });
+  }
 
-        return Container(
-          padding: EdgeInsets.all(R.sp(context, AppSpacing.cardPadding)),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(
-              R.radius(context, AppSizes.cardRadius),
+  @override
+  Widget build(BuildContext context) {
+    final paginatedState = ref.watch(productListProvider);
+
+    if (paginatedState.isInitialLoading && paginatedState.items.isEmpty) {
+      return SizedBox(
+        height: R.sp(context, 68),
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (paginatedState.error != null && paginatedState.items.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final products = paginatedState.items;
+
+    // Total count of distinct products — same list the Products screen shows
+    final totalItems = products.length;
+
+    // Total purchase amount = sum of (quantity × purchase price) only
+    final totalValue = products.fold<double>(
+      0.0,
+      (sum, p) => sum + (p.quantity * p.purchasePrice),
+    );
+
+    return Container(
+      padding: EdgeInsets.all(R.sp(context, AppSpacing.cardPadding)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(
+          R.radius(context, AppSizes.cardRadius),
+        ),
+        border: Border.all(color: Colors.grey.shade300, width: 1.0),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: R.sp(context, 36),
+            height: R.sp(context, 36),
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              gradient: AppColors.brandGradient,
+              shape: BoxShape.circle,
             ),
-            border: Border.all(color: Colors.grey.shade300, width: 1.0),
+            child: Icon(
+              Icons.inventory_2_rounded,
+              color: Colors.white,
+              size: R.icon(context, 14),
+            ),
           ),
-          child: Row(
-            children: [
-              // ── TOTAL ITEMS ICON (LEFT) ──
-              Container(
-                width: R.sp(context, 36),
-                height: R.sp(context, 36),
-                alignment: Alignment.center,
-                decoration: const BoxDecoration(
-                  gradient: AppColors.brandGradient,
-                  shape: BoxShape.circle,
+          SizedBox(width: R.sp(context, AppSpacing.xs)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Total Products',
+                  style: AppTextStyles.small.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
-                child: Icon(
-                  Icons.inventory_2_rounded,
-                  color: Colors.white,
-                  size: R.icon(context, 14),
+                Text(
+                  '$totalItems',
+                  style: AppTextStyles.cardValue.copyWith(
+                    fontSize: R.fs(context, 20),
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-              SizedBox(width: R.sp(context, AppSpacing.md)),
-              // ── TOTAL ITEMS TEXT ──
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Total Items',
-                      style: AppTextStyles.small.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    Text(
-                      '$totalItems',
-                      style: AppTextStyles.cardValue.copyWith(
-                        fontSize: R.fs(context, 20),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // ── MIDDLE SEPARATOR ──
-              Container(
-                width: 1,
-                height: R.sp(context, 28),
-                color: AppColors.border,
-                margin: EdgeInsets.symmetric(
-                  horizontal: R.sp(context, AppSpacing.xs),
-                ),
-              ),
-
-              // ── TOTAL VALUE ICON (MOVED TO LEFT SIDE OF TEXT) ──
-              Container(
-                width: R.sp(context, 36),
-                height: R.sp(context, 36),
-                alignment: Alignment.center,
-                decoration: const BoxDecoration(
-                  gradient: AppColors.brandGradient,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.bar_chart_rounded,
-                  color: Colors.white,
-                  size: R.icon(context, 14),
-                ),
-              ),
-              SizedBox(width: R.sp(context, AppSpacing.md)),
-              // ── TOTAL VALUE TEXT ──
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Total Value',
-                      style: AppTextStyles.small.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    Text(
-                      '₹${_formatAmount(totalValue)}',
-                      style: AppTextStyles.cardValue.copyWith(
-                        fontSize: R.fs(context, 18),
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-        );
-      },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stackTrace) => const SizedBox.shrink(),
+          Container(
+            width: 1,
+            height: R.sp(context, 28),
+            color: AppColors.border,
+            margin: EdgeInsets.symmetric(
+              horizontal: R.sp(context, AppSpacing.xs),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Total Purchase',
+                  style: AppTextStyles.small.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                Text(
+                  '₹${_formatAmount(totalValue)}',
+                  style: AppTextStyles.cardValue.copyWith(
+                    fontSize: R.fs(context, 18),
+                    fontWeight: FontWeight.w700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          SizedBox(width: R.sp(context, AppSpacing.xs)),
+          Container(
+            width: R.sp(context, 36),
+            height: R.sp(context, 36),
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              gradient: AppColors.brandGradient,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.bar_chart_rounded,
+              color: Colors.white,
+              size: R.icon(context, 14),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -449,30 +488,27 @@ class _InventoryPromoBanner extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            width: R.sp(
-              context,
-              80,
-            ), // 👈 Increased further for a larger appearance
-            height: R.sp(
-              context,
-              80,
-            ), // 👈 Increased further for a larger appearance
+            width: R.sp(context, 48),
+            height: R.sp(context, 48),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(R.radius(context, 12)),
+              border: Border.all(color: Colors.grey.shade300, width: 1.0),
+            ),
+            clipBehavior: Clip.antiAlias,
             child: Image.asset(
               'assets/inventory.png',
-              fit: BoxFit.contain,
+              fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) {
                 return Icon(
                   Icons.inventory_rounded,
                   color: AppColors.primary,
-                  size: R.icon(
-                    context,
-                    36,
-                  ), // 👈 Fallback icon size increased to match
+                  size: R.icon(context, 20),
                 );
               },
             ),
           ),
-          SizedBox(width: R.sp(context, AppSpacing.md)),
+          SizedBox(width: R.sp(context, AppSpacing.sm)),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

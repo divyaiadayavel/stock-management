@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'dart:io';
 import '../../data/datasources/settings_remote_datasource.dart';
 import '../../data/repositories/settings_repository_impl.dart';
 import '../../domain/entities/business_profile.dart';
@@ -10,12 +10,21 @@ import '../../domain/usecases/add_staff_user.dart';
 import '../../domain/usecases/get_settings_bundle.dart';
 import '../../domain/usecases/save_profile.dart';
 import '../../domain/usecases/save_setting.dart';
+import '../../domain/entities/user_profile.dart';
 
 // ── Simple state providers ────────────────────────────────────────────────────
 
 final storeNameProvider = StateProvider<String>((ref) => '');
 final taglineProvider   = StateProvider<String>((ref) => '');
 final logoPathProvider  = StateProvider<String?>((ref) => null);
+final profileNameProvider =
+    StateProvider<String>((ref) => '');
+
+final profileRoleProvider =
+    StateProvider<String>((ref) => '');
+
+final profilePictureProvider =
+    StateProvider<String?>((ref) => null);
 
 // ── Infrastructure providers ──────────────────────────────────────────────────
 
@@ -72,6 +81,22 @@ class SettingsController extends AsyncNotifier<SettingsBundle> {
     return saved;
   }
 
+  Future<BusinessProfile> uploadBusinessLogo(File image) async {
+  final current = state.valueOrNull;
+
+  if (current == null) {
+    throw Exception("Business profile not loaded.");
+  }
+
+  final logoPath = await _repo.uploadBusinessLogo(image);
+
+  final updatedProfile = current.profile.copyWith(
+    logoPath: logoPath,
+  );
+
+  return saveProfile(updatedProfile);
+}
+
   Future<BusinessProfile> updateProfileField(String field, String value) async {
     final saved = await _repo.updateProfileField(field, value);
     _syncProfileProviders(saved);
@@ -101,6 +126,83 @@ class SettingsController extends AsyncNotifier<SettingsBundle> {
     if (current == null) return;
     state = AsyncData(update(current));
   }
+
+// Future<UserProfile> saveUserProfile(
+//     UserProfile profile) async {
+
+//   final saved =
+//       await _repo.saveUserProfile(profile);
+
+//   syncUserProfile(saved);
+
+//   return saved;
+// }
+
+// Future<UserProfile> uploadProfilePicture(
+//     File image) async {
+
+//   final currentName =
+//       ref.read(profileNameProvider);
+
+//   final currentRole =
+//       ref.read(profileRoleProvider);
+
+//   final path =
+//       await _repo.uploadProfilePicture(image);
+
+//   final saved =
+//       await saveUserProfile(
+//         UserProfile(
+//           id: 1,
+//           name: currentName,
+//           role: currentRole,
+//           profilePicture: path,
+//         ),
+//       );
+
+//   return saved;
+// }
+
+// void syncUserProfile(UserProfile profile) {
+//   ref.read(profileNameProvider.notifier).state =
+//       profile.name;
+
+//   ref.read(profileRoleProvider.notifier).state =
+//       profile.role;
+
+//   ref.read(profilePictureProvider.notifier).state =
+//       profile.profilePicture;
+// }
+Future<UserProfile> saveUserProfile(
+  UserProfile profile,
+) async {
+  final saved = await _repo.saveUserProfile(profile);
+
+  syncUserProfile(saved);
+
+  return saved;
+}
+
+Future<String> uploadProfilePicture(
+  File image,
+) async {
+  final path = await _repo.uploadProfilePicture(image);
+
+  ref.read(profilePictureProvider.notifier).state = path;
+
+  return path;
+}
+
+void syncUserProfile(UserProfile profile) {
+  ref.read(profileNameProvider.notifier).state =
+      profile.name;
+
+  ref.read(profileRoleProvider.notifier).state =
+      profile.role;
+
+  ref.read(profilePictureProvider.notifier).state =
+      profile.profilePicture;
+}
 }
 
 // ── Staff controller (separate — hits api/staff/ endpoints) ──────────────────

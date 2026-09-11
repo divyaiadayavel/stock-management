@@ -17,12 +17,26 @@ class ForgotPasswordScreen extends ConsumerStatefulWidget {
 class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   final formKey = GlobalKey<FormState>();
   final emailController = TextEditingController();
+  final emailFocus = FocusNode();
 
   bool isLoading = false;
+  bool validateEmailNow = false;
+
+  @override
+  void initState() {
+    super.initState();
+    emailFocus.addListener(() {
+      if (!emailFocus.hasFocus) {
+        setState(() => validateEmailNow = true);
+        formKey.currentState?.validate();
+      }
+    });
+  }
 
   @override
   void dispose() {
     emailController.dispose();
+    emailFocus.dispose();
     super.dispose();
   }
 
@@ -78,12 +92,22 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: AppColors.primary, width: 1.4),
+        borderSide: const BorderSide(color: AppColors.cyanDim, width: 1.4),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Colors.red),
+        borderSide: const BorderSide(color: AppColors.red, width: 1.4),
       ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: AppColors.red, width: 1.4),
+      ),
+      errorStyle: const TextStyle(
+        color: AppColors.red,
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+      ),
+      errorMaxLines: 2,
     );
   }
 
@@ -144,8 +168,12 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
 
                 TextFormField(
                   controller: emailController,
+                  focusNode: emailFocus,
                   keyboardType: TextInputType.emailAddress,
                   style: const TextStyle(color: Colors.black),
+                  autovalidateMode: validateEmailNow
+                      ? AutovalidateMode.always
+                      : AutovalidateMode.disabled,
                   validator: (value) => Validators.validateEmail(value ?? ''),
                   decoration: fieldDecoration(
                     hint: "Enter your email",
@@ -158,31 +186,41 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                 SizedBox(
                   width: double.infinity,
                   height: 54,
-                  child: ElevatedButton(
-                    onPressed: isLoading ? null : sendOtp,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: AppColors.brandGradient,
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    child: isLoading
-                        ? const SizedBox(
-                            height: 22,
-                            width: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
+                    child: ElevatedButton(
+                      onPressed: isLoading ? null : sendOtp,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        foregroundColor: Colors.white,
+                        shadowColor: Colors.transparent,
+                        surfaceTintColor: Colors.transparent,
+                        disabledBackgroundColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: isLoading
+                          ? const SizedBox(
+                              height: 22,
+                              width: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text(
+                              "Send OTP",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                              ),
                             ),
-                          )
-                        : const Text(
-                            "Send OTP",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
+                    ),
                   ),
                 ),
               ],

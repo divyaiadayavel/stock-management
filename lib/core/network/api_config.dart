@@ -5,17 +5,47 @@ class ApiConfig {
   ApiConfig._();
 
   static const String baseUrl =
-      'https://nonredemptive-gyrational-pauletta.ngrok-free.dev/public_html';
+      'https://catalystack.com/catalystockdev/public_html';
 
   // ── Auth ──────────────────────────────────────────────────
   static const String staffLogin = '$baseUrl/api/auth/staff_login.php';
+
+  static const String validateSession =
+      '$baseUrl/api/auth/validate_session.php';
+
+  static const String staffLogout = '$baseUrl/api/auth/staff_logout.php';
+
   static const String sendOtp = '$baseUrl/api/auth/send_otp.php';
+
   static const String verifyOtp = '$baseUrl/api/auth/verify_otp.php';
+
   static const String resetPassword = '$baseUrl/api/auth/reset_password.php';
 
   // ── Settings ──────────────────────────────────────────────
   static const String getSettings = '$baseUrl/api/settings/get_settings.php';
   static const String saveSettings = '$baseUrl/api/settings/save_settings.php';
+  static const String uploadBusinessLogo =
+      '$baseUrl/api/settings/upload_logo.php';
+
+  // ── User Profile ─────────────────────────────────────────
+  static const String getUserProfile =
+      '$baseUrl/api/settings/users_profile/get_user_profile.php';
+
+  static const String saveUserProfile =
+      '$baseUrl/api/settings/users_profile/save_user_profile.php';
+
+  static const String uploadProfilePicture =
+      '$baseUrl/api/settings/users_profile/upload_profile_picture.php';
+
+  // ==========================================================
+  // Settings - Customize
+  // ==========================================================
+
+  static const String productCategories =
+      '$baseUrl/api/settings/categories_units/categories.php';
+
+  static const String productUnits =
+      '$baseUrl/api/settings/categories_units/units.php';
 
   // ── Staff ─────────────────────────────────────────────────
   static const String getStaff = '$baseUrl/api/staff/get_staff.php';
@@ -48,6 +78,7 @@ class ApiConfig {
   // ── Sales & Invoices ──────────────────────────────────────
   static const String createSale = '$baseUrl/api/sales/create_sale.php';
   static const String getInvoice = '$baseUrl/api/sales/get_invoice.php';
+  static const String addPayment = '$baseUrl/api/sales/add_payment.php';
 
   // ── Inventory & Purchase Management Routes ────────────────
   static const String inventory = '$baseUrl/api/inventory/inventory.php';
@@ -61,18 +92,7 @@ class ApiConfig {
   static const String dashboard = '$baseUrl/api/dashboard/dashboard.php';
 
   // ── Backup ──────────────────────────────────────────────────
-  static const String getBackupStatus =
-      '$baseUrl/api/backup/backup.php?action=status';
-  static const String createBackup =
-      '$baseUrl/api/backup/backup.php?action=create';
-  static const String completeBackup =
-      '$baseUrl/api/backup/backup.php?action=complete';
-  static const String getBackupHistory =
-      '$baseUrl/api/backup/backup.php?action=history';
-  static const String restoreBackup =
-      '$baseUrl/api/backup/backup.php?action=restore';
-  static const String saveBackupSettings =
-      '$baseUrl/api/backup/backup.php?action=saveSettings';
+  static const String backup = '$baseUrl/api/backup/backup.php';
 
   // ── Printers & Hardware ───────────────────────────────────
   static const String getSavedPrinters =
@@ -92,8 +112,52 @@ class ApiConfig {
   static const String getPrintedBills =
       '$baseUrl/api/settings/printers_hardware/get_printed_bills.php';
 
+  // ── Notifications ─────────────────────────────────────────
+  static const String saveFcmToken =
+      '$baseUrl/api/notifications/user/save_token.php';
+  static const String getUserNotifications =
+      '$baseUrl/api/notifications/user/get_user_notifications.php';
+  static const String markNotificationRead =
+      '$baseUrl/api/notifications/user/mark_read.php';
+  static const String checkLowStock =
+      '$baseUrl/api/notifications/stocks_notifications/check_low_stock.php';
+  static const String sendTestNotification =
+      '$baseUrl/api/notifications/dev/send_test_notification.php';
+  // Notification Endpoints
+  static const String triggerStockStatus =
+      "$baseUrl/api/notifications/stocks_notifications/stock_status_trigger.php";
+
+  // ==========================================================
+  // Service Management (Admin) — Settings > Service Management
+  // ==========================================================
+  static const String getServiceCategories =
+      '$baseUrl/api/services/admin/categories.php';
+  static const String saveServiceCategory =
+      '$baseUrl/api/services/admin/categories.php';
+  static const String deleteServiceCategory =
+      '$baseUrl/api/services/admin/categories.php';
+
+  static const String getServices = '$baseUrl/api/services/admin/services.php';
+  static const String getServiceDetail =
+      '$baseUrl/api/services/admin/services.php';
+  static const String saveService = '$baseUrl/api/services/admin/services.php';
+  static const String deleteService =
+      '$baseUrl/api/services/admin/services.php';
+
+  // ==========================================================
+  // Services (User side) — submitting a filled service form
+  // ==========================================================
+  static const String submitServiceRequest =
+      '$baseUrl/api/services/user/service_requests.php';
+  static const String getServiceRequests =
+      '$baseUrl/api/services/user/service_requests.php';
+  static String get uploadServiceRequestFile =>
+      '$baseUrl/api/services/user/upload_answer_file.php';
+
+  // ── Expenses ───────────────────────────────────────────────
+  static const String expenses = '$baseUrl/api/expenses/expense.php';
+
   static const Map<String, String> jsonHeaders = {
     'Content-Type': 'application/json',
-    'ngrok-skip-browser-warning': 'true',
   };
 }

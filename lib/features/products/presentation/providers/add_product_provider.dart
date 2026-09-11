@@ -1,20 +1,20 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:io';
-import '../../data/datasources/product_remote_datasource.dart';
-import '../providers/product_provider.dart'; // <-- ADD THIS to get productRemoteSourceProvider
+import '../../../settings/presentation/providers/settings_provider.dart';
 
 // ─── Categories & Units (fetched from API) ──────────────────
-final categoriesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  final remoteSource = ref.read(productRemoteSourceProvider);
-  return await remoteSource.getCategories();
+// Removed .autoDispose to prevent unexpected disposal during step navigation
+final categoriesProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  return ref.read(settingsRepositoryProvider).getCategories();
 });
 
-final unitsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  final remoteSource = ref.read(productRemoteSourceProvider);
-  return await remoteSource.getUnits();
+final unitsProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  return ref.read(settingsRepositoryProvider).getUnits();
 });
-final selectedSupplierIdProvider =
-    StateProvider<int?>((ref) => null);
+
+final selectedSupplierIdProvider = StateProvider<int?>((ref) => null);
 
 // ─── Selected IDs ────────────────────────────────────────────
 final selectedCategoryIdProvider = StateProvider<int?>((ref) => null);

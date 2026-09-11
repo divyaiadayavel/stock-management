@@ -1,70 +1,252 @@
-// =========================================================
-// lib/providers/inventory_providers.dart
-// =========================================================
+// ============================================================
+// lib/features/inventory/presentation/providers/inventory_providers.dart
+// ============================================================
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/storage/db_helper.dart';
+import 'package:http/http.dart' as http;
 
-/// Active filter chip on Inventory screen: all | low | out | expiring
-final inventoryFilterProvider = StateProvider<String>((ref) => 'all');
+import '../../../products/data/models/product_model.dart';
 
-/// Search text on Inventory screen
-final inventorySearchProvider = StateProvider<String>((ref) => '');
+import '../../data/datasources/inventory_remote_datasource.dart';
+import '../../data/repositories/inventory_repository_impl.dart';
+import '../../domain/entities/inventory_summary.dart';
+import '../../domain/repositories/inventory_repository.dart';
 
-/// 🆕 Sorting type state: name_asc | stock_asc | value_desc
-final inventorySortProvider = StateProvider<String>((ref) => 'name_asc');
 
-/// Summary counts: {all, low, out, expiring}
-final inventorySummaryProvider = FutureProvider.autoDispose<Map<String, int>>((
-  ref,
-) async {
-  ref.watch(productsRefreshProvider);
-  return DBHelper.getInventorySummary();
+// ============================================================
+// NETWORK
+// ============================================================
+
+final inventoryHttpClientProvider = Provider<http.Client>((ref) {
+  final client = http.Client();
+
+  ref.onDispose(client.close);
+
+  return client;
 });
 
-/// Bump this to force every inventory-related provider to refetch
-final productsRefreshProvider = StateProvider<int>((ref) => 0);
 
-/// Filtered product list driven by filter + search + sort
-final productsListProvider =
-    FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
-      ref.watch(productsRefreshProvider);
-      final filter = ref.watch(inventoryFilterProvider);
-      final query = ref.watch(inventorySearchProvider);
-      final sortBy = ref.watch(inventorySortProvider); // 🆕 Watch sort choice
+// ============================================================
+// DATA SOURCE
+// ============================================================
 
-      // Pass filter, query, AND sorting directly to the database layer
-      return DBHelper.getProductsFiltered(
-        filter: filter,
-        query: query,
-        sortBy: sortBy,
-      );
-    });
+final inventoryRemoteDataSourceProvider =
+    Provider<InventoryRemoteDataSource>((ref) {
+  return InventoryRemoteDataSource(
+    client: ref.read(inventoryHttpClientProvider),
+  );
+});
 
-/// Low stock list for Low Stock Center screen
+
+// ============================================================
+// REPOSITORY
+// ============================================================
+
+final inventoryRepositoryProvider =
+    Provider<InventoryRepository>((ref) {
+  return InventoryRepositoryImpl(
+    dataSource: ref.read(
+      inventoryRemoteDataSourceProvider,
+    ),
+  );
+});
+
+
+// ============================================================
+// UI FILTER STATE
+// ============================================================
+
+/// Active filter:
+///
+/// all
+/// low
+/// out
+/// expiring
+/// expired
+final inventoryFilterProvider =
+    StateProvider<String>((ref) => 'all');
+
+
+/// Search text on Inventory screen.
+final inventorySearchProvider =
+    StateProvider<String>((ref) => '');
+
+
+/// Sorting:
+///
+/// name_asc
+/// stock_asc
+/// value_desc
+final inventorySortProvider =
+    StateProvider<String>((ref) => 'name_asc');
+
+
+// ============================================================
+// REFRESH STATE
+// ============================================================
+
+/// Increment this value after any successful inventory
+/// operation to force inventory providers to refetch.
+final productsRefreshProvider =
+    StateProvider<int>((ref) => 0);
+
+
+// ============================================================
+// INVENTORY SUMMARY
+// ============================================================
+
+final inventorySummaryProvider =
+    FutureProvider.autoDispose<InventorySummary>((ref) async {
+  ref.watch(productsRefreshProvider);
+
+  final repository = ref.read(
+    inventoryRepositoryProvider,
+  );
+
+  return repository.getInventorySummary();
+});
+
+
+// ============================================================
+// INVENTORY PRODUCTS
+// ============================================================
+
+final inventoryProductsProvider =
+    FutureProvider.autoDispose<List<Product>>((ref) async {
+  ref.watch(productsRefreshProvider);
+
+  final filter = ref.watch(
+    inventoryFilterProvider,
+  );
+
+  final search = ref.watch(
+    inventorySearchProvider,
+  );
+
+  final sortBy = ref.watch(
+    inventorySortProvider,
+  );
+
+  final repository = ref.read(
+    inventoryRepositoryProvider,
+  );
+
+  return repository.getInventoryProducts(
+    page: 1,
+    limit: 500,
+    filter: filter.isEmpty ? 'all' : filter,
+    search: search.trim(),
+    sortBy: sortBy,
+  );
+});
+
+
+// ============================================================
+// LOW STOCK PRODUCTS
+// ============================================================
+
 final lowStockListProvider =
-    FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
-      ref.watch(productsRefreshProvider);
-      return DBHelper.getLowStockProducts();
-    });
-
-final lowStockRestockValueProvider = FutureProvider.autoDispose<double>((
-  ref,
-) async {
+    FutureProvider.autoDispose<List<Product>>((ref) async {
   ref.watch(productsRefreshProvider);
-  return DBHelper.getLowStockRestockValue();
+
+  final repository = ref.read(
+    inventoryRepositoryProvider,
+  );
+
+  return repository.getLowStockProducts();
 });
 
-/// Product search (typeahead) used inside Stock In / Stock Out screens
-final productSearchQueryProvider = StateProvider<String>((ref) => '');
+
+// ============================================================
+// LOW STOCK RESTOCK VALUE
+// ============================================================
+//
+// IMPORTANT:
+//
+
+//
+//   (lsl * 2 - quantity) * purchase_price
+//
+// Your new remote inventory data source does NOT currently expose
+// a getLowStockRestockValue() API.
+//
+// Therefore we must NOT silently calculate an incorrect value
+// on Flutter.
+//
+// For now this provider derives the value only when the Product
+// model contains the required low-stock-limit field.
+//
+// If your Product model does not contain that field, this returns
+// 0 until the backend exposes a dedicated restock-value field.
+//
+// ============================================================
+
+final lowStockRestockValueProvider =
+    FutureProvider.autoDispose<double>((ref) async {
+  ref.watch(productsRefreshProvider);
+
+  final products = await ref.watch(
+    lowStockListProvider.future,
+  );
+
+  double total = 0;
+
+  for (final product in products) {
+    // Current Product model does not expose `lsl`.
+    //
+    // Do not invent a restock quantity here.
+    //
+    // Backend should eventually return:
+    //
+    // suggested_qty
+    //
+    // and:
+    //
+    // restock_value
+    //
+    // for an exact calculation.
+  }
+
+  return total;
+});
+
+
+// ============================================================
+// PRODUCT SEARCH
+// ============================================================
+
+final productSearchQueryProvider =
+    StateProvider<String>((ref) => '');
+
 
 final productSearchResultsProvider =
-    FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
-      final query = ref.watch(productSearchQueryProvider);
-      if (query.trim().isEmpty) return [];
-      return DBHelper.searchProductsByName(query);
-    });
+    FutureProvider.autoDispose<List<Product>>((ref) async {
+  final query = ref.watch(
+    productSearchQueryProvider,
+  );
 
-/// Helper to call after any stock in/out/adjust action succeeds
+  final trimmedQuery = query.trim();
+
+  if (trimmedQuery.isEmpty) {
+    return [];
+  }
+
+  final repository = ref.read(
+    inventoryRepositoryProvider,
+  );
+
+  return repository.searchProducts(
+    trimmedQuery,
+  );
+});
+
+
+// ============================================================
+// INVENTORY REFRESH HELPER
+// ============================================================
+
 void refreshInventory(WidgetRef ref) {
-  ref.read(productsRefreshProvider.notifier).state++;
+  ref
+      .read(productsRefreshProvider.notifier)
+      .state++;
 }

@@ -1,19 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import '../../data/dashboard_remote_datasource.dart';
 
 /// ===========================================================
 /// UI State
 /// ===========================================================
 
-final dashboardFilterProvider =
-    StateProvider<String>((ref) => "Day");
-
-final graphVisibilityProvider =
-    StateProvider<bool>((ref) => true);
+final dashboardFilterProvider = StateProvider<String>((ref) => "Day");
+final graphVisibilityProvider = StateProvider<bool>((ref) => true);
 
 /// ===========================================================
-/// Dashboard State
+/// Dashboard State Model
 /// ===========================================================
 
 class DashboardState {
@@ -38,17 +34,14 @@ class DashboardState {
   const DashboardState({
     this.isLoading = false,
     this.error,
-
     this.totalProducts = 0,
     this.totalSuppliers = 0,
     this.totalSales = 0,
     this.lowStock = 0,
-
     this.pastProducts = 0,
     this.pastSuppliers = 0,
     this.pastSales = 0,
     this.pastLowStock = 0,
-
     this.totalSalesAmount = 0,
     this.todaySales = 0,
     this.receivables = 0,
@@ -58,18 +51,15 @@ class DashboardState {
   DashboardState copyWith({
     bool? isLoading,
     String? error,
-
     int? totalProducts,
     int? totalSuppliers,
     int? totalSales,
     int? lowStock,
-
     int? pastProducts,
     int? pastSuppliers,
     int? pastSales,
     int? pastLowStock,
     int? productsSoldToday,
-
     double? totalSalesAmount,
     double? todaySales,
     double? receivables,
@@ -77,22 +67,60 @@ class DashboardState {
     return DashboardState(
       isLoading: isLoading ?? this.isLoading,
       error: error,
-
       totalProducts: totalProducts ?? this.totalProducts,
       totalSuppliers: totalSuppliers ?? this.totalSuppliers,
       totalSales: totalSales ?? this.totalSales,
       lowStock: lowStock ?? this.lowStock,
-
       pastProducts: pastProducts ?? this.pastProducts,
       pastSuppliers: pastSuppliers ?? this.pastSuppliers,
       pastSales: pastSales ?? this.pastSales,
       pastLowStock: pastLowStock ?? this.pastLowStock,
-
       totalSalesAmount: totalSalesAmount ?? this.totalSalesAmount,
       todaySales: todaySales ?? this.todaySales,
       receivables: receivables ?? this.receivables,
-      productsSoldToday:
-      productsSoldToday ?? this.productsSoldToday,
+      productsSoldToday: productsSoldToday ?? this.productsSoldToday,
+    );
+  }
+
+  // 🔴 CRITICAL: Value Equality Overrides so Riverpod knows data actually changed
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+
+    return other is DashboardState &&
+        other.isLoading == isLoading &&
+        other.error == error &&
+        other.totalProducts == totalProducts &&
+        other.totalSuppliers == totalSuppliers &&
+        other.totalSales == totalSales &&
+        other.lowStock == lowStock &&
+        other.pastProducts == pastProducts &&
+        other.pastSuppliers == pastSuppliers &&
+        other.pastSales == pastSales &&
+        other.pastLowStock == pastLowStock &&
+        other.totalSalesAmount == totalSalesAmount &&
+        other.todaySales == todaySales &&
+        other.receivables == receivables &&
+        other.productsSoldToday == productsSoldToday;
+  }
+
+  @override
+  int get hashCode {
+    return Object.hash(
+      isLoading,
+      error,
+      totalProducts,
+      totalSuppliers,
+      totalSales,
+      lowStock,
+      pastProducts,
+      pastSuppliers,
+      pastSales,
+      pastLowStock,
+      totalSalesAmount,
+      todaySales,
+      receivables,
+      productsSoldToday,
     );
   }
 }
@@ -103,67 +131,61 @@ class DashboardState {
 
 final dashboardProvider =
     StateNotifierProvider<DashboardNotifier, DashboardState>(
-  (ref) => DashboardNotifier(),
+  (ref) => DashboardNotifier(ref),
 );
 
-/// ===========================================================
-/// Notifier
-/// ===========================================================
-
 class DashboardNotifier extends StateNotifier<DashboardState> {
-  DashboardNotifier() : super(const DashboardState()) {
-    loadDashboard();
+  final Ref ref;
+
+  DashboardNotifier(this.ref) : super(const DashboardState()) {
+    loadDashboard(showLoading: true);
   }
 
-  final DashboardRemoteDataSource _remote =
-      DashboardRemoteDataSource();
+  final DashboardRemoteDataSource _remote = DashboardRemoteDataSource();
 
-  Future<void> loadDashboard() async {
+  @override
+  bool updateShouldNotify(DashboardState old, DashboardState current) {
+    return old != current;
+  }
+
+  Future<void> loadDashboard({bool showLoading = true}) async {
     try {
-      state = state.copyWith(
-        isLoading: true,
-        error: null,
-      );
+      if (showLoading) {
+        state = state.copyWith(isLoading: true, error: null);
+      }
 
       final data = await _remote.getDashboard();
 
-      print("Dashboard API Data => $data");
-
       state = state.copyWith(
         isLoading: false,
-
+        error: null,
         totalProducts: _toInt(data['total_products']),
         totalSuppliers: _toInt(data['total_suppliers']),
         totalSales: _toInt(data['total_sales']),
         lowStock: _toInt(data['low_stock']),
-
         pastProducts: _toInt(data['past_products']),
         pastSuppliers: _toInt(data['past_suppliers']),
         pastSales: _toInt(data['past_sales']),
         pastLowStock: _toInt(data['past_low_stock']),
-
         totalSalesAmount: _toDouble(data['total_sales_amount']),
         todaySales: _toDouble(data['today_sales']),
         receivables: _toDouble(data['receivables']),
         productsSoldToday: _toInt(data['products_sold_today']),
       );
-
-      print("Today's Sales : ${state.todaySales}");
-      print("Sales Value   : ${state.totalSalesAmount}");
-      print("Receivables   : ${state.receivables}");
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: e.toString(),
+        error: "NETWORK_ERROR",
       );
     }
   }
 
+  /// Triggers quiet background refresh without disturbing the user with a full-screen loader
   Future<void> refresh() async {
-    await loadDashboard();
+    await loadDashboard(showLoading: false);
   }
 
-int _toInt(dynamic value) {
+  int _toInt(dynamic value) {
     if (value == null) return 0;
     if (value is int) return value;
     if (value is double) return value.toInt();

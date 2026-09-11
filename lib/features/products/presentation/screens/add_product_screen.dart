@@ -1,14 +1,20 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'barcode_scanner_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/network/api_config.dart';
 import '../../../suppliers/presentation/screens/add_supplier_screen.dart';
 import '../providers/add_product_provider.dart';
 import '../../../../core/utils/responsive_helper.dart';
 import '../../data/models/product_model.dart';
 import '../providers/product_provider.dart';
+import '../../../../core/utils/validators.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class AddProductScreen extends ConsumerStatefulWidget {
   final Product? product;
@@ -46,50 +52,84 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   double? _originalSellingPrice;
   int _originalQuantity = 0;
   bool _isSaving = false;
+  bool _isInitializing = true;
 
   // ─── Dirty tracking ────────────────────────────────────────
   bool _hasChanges = false;
+  bool _barcodeDuplicate = false;
+  bool _imageRemoved = false;
 
-  // ─── Helper to set default category/unit when data loads ──
-  void _setDefaultSelection() {
-    final categories = ref.read(categoriesProvider).value;
-    final units = ref.read(unitsProvider).value;
+  // ─── Duplicate Barcode Check ────────────────────────────────
+  bool _checkDuplicateBarcode(String barcode) {
+    if (barcode.trim().isEmpty) return false;
 
-    if (categories != null && categories.isNotEmpty) {
-      final currentCategoryId = ref.read(selectedCategoryIdProvider);
-      if (currentCategoryId == null) {
-        final firstId = categories.first['id'] as int;
-        ref.read(selectedCategoryIdProvider.notifier).state = firstId;
-        ref.read(selectedCategoryProvider.notifier).state =
-            categories.first['category_name'] ?? 'General';
+    final allProducts = ref.read(productListProvider).items;
+
+    for (var p in allProducts) {
+      if (p.barcode.trim() == barcode.trim()) {
+        if (widget.product != null && widget.product!.id == p.id) {
+          continue;
+        }
+        return true;
       }
     }
+    return false;
+  }
 
-    if (units != null && units.isNotEmpty) {
-      final currentUnitId = ref.read(selectedUnitIdProvider);
-      if (currentUnitId == null) {
-        final firstId = units.first['id'] as int;
-        ref.read(selectedUnitIdProvider.notifier).state = firstId;
-        unitController.text = units.first['unit_name'] ?? 'piece';
-      }
-    }
+  // ─── FIX: Expiry Date Format Helpers ───────────────────────
+  String _serverDateToDisplay(String serverDate) {
+    final trimmed = serverDate.trim();
+    if (trimmed.isEmpty) return '';
+
+    final parts = trimmed.split('-');
+    if (parts.length != 3) return trimmed;
+
+    final year = parts[0];
+    final month = parts[1];
+    final day = parts[2];
+    return '$day/$month/$year';
+  }
+
+  String _displayDateToServer(String displayDate) {
+    final trimmed = displayDate.trim();
+    if (trimmed.isEmpty) return '';
+
+    final parts = trimmed.split('/');
+    if (parts.length != 3) return trimmed;
+
+    final day = parts[0].padLeft(2, '0');
+    final month = parts[1].padLeft(2, '0');
+    final year = parts[2];
+    return '$year-$month-$day';
   }
 
   @override
   void initState() {
     super.initState();
 
-    // Listen to all controllers to mark changes
+    // NOTE: We intentionally do NOT invalidate productListProvider here.
+    // Invalidating it reset the shared product list to empty as soon as
+    // this screen opened, and nothing re-triggered loadProducts() on the
+    // fresh provider instance. That meant ProductScreen showed an empty
+    // list whenever you returned from here without result == true (e.g.
+    // scanning a barcode, removing the image, or just going back).
+    // The duplicate-barcode check below reads the already-loaded product
+    // list via ref.read(productListProvider), which is enough — it
+    // doesn't need a forced refetch.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.invalidate(categoriesProvider);
+      ref.invalidate(unitsProvider);
+    });
+
     _addListeners();
 
     purchaseController.addListener(calculateProfit);
     sellingController.addListener(calculateProfit);
 
     if (widget.product != null) {
-      // Populate fields
       nameController.text = widget.product!.name;
       productcodeController.text = widget.product!.barcode;
-      expiryController.text = widget.product!.expiryDate;
+      expiryController.text = _serverDateToDisplay(widget.product!.expiryDate);
       purchaseController.text = widget.product!.purchasePrice > 0
           ? widget.product!.purchasePrice.toStringAsFixed(0)
           : "";
@@ -117,7 +157,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           : "";
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        // Set category and unit IDs from product (if available)
         ref.read(selectedCategoryIdProvider.notifier).state =
             widget.product!.categoryId;
         ref.read(selectedUnitIdProvider.notifier).state =
@@ -135,15 +174,13 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             hsnController.text.isNotEmpty;
 
         calculateProfit();
-        if (widget.product!.imagePath.isNotEmpty &&
-            !widget.product!.imagePath.startsWith('http')) {
-          ref.read(imageProvider.notifier).state = File(
-            widget.product!.imagePath,
-          );
-        }
 
-        // After categories/units load, ensure we have a selection
-        _setDefaultSelection();
+        if (widget.product!.imagePath.isNotEmpty) {
+          final localFile = File(widget.product!.imagePath);
+          if (localFile.existsSync()) {
+            ref.read(imageProvider.notifier).state = localFile;
+          }
+        }
       });
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -155,11 +192,9 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         ref.read(selectedSupplierIdProvider.notifier).state = null;
         ref.read(showGstProvider.notifier).state = false;
         ref.read(profitMarginProvider.notifier).state = 0;
-
-        // After categories/units load, set defaults
-        _setDefaultSelection();
       });
     }
+    _isInitializing = false;
   }
 
   void _addListeners() {
@@ -178,9 +213,12 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       descriptionController,
       expiryController,
     ];
+
     for (var c in controllers) {
       c.addListener(() {
-        if (c.text.isNotEmpty) _hasChanges = true;
+        if (!_isInitializing) {
+          _hasChanges = true;
+        }
       });
     }
   }
@@ -243,88 +281,333 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   }
 
   void _goNext() {
-    if (!_validateCurrentStep()) return;
-    if (_currentStep < 2) setState(() => _currentStep++);
+    if (_isSaving) return;
+
+    // Validate the current step (Step 1) strictly
+    final isValid = _validateCurrentStep();
+
+    // If Step 1 contains a duplicate barcode or invalid field, block navigation
+    if (!isValid) {
+      return;
+    }
+
+    if (_currentStep < 2) {
+      setState(() {
+        _currentStep++;
+      });
+    }
   }
 
   // ─── Validation ─────────────────────────────────────────────
   bool _validateCurrentStep() {
-    final image = ref.read(imageProvider);
+    // ============================================================
+    // STEP 1 - BASIC INFORMATION
+    // ============================================================
     if (_currentStep == 0) {
-      if (image == null && widget.product == null) {
-        _showMissingFieldSnack("Please select a product image");
+      // 1. Validate Image
+      final image = ref.read(imageProvider);
+      if (image == null &&
+          (widget.product == null ||
+              widget.product!.imagePath.trim().isEmpty)) {
+        _showMissingFieldSnack("Product Image: Please select a product image.");
         return false;
       }
-      if (nameController.text.trim().isEmpty) {
-        _showMissingFieldSnack("Product Name is required");
+
+      // 2. Validate Name
+      final nameError = Validators.validateProductName(
+        nameController.text,
+        fieldName: 'Product name',
+      );
+      if (nameError != null) {
+        _showMissingFieldSnack(nameError);
         return false;
       }
+
+      // 3. Validate Product Code Format
+      final productCodeError = Validators.validateProductCode(
+        productcodeController.text,
+      );
+      if (productCodeError != null) {
+        _showMissingFieldSnack(productCodeError);
+        return false;
+      }
+
+      // 4. Validate Category
+      final normalizedBarcode = Validators.normalizeSubmittedValue(
+        productcodeController.text,
+      );
+
+      if (_checkDuplicateBarcode(normalizedBarcode)) {
+        setState(() {
+          _barcodeDuplicate = true;
+        });
+
+        _showMissingFieldSnack(
+          "Product Code: Product with this barcode already exists.",
+        );
+
+        return false;
+      }
+
+      setState(() {
+        _barcodeDuplicate = false;
+      });
+
       return true;
     }
+
+    // ============================================================
+    // STEP 2 - STOCK & SUPPLIER
+    // ============================================================
     if (_currentStep == 1) {
-      if (quantityController.text.trim().isEmpty) {
-        _showMissingFieldSnack("Quantity is required");
+      final quantityError = Validators.validateRequiredInteger(
+        quantityController.text,
+        fieldName: 'Quantity',
+        min: 0,
+      );
+
+      if (quantityError != null) {
+        _showMissingFieldSnack(quantityError);
         return false;
       }
-      if (lslController.text.trim().isEmpty) {
-        _showMissingFieldSnack("Low Stock Limit is required");
+
+      final lslError = Validators.validateRequiredInteger(
+        lslController.text,
+        fieldName: 'Low Stock Limit',
+        min: 0,
+      );
+
+      if (lslError != null) {
+        _showMissingFieldSnack(lslError);
         return false;
       }
-      if (unitController.text.trim().isEmpty) {
-        _showMissingFieldSnack("Please select a Unit");
+
+      final unitId = ref.read(selectedUnitIdProvider);
+
+      if (unitId == null || unitId <= 0) {
+        _showMissingFieldSnack("Unit: Please select a unit.");
         return false;
       }
+
+      final descriptionError = Validators.validateMaxLength(
+        descriptionController.text,
+        max: 1000,
+        fieldName: 'Description',
+      );
+
+      if (descriptionError != null) {
+        _showMissingFieldSnack(descriptionError);
+        return false;
+      }
+
+      final expiryError = Validators.validateFutureDate(
+        expiryController.text,
+        fieldName: 'Expiry date',
+      );
+
+      if (expiryError != null) {
+        _showMissingFieldSnack(expiryError);
+        return false;
+      }
+
+      final showGstFields = ref.read(showGstProvider);
+
+      if (showGstFields) {
+        final hsnError = Validators.validateHsn(hsnController.text);
+
+        if (hsnError != null) {
+          _showMissingFieldSnack(hsnError);
+          return false;
+        }
+
+        final sgstError = Validators.validatePercentage(
+          sgstController.text,
+          fieldName: 'SGST',
+        );
+
+        if (sgstError != null) {
+          _showMissingFieldSnack(sgstError);
+          return false;
+        }
+
+        final cgstError = Validators.validatePercentage(
+          cgstController.text,
+          fieldName: 'CGST',
+        );
+
+        if (cgstError != null) {
+          _showMissingFieldSnack(cgstError);
+          return false;
+        }
+
+        final discountError = Validators.validatePercentage(
+          discountController.text,
+          fieldName: 'Discount',
+        );
+
+        if (discountError != null) {
+          _showMissingFieldSnack(discountError);
+          return false;
+        }
+      }
+
       return true;
     }
+
+    // ============================================================
+    // STEP 3 - PRICING
+    // ============================================================
+    if (_currentStep == 2) {
+      final purchaseError = Validators.validateRequiredDecimal(
+        purchaseController.text,
+        fieldName: 'Purchase price',
+        min: 0,
+      );
+
+      if (purchaseError != null) {
+        _showMissingFieldSnack(purchaseError);
+        return false;
+      }
+
+      final sellingError = Validators.validateRequiredDecimal(
+        sellingController.text,
+        fieldName: 'Selling price',
+        min: 0,
+      );
+
+      if (sellingError != null) {
+        _showMissingFieldSnack(sellingError);
+        return false;
+      }
+
+      return true;
+    }
+
+    return false;
+  }
+
+  bool _validateAllFields() {
+    final originalStep = _currentStep;
+
+    _currentStep = 0;
+
+    if (!_validateCurrentStep()) {
+      if (mounted) {
+        setState(() {});
+      }
+      return false;
+    }
+
+    _currentStep = 1;
+
+    if (!_validateCurrentStep()) {
+      if (mounted) {
+        setState(() {});
+      }
+      return false;
+    }
+
+    _currentStep = 2;
+
+    if (!_validateCurrentStep()) {
+      if (mounted) {
+        setState(() {});
+      }
+      return false;
+    }
+
+    _currentStep = originalStep;
+
+    if (mounted) {
+      setState(() {});
+    }
+
     return true;
   }
 
   void _showMissingFieldSnack(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    String cleanMessage = message;
+    if (message.contains("1062 Duplicate entry") ||
+        message.contains("uk_product_barcode") ||
+        message.contains("Duplicate entry")) {
+      cleanMessage = "Product Code: Product with this barcode already exists.";
+    }
+
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(cleanMessage),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ),
+      );
   }
 
   // ─── CRUD Operations ──────────────────────────────────────
   void updateProduct() async {
-    // Ensure we have valid IDs (fallback to first available)
-    _ensureValidIds();
+    if (_isSaving) return;
 
-    final selectedCategoryId = ref.read(selectedCategoryIdProvider);
-    final selectedUnitId = ref.read(selectedUnitIdProvider);
-    final showGstFields = ref.read(showGstProvider);
+    if (!_validateAllFields()) {
+      return;
+    }
 
-    final categories = ref.read(categoriesProvider).value ?? [];
-    final units = ref.read(unitsProvider).value ?? [];
-    final category = categories.cast<Map<String, dynamic>>().firstWhere(
-      (e) => e['id'] == selectedCategoryId,
-      orElse: () => categories.first,
+    final normalizedBarcode = Validators.normalizeSubmittedValue(
+      productcodeController.text,
     );
 
-    final categoryName = category['category_name'];
-    final unitName =
-        units.firstWhere((u) => u['id'] == selectedUnitId)['unit_name'] ??
-        'piece';
+    if (_checkDuplicateBarcode(normalizedBarcode)) {
+      setState(() => _currentStep = 0);
+      _showMissingFieldSnack(
+        "Product Code: Product with this barcode already exists.",
+      );
+      return;
+    }
 
     try {
+      setState(() => _isSaving = true);
+
+      final validData = await _ensureValidIds();
+      final category = validData.category;
+      final unit = validData.unit;
+
+      final categoryName = category['category_name'].toString();
+      final unitName = unit['unit_name']?.toString() ?? 'piece';
+      final selectedCategoryId = category['id'] as int;
+      final selectedUnitId = unit['id'] as int;
+
+      final showGstFields = ref.read(showGstProvider);
+      final productName = Validators.normalizeName(nameController.text);
+      final updatedStock = int.tryParse(quantityController.text) ?? 0;
+
       final updatedProductInstance = Product(
         id: widget.product!.id,
-        name: nameController.text.trim(),
+        name: productName,
         category: categoryName,
         categoryId: selectedCategoryId,
-        hsnCode: showGstFields ? hsnController.text.trim() : "",
+        hsnCode: showGstFields
+            ? Validators.normalizeDigits(hsnController.text)
+            : "",
         purchasePrice: double.tryParse(purchaseController.text) ?? 0.0,
         sellingPrice: double.tryParse(sellingController.text) ?? 0.0,
-        quantity: int.tryParse(quantityController.text) ?? 0,
+        quantity: updatedStock,
         unit: unitName,
         unitId: selectedUnitId,
-        description: descriptionController.text.trim(),
-        imagePath: ref.read(imageProvider)?.path ?? widget.product!.imagePath,
-        barcode: productcodeController.text.trim(),
+        description: Validators.normalizeSubmittedValue(
+          descriptionController.text,
+        ),
+        imagePath:
+            ref.read(imageProvider)?.path ??
+            (_imageRemoved ? "" : widget.product!.imagePath),
+        barcode: Validators.normalizeSubmittedValue(productcodeController.text),
         sgst: showGstFields ? double.tryParse(sgstController.text) ?? 0.0 : 0.0,
         cgst: showGstFields ? double.tryParse(cgstController.text) ?? 0.0 : 0.0,
         discount: double.tryParse(discountController.text) ?? 0.0,
-        expiryDate: expiryController.text.trim(),
+        expiryDate: _displayDateToServer(expiryController.text),
         supplierId: ref.read(selectedSupplierIdProvider),
         supplier: ref.read(selectedSupplierProvider) ?? "",
         lsl: int.tryParse(lslController.text) ?? 10,
@@ -335,71 +618,104 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           .modifyProduct(updatedProductInstance);
 
       if (success && mounted) {
+        // Trigger Notification for Product Details Edit
+        try {
+          await http.post(
+            Uri.parse(ApiConfig.triggerStockStatus),
+            headers: ApiConfig.jsonHeaders,
+            body: jsonEncode({
+              "user_id": 1,
+              "product_id": widget.product!.id,
+              "action_type": "update",
+              "change_qty": updatedStock,
+            }),
+          );
+        } catch (e) {
+          debugPrint("Update product notification trigger failed: $e");
+        }
+
         Navigator.pop(context, true);
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Failed to update product.")),
+        final operationError = ref.read(productOperationsProvider);
+
+        final message = operationError.maybeWhen(
+          error: (error, _) => error.toString().replaceFirst("Exception: ", ""),
+          orElse: () => "Unable to update product.",
         );
+
+        if (message.contains("Duplicate entry") ||
+            message.contains("barcode")) {
+          setState(() => _currentStep = 0);
+        }
+        _showMissingFieldSnack(message);
       }
     } catch (e) {
       debugPrint("MVP EDIT MUTATION FAILURE: $e");
+      if (mounted) {
+        _showMissingFieldSnack(e.toString().replaceAll("Exception: ", ""));
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
   void saveProduct() async {
     if (_isSaving) return;
 
+    if (!_validateAllFields()) {
+      return;
+    }
+
+    final normalizedBarcode = Validators.normalizeSubmittedValue(
+      productcodeController.text,
+    );
+
+    if (_checkDuplicateBarcode(normalizedBarcode)) {
+      setState(() => _currentStep = 0);
+      _showMissingFieldSnack(
+        "Product Code: Product with this barcode already exists.",
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
 
     try {
-      // Ensure we have valid IDs
-      _ensureValidIds();
+      final validData = await _ensureValidIds();
+      final category = validData.category;
+      final unit = validData.unit;
+
+      final categoryName = category['category_name'].toString();
+      final unitName = unit['unit_name']?.toString() ?? 'piece';
+      final selectedCategoryId = category['id'] as int;
+      final selectedUnitId = unit['id'] as int;
 
       final image = ref.read(imageProvider);
-      final selectedCategoryId = ref.read(selectedCategoryIdProvider);
-      final selectedUnitId = ref.read(selectedUnitIdProvider);
       final showGstFields = ref.read(showGstProvider);
-
-      final categories = ref.read(categoriesProvider).value ?? [];
-      final units = ref.read(unitsProvider).value ?? [];
-      final category = categories.cast<Map<String, dynamic>>().firstWhere(
-        (e) => e['id'] == selectedCategoryId,
-        orElse: () => categories.first,
-      );
-
-      final categoryName = category['category_name'];
-      final unitName =
-          units.firstWhere((u) => u['id'] == selectedUnitId)['unit_name'] ??
-          'piece';
-
-      if (nameController.text.trim().isEmpty ||
-          quantityController.text.trim().isEmpty ||
-          lslController.text.trim().isEmpty ||
-          unitController.text.trim().isEmpty ||
-          purchaseController.text.trim().isEmpty ||
-          sellingController.text.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Please fill all required fields.")),
-        );
-        return;
-      }
+      final productName = Validators.normalizeName(nameController.text);
+      final initialStock = int.tryParse(quantityController.text) ?? 0;
 
       final newProductInstance = Product(
-        name: nameController.text.trim(),
+        name: productName,
         category: categoryName,
         categoryId: selectedCategoryId,
-        hsnCode: showGstFields ? hsnController.text.trim() : "",
+        hsnCode: showGstFields
+            ? Validators.normalizeDigits(hsnController.text)
+            : "",
         purchasePrice: double.tryParse(purchaseController.text) ?? 0.0,
         sellingPrice: double.tryParse(sellingController.text) ?? 0.0,
-        quantity: int.tryParse(quantityController.text) ?? 0,
+        quantity: initialStock,
         unit: unitName,
         unitId: selectedUnitId,
-        description: descriptionController.text.trim(),
+        description: Validators.normalizeSubmittedValue(
+          descriptionController.text,
+        ),
         imagePath: image?.path ?? "",
-        barcode: productcodeController.text.trim(),
+        barcode: Validators.normalizeSubmittedValue(productcodeController.text),
         sgst: showGstFields ? double.tryParse(sgstController.text) ?? 0.0 : 0.0,
         cgst: showGstFields ? double.tryParse(cgstController.text) ?? 0.0 : 0.0,
         discount: double.tryParse(discountController.text) ?? 0.0,
+        expiryDate: _displayDateToServer(expiryController.text),
         supplierId: ref.read(selectedSupplierIdProvider),
         supplier: ref.read(selectedSupplierProvider) ?? "",
         lsl: int.tryParse(lslController.text) ?? 10,
@@ -410,46 +726,142 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           .addProduct(newProductInstance);
 
       if (success && mounted) {
+        // Trigger Notification for New Product Creation
+        try {
+          await http.post(
+            Uri.parse(ApiConfig.triggerStockStatus),
+            headers: ApiConfig.jsonHeaders,
+            body: jsonEncode({
+              "user_id": 1,
+              "product_id": newProductInstance.id ?? 1,
+              "action_type": "add",
+              "change_qty": initialStock,
+            }),
+          );
+        } catch (e) {
+          debugPrint("Add product notification trigger failed: $e");
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Product Added successfully.")),
         );
         Navigator.pop(context, true);
       } else if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("Failed to add product.")));
+        final operationError = ref.read(productOperationsProvider);
+
+        final message = operationError.maybeWhen(
+          error: (error, _) => error.toString().replaceFirst("Exception: ", ""),
+          orElse: () => "Unable to add product.",
+        );
+
+        if (message.contains("Duplicate entry") ||
+            message.contains("barcode")) {
+          setState(() => _currentStep = 0);
+        }
+        _showMissingFieldSnack(message);
       }
     } catch (e) {
       debugPrint("MVP WRITE TRANSACTION ERROR: $e");
+      if (mounted) {
+        _showMissingFieldSnack(e.toString().replaceAll("Exception: ", ""));
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
   }
 
-  // ─── Helper to ensure we have valid category/unit IDs ──
-  void _ensureValidIds() {
-    final categories = ref.read(categoriesProvider).value ?? [];
-    final units = ref.read(unitsProvider).value ?? [];
+  Future<({Map<String, dynamic> category, Map<String, dynamic> unit})>
+  _ensureValidIds() async {
+    final categories = await ref.read(categoriesProvider.future);
+    final units = await ref.read(unitsProvider.future);
 
-    final currentCatId = ref.read(selectedCategoryIdProvider);
-    if (currentCatId == null || currentCatId <= 0) {
-      final firstId = categories.isNotEmpty ? categories.first['id'] as int : 1;
-      ref.read(selectedCategoryIdProvider.notifier).state = firstId;
+    if (categories.isEmpty) {
+      throw Exception("No active categories found.");
     }
 
-    final currentUnitId = ref.read(selectedUnitIdProvider);
-    if (currentUnitId == null || currentUnitId <= 0) {
-      final firstId = units.isNotEmpty ? units.first['id'] as int : 1;
-      ref.read(selectedUnitIdProvider.notifier).state = firstId;
+    if (units.isEmpty) {
+      throw Exception("No active units found.");
     }
+
+    final categoryId = ref.read(selectedCategoryIdProvider);
+
+    if (categoryId == null || categoryId <= 0) {
+      throw Exception("Category: Please select a category.");
+    }
+
+    Map<String, dynamic>? selectedCategory;
+
+    for (final category in categories) {
+      final id = int.tryParse(category['id']?.toString() ?? '');
+
+      if (id == categoryId) {
+        selectedCategory = category;
+        break;
+      }
+    }
+
+    if (selectedCategory == null) {
+      throw Exception("Category: Selected category is no longer available.");
+    }
+
+    final unitId = ref.read(selectedUnitIdProvider);
+
+    if (unitId == null || unitId <= 0) {
+      throw Exception("Unit: Please select a unit.");
+    }
+
+    Map<String, dynamic>? selectedUnit;
+
+    for (final unit in units) {
+      final id = int.tryParse(unit['id']?.toString() ?? '');
+
+      if (id == unitId) {
+        selectedUnit = unit;
+        break;
+      }
+    }
+
+    if (selectedUnit == null) {
+      throw Exception("Unit: Selected unit is no longer available.");
+    }
+
+    return (category: selectedCategory, unit: selectedUnit);
   }
 
-  // ─── Image picker ──────────────────────────────────────────
   Future<void> pickImage(ImageSource source) async {
     final picked = await ImagePicker().pickImage(source: source);
     if (picked != null) {
       _hasChanges = true;
       ref.read(imageProvider.notifier).state = File(picked.path);
+    }
+  }
+
+  Future<void> _confirmRemoveImage() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Remove Image?"),
+        content: const Text(
+          "Are you sure you want to remove the selected product image?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text("Remove"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      _hasChanges = true;
+      setState(() => _imageRemoved = true);
+      ref.read(imageProvider.notifier).state = null;
     }
   }
 
@@ -464,7 +876,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     }
   }
 
-  // ─── UI Helpers ─────────────────────────────────────────────
   Widget inputField({
     required String label,
     required TextEditingController controller,
@@ -475,6 +886,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     Widget? suffixIcon,
     bool readOnly = false,
     VoidCallback? onTap,
+    ValueChanged<String>? onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -504,7 +916,11 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           maxLines: maxLines,
           readOnly: readOnly,
           onTap: onTap,
-          onChanged: (_) => _hasChanges = true,
+          onChanged: (val) {
+            _hasChanges = true;
+            if (onChanged != null) onChanged(val);
+          },
+          inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'^\s+'))],
           style: TextStyle(fontSize: R.fs(context, 14)),
           decoration: InputDecoration(
             hintText: "Enter $label",
@@ -515,7 +931,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             ),
             suffixIcon: suffixIcon,
             filled: true,
-            fillColor: readOnly ? Colors.grey.shade100 : Colors.white,
+            fillColor: Colors.white,
             contentPadding: EdgeInsets.symmetric(
               horizontal: R.fluid(context, 14, 18),
               vertical: R.fluid(context, 14, 18),
@@ -555,16 +971,46 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   }
 
   Future<void> pickDate() async {
-    DateTime? pickedDate = await showDatePicker(
+    final today = DateTime.now();
+
+    final currentExpiry = expiryController.text.trim();
+
+    DateTime initialDate = today;
+
+    if (currentExpiry.isNotEmpty) {
+      final parts = currentExpiry.split('/');
+
+      if (parts.length == 3) {
+        final day = int.tryParse(parts[0]);
+        final month = int.tryParse(parts[1]);
+        final year = int.tryParse(parts[2]);
+
+        if (day != null && month != null && year != null) {
+          final existingDate = DateTime(year, month, day);
+
+          if (!existingDate.isBefore(
+            DateTime(today.year, today.month, today.day),
+          )) {
+            initialDate = existingDate;
+          }
+        }
+      }
+    }
+
+    final pickedDate = await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2024),
+      initialDate: initialDate,
+      firstDate: DateTime(today.year, today.month, today.day),
       lastDate: DateTime(2100),
     );
+
     if (pickedDate != null) {
       _hasChanges = true;
-      expiryController.text =
-          "${pickedDate.day}/${pickedDate.month}/${pickedDate.year}";
+
+      final day = pickedDate.day.toString().padLeft(2, '0');
+      final month = pickedDate.month.toString().padLeft(2, '0');
+
+      expiryController.text = "$day/$month/${pickedDate.year}";
     }
   }
 
@@ -574,6 +1020,20 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     final s = double.tryParse(sellingController.text) ?? 0;
     return p != (_originalPurchasePrice ?? 0) ||
         s != (_originalSellingPrice ?? 0);
+  }
+
+  String _resolveImageUrl(String path) {
+    String trimmed = path.trim();
+    if (trimmed.contains('ngrok') || trimmed.contains('localhost')) {
+      if (trimmed.contains('uploads/')) {
+        trimmed = 'uploads/' + trimmed.split('uploads/').last;
+      }
+    }
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      if (trimmed.startsWith('/')) trimmed = trimmed.substring(1);
+      trimmed = '${ApiConfig.baseUrl}/$trimmed';
+    }
+    return trimmed;
   }
 
   // ─── Build Steps ────────────────────────────────────────────
@@ -587,7 +1047,33 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        sectionTitle("1. Product Media"),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 18),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "1. Product Media",
+                style: TextStyle(
+                  fontSize: R.fs(context, 18),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              if (image != null ||
+                  (!_imageRemoved &&
+                      widget.product != null &&
+                      widget.product!.imagePath.trim().isNotEmpty))
+                GestureDetector(
+                  onTap: _confirmRemoveImage,
+                  child: Icon(
+                    Icons.delete_outline,
+                    color: Colors.red,
+                    size: R.icon(context, 22),
+                  ),
+                ),
+            ],
+          ),
+        ),
         Container(
           height: R.fluid(context, 180, 320),
           width: double.infinity,
@@ -596,31 +1082,39 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: Colors.grey.shade200),
           ),
-          child: image == null
-              ? (widget.product != null &&
-                        widget.product!.imagePath.isNotEmpty &&
-                        widget.product!.imagePath.startsWith('http')
+          child: image != null
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Image.file(image, fit: BoxFit.cover),
+                )
+              : (!_imageRemoved &&
+                        widget.product != null &&
+                        widget.product!.imagePath.trim().isNotEmpty
                     ? ClipRRect(
                         borderRadius: BorderRadius.circular(20),
-                        child: Image.network(
-                          widget.product!.imagePath,
+                        child: CachedNetworkImage(
+                          imageUrl: _resolveImageUrl(widget.product!.imagePath),
                           fit: BoxFit.cover,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Center(
-                              child: CircularProgressIndicator(
-                                value:
-                                    loadingProgress.expectedTotalBytes != null
-                                    ? loadingProgress.cumulativeBytesLoaded /
-                                          loadingProgress.expectedTotalBytes!
-                                    : null,
+                          placeholder: (_, __) => const Center(
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          errorWidget: (_, __, ___) => Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(
+                                Icons.broken_image,
+                                size: 60,
+                                color: Colors.grey,
                               ),
-                            );
-                          },
-                          errorBuilder: (_, __, ___) => const Icon(
-                            Icons.broken_image,
-                            size: 60,
-                            color: Colors.grey,
+                              SizedBox(height: 8),
+                              Text(
+                                "Failed to load image",
+                                style: TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       )
@@ -638,11 +1132,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                             style: TextStyle(color: Colors.grey, fontSize: 16),
                           ),
                         ],
-                      ))
-              : ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: Image.file(image, fit: BoxFit.cover),
-                ),
+                      )),
         ),
         const SizedBox(height: 16),
         Row(
@@ -712,9 +1202,24 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                       builder: (_) => const BarcodeScannerScreen(),
                     ),
                   );
-                  if (result != null) {
-                    _hasChanges = true;
-                    productcodeController.text = result;
+
+                  if (result != null && result.toString().isNotEmpty) {
+                    final scannedBarcode = Validators.normalizeSubmittedValue(
+                      result.toString(),
+                    );
+
+                    // Perform duplicate check immediately on Step 1
+                    final isDuplicate = _checkDuplicateBarcode(scannedBarcode);
+                    setState(() => _barcodeDuplicate = isDuplicate);
+
+                    if (isDuplicate) {
+                      _showMissingFieldSnack(
+                        "Product Code: Product with this barcode already exists.",
+                      );
+                    } else {
+                      _hasChanges = true;
+                      productcodeController.text = scannedBarcode;
+                    }
                   }
                 },
                 child: Container(
@@ -756,6 +1261,16 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           label: "Product Code",
           controller: productcodeController,
           icon: Icons.qr_code,
+          onChanged: (val) {
+            final normalizedBarcode = Validators.normalizeSubmittedValue(val);
+            final isDuplicate = _checkDuplicateBarcode(normalizedBarcode);
+            setState(() => _barcodeDuplicate = isDuplicate);
+            if (isDuplicate) {
+              _showMissingFieldSnack(
+                "Product Code: Product with this barcode already exists.",
+              );
+            }
+          },
         ),
         const SizedBox(height: 20),
         Column(
@@ -780,8 +1295,36 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             const SizedBox(height: 8),
             categoriesAsync.when(
               data: (categories) {
+                // ==========================================================
+                // NORMALIZE + DEDUPLICATE CATEGORY IDS
+                // ==========================================================
+
+                final uniqueCategories = <int, Map<String, dynamic>>{};
+
+                for (final category in categories) {
+                  final id = int.tryParse(category['id']?.toString() ?? '');
+
+                  if (id != null && id > 0) {
+                    uniqueCategories[id] = category;
+                  }
+                }
+
+                final categoryItems = uniqueCategories.values.toList();
+
+                // ==========================================================
+                // SAFE SELECTED VALUE
+                //
+                // DropdownButton requires the selected value to exist
+                // exactly once in the items list.
+                // ==========================================================
+
+                final safeCategoryId =
+                    uniqueCategories.containsKey(selectedCategoryId)
+                    ? selectedCategoryId
+                    : null;
+
                 return DropdownButtonFormField<int>(
-                  initialValue: selectedCategoryId,
+                  value: safeCategoryId,
                   isExpanded: true,
                   menuMaxHeight: 250,
                   dropdownColor: Colors.white,
@@ -817,27 +1360,46 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                       ),
                     ),
                   ),
-                  items: categories.map((cat) {
+
+                  // ========================================================
+                  // UNIQUE CATEGORY ITEMS
+                  // ========================================================
+                  items: categoryItems.map((category) {
+                    final id = int.parse(category['id'].toString());
+
                     return DropdownMenuItem<int>(
-                      value: cat['id'] as int,
-                      child: Text(cat['category_name'] ?? ''),
+                      value: id,
+                      child: Text(category['category_name']?.toString() ?? ''),
                     );
                   }).toList(),
+
+                  // ========================================================
+                  // CATEGORY CHANGE
+                  // ========================================================
                   onChanged: (value) {
-                    if (value != null) {
-                      _hasChanges = true;
-                      ref.read(selectedCategoryIdProvider.notifier).state =
-                          value;
-                      final selectedCat = categories.firstWhere(
-                        (c) => c['id'] == value,
-                      );
-                      ref.read(selectedCategoryProvider.notifier).state =
-                          selectedCat['category_name'] ?? 'General';
+                    if (value == null) {
+                      return;
                     }
+
+                    final selectedCategory = uniqueCategories[value];
+
+                    if (selectedCategory == null) {
+                      return;
+                    }
+
+                    _hasChanges = true;
+
+                    ref.read(selectedCategoryIdProvider.notifier).state = value;
+
+                    ref.read(selectedCategoryProvider.notifier).state =
+                        selectedCategory['category_name']?.toString() ??
+                        'General';
                   },
                 );
               },
+
               loading: () => const CircularProgressIndicator(),
+
               error: (err, stack) => Text('Error loading categories: $err'),
             ),
           ],
@@ -903,8 +1465,32 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             const SizedBox(height: 8),
             unitsAsync.when(
               data: (units) {
+                // ==========================================================
+                // NORMALIZE + DEDUPLICATE UNIT IDS
+                // ==========================================================
+
+                final uniqueUnits = <int, Map<String, dynamic>>{};
+
+                for (final unit in units) {
+                  final id = int.tryParse(unit['id']?.toString() ?? '');
+
+                  if (id != null && id > 0) {
+                    uniqueUnits[id] = unit;
+                  }
+                }
+
+                final unitItems = uniqueUnits.values.toList();
+
+                // ==========================================================
+                // SAFE SELECTED VALUE
+                // ==========================================================
+
+                final safeUnitId = uniqueUnits.containsKey(selectedUnitId)
+                    ? selectedUnitId
+                    : null;
+
                 return DropdownButtonFormField<int>(
-                  value: selectedUnitId,
+                  value: safeUnitId,
                   isExpanded: true,
                   menuMaxHeight: 250,
                   dropdownColor: Colors.white,
@@ -940,25 +1526,45 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                       ),
                     ),
                   ),
-                  items: units.map((unit) {
+
+                  // ========================================================
+                  // UNIQUE UNIT ITEMS
+                  // ========================================================
+                  items: unitItems.map((unit) {
+                    final id = int.parse(unit['id'].toString());
+
                     return DropdownMenuItem<int>(
-                      value: unit['id'] as int,
-                      child: Text(unit['unit_name'] ?? ''),
+                      value: id,
+                      child: Text(unit['unit_name']?.toString() ?? ''),
                     );
                   }).toList(),
+
+                  // ========================================================
+                  // UNIT CHANGE
+                  // ========================================================
                   onChanged: (value) {
-                    if (value != null) {
-                      _hasChanges = true;
-                      ref.read(selectedUnitIdProvider.notifier).state = value;
-                      final selectedUnit = units.firstWhere(
-                        (u) => u['id'] == value,
-                      );
-                      unitController.text = selectedUnit['unit_name'] ?? '';
+                    if (value == null) {
+                      return;
                     }
+
+                    final selectedUnit = uniqueUnits[value];
+
+                    if (selectedUnit == null) {
+                      return;
+                    }
+
+                    _hasChanges = true;
+
+                    ref.read(selectedUnitIdProvider.notifier).state = value;
+
+                    unitController.text =
+                        selectedUnit['unit_name']?.toString() ?? '';
                   },
                 );
               },
+
               loading: () => const CircularProgressIndicator(),
+
               error: (err, stack) => Text('Error loading units: $err'),
             ),
           ],
@@ -1102,6 +1708,8 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
                 final supplier = supplierData.firstWhere((e) => e['id'] == id);
 
+                _hasChanges = true;
+
                 ref.read(selectedSupplierIdProvider.notifier).state = id;
 
                 ref.read(selectedSupplierProvider.notifier).state =
@@ -1244,23 +1852,13 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   // ─── Main Build ─────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    // 🔥 Move listeners here – allowed inside build method
-    ref.listen(categoriesProvider, (_, __) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _setDefaultSelection(),
-      );
-    });
-    ref.listen(unitsProvider, (_, __) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _setDefaultSelection(),
-      );
-    });
-
     final image = ref.watch(imageProvider);
     final selectedCategory = ref.watch(selectedCategoryProvider);
     final profitMargin = ref.watch(profitMarginProvider);
     final showGstFields = ref.watch(showGstProvider);
     final suppliersAsync = ref.watch(supplierListProvider);
+
+    ref.watch(productListProvider);
 
     return PopScope(
       canPop: false,
@@ -1451,13 +2049,15 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                                 borderRadius: BorderRadius.circular(
                                   R.radius(context, 14),
                                 ),
-                                onTap: _isSaving
+                                onTap:
+                                    (_isSaving ||
+                                        (_currentStep == 0 &&
+                                            _barcodeDuplicate))
                                     ? null
                                     : () {
                                         if (_currentStep < 2) {
                                           _goNext();
                                         } else {
-                                          if (!_validateCurrentStep()) return;
                                           widget.product == null
                                               ? saveProduct()
                                               : updateProduct();

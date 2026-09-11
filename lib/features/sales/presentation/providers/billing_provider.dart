@@ -3,9 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../products/data/models/product_model.dart';
 import '../../data/models/cart_item_model.dart';
 
-final billingProvider = StateNotifierProvider<BillingNotifier, BillingState>((
-  ref,
-) {
+final billingProvider =
+    StateNotifierProvider<BillingNotifier, BillingState>((ref) {
   return BillingNotifier();
 });
 
@@ -13,25 +12,35 @@ class BillingState {
   final List<CartItem> cart;
   final double discount;
 
-  const BillingState({this.cart = const [], this.discount = 0});
+  const BillingState({
+    this.cart = const [],
+    this.discount = 0,
+  });
 
-  BillingState copyWith({List<CartItem>? cart, double? discount}) {
+  BillingState copyWith({
+    List<CartItem>? cart,
+    double? discount,
+  }) {
     return BillingState(
       cart: cart ?? this.cart,
       discount: discount ?? this.discount,
     );
   }
 
-  double get subtotal => cart.fold(0.0, (sum, item) => sum + item.subtotal);
+  double get subtotal =>
+      cart.fold(0.0, (sum, item) => sum + item.subtotal);
 
-  double get tax => cart.fold(0.0, (sum, item) => sum + item.tax);
+  double get tax =>
+      cart.fold(0.0, (sum, item) => sum + item.tax);
 
   double get itemDiscount =>
       cart.fold(0.0, (sum, item) => sum + item.discountAmount);
 
-  double get grandTotal => subtotal - itemDiscount - discount + tax;
+  double get grandTotal =>
+      subtotal - itemDiscount - discount + tax;
 
-  int get totalItems => cart.fold(0, (sum, item) => sum + item.qty);
+  int get totalItems =>
+      cart.fold(0, (sum, item) => sum + item.qty);
 
   bool get isEmpty => cart.isEmpty;
 
@@ -45,25 +54,25 @@ class BillingNotifier extends StateNotifier<BillingState> {
   void addProduct(Product product, {int qty = 1}) {
     final cart = [...state.cart];
 
-    final index = cart.indexWhere((item) => item.productId == product.id);
+    final index = cart.indexWhere(
+      (item) => item.productId == product.id,
+    );
 
     if (index >= 0) {
       cart[index].qty += qty;
     } else {
-      final finalQty = qty > availableStock ? availableStock : qty;
-
       cart.add(
-        CartItem(
-          productId: product.id!,
-          name: product.name,
-          category: product.category,
-          price: product.sellingPrice,
-          sgst: product.sgst,
-          cgst: product.cgst,
-          discount: product.discount,
-          imagePath: product.imagePath,
-          qty: 1,
-        ),
+CartItem(
+  productId: product.id!,
+  name: product.name,
+  category: product.category,
+  price: product.sellingPrice,
+  sgst: product.sgst,
+  cgst: product.cgst,
+  discount: product.discount,
+  imagePath: product.imagePath,
+  qty: 1,
+),
       );
     }
 
@@ -82,7 +91,9 @@ class BillingNotifier extends StateNotifier<BillingState> {
   void increaseQty(int productId) {
     final cart = [...state.cart];
 
-    final index = cart.indexWhere((item) => item.productId == productId);
+    final index = cart.indexWhere(
+      (item) => item.productId == productId,
+    );
 
     if (index == -1) return;
 
@@ -95,7 +106,9 @@ class BillingNotifier extends StateNotifier<BillingState> {
   void decreaseQty(int productId) {
     final cart = [...state.cart];
 
-    final index = cart.indexWhere((item) => item.productId == productId);
+    final index = cart.indexWhere(
+      (item) => item.productId == productId,
+    );
 
     if (index == -1) return;
 
@@ -117,7 +130,9 @@ class BillingNotifier extends StateNotifier<BillingState> {
 
     final cart = [...state.cart];
 
-    final index = cart.indexWhere((item) => item.productId == productId);
+    final index = cart.indexWhere(
+      (item) => item.productId == productId,
+    );
 
     if (index == -1) return;
 
@@ -133,6 +148,8 @@ class BillingNotifier extends StateNotifier<BillingState> {
 
   /// Bill Discount
   void setDiscount(double value) {
-    state = state.copyWith(discount: value < 0 ? 0 : value);
+    state = state.copyWith(
+      discount: value < 0 ? 0 : value,
+    );
   }
 }

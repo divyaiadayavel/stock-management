@@ -169,6 +169,32 @@ class _PrinterDetailsScreenState extends ConsumerState<PrinterDetailsScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
+          if (!isConnected) ...[
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: AppColors.textWhite,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+                  ),
+                ),
+                onPressed: () => _reconnectPrinter(context),
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: Text(
+                  'Reconnect',
+                  style: AppTextStyles.button.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+          ],
           _sectionLabel('Test Print'),
           _TestPrintCard(printer: widget.printer),
           const SizedBox(height: AppSpacing.xl),
@@ -227,14 +253,40 @@ class _PrinterDetailsScreenState extends ConsumerState<PrinterDetailsScreen> {
             ),
             onPressed: () async {
               final navigator = Navigator.of(dialogContext);
-              await ref.read(printersHardwareProvider.notifier).disconnect();
+              final messenger = ScaffoldMessenger.of(context);
+              final removed = await ref
+                  .read(printersHardwareProvider.notifier)
+                  .removePrinter(widget.printer.id);
               navigator.pop();
               if (!context.mounted) return;
-              Navigator.pop(context);
+              if (removed) {
+                messenger.showSnackBar(
+                  SnackBar(content: Text('${widget.printer.name} removed')),
+                );
+                Navigator.pop(context);
+              } else {
+                final err = ref.read(printersHardwareProvider).errorMessage;
+                messenger.showSnackBar(
+                  SnackBar(content: Text(err ?? 'Could not remove printer')),
+                );
+              }
             },
             child: const Text('Forget'),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _reconnectPrinter(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await ref
+        .read(printersHardwareProvider.notifier)
+        .connectToPrinter(widget.printer);
+    if (!context.mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(ok ? '${widget.printer.name} connected' : 'Reconnect failed'),
       ),
     );
   }
@@ -258,7 +310,7 @@ class _PrinterDetailsScreenState extends ConsumerState<PrinterDetailsScreen> {
     final color = isConnected ? AppColors.green : AppColors.red;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(999)),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(999)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -430,7 +482,7 @@ class _TestPrintCardState extends ConsumerState<_TestPrintCard> {
         Container(
           width: 80,
           height: 80,
-          decoration: BoxDecoration(color: AppColors.cyan.withOpacity(0.08), shape: BoxShape.circle),
+          decoration: BoxDecoration(color: AppColors.cyan.withValues(alpha: 0.08), shape: BoxShape.circle),
           child: const Icon(Icons.receipt_long_rounded, color: AppColors.cyanDim, size: 36),
         ),
         const SizedBox(height: AppSpacing.lg),
@@ -478,7 +530,7 @@ class _TestPrintCardState extends ConsumerState<_TestPrintCard> {
         Container(
           width: 80,
           height: 80,
-          decoration: BoxDecoration(color: AppColors.green.withOpacity(0.1), shape: BoxShape.circle),
+          decoration: BoxDecoration(color: AppColors.green.withValues(alpha: 0.1), shape: BoxShape.circle),
           child: const Icon(Icons.check_rounded, color: AppColors.green, size: 40),
         ),
         const SizedBox(height: AppSpacing.lg),
@@ -530,7 +582,7 @@ class _TestPrintCardState extends ConsumerState<_TestPrintCard> {
         Container(
           width: 80,
           height: 80,
-          decoration: BoxDecoration(color: AppColors.red.withOpacity(0.1), shape: BoxShape.circle),
+          decoration: BoxDecoration(color: AppColors.red.withValues(alpha: 0.1), shape: BoxShape.circle),
           child: const Icon(Icons.close_rounded, color: AppColors.red, size: 40),
         ),
         const SizedBox(height: AppSpacing.lg),

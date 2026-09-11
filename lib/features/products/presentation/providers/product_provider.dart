@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../../data/datasources/product_remote_datasource.dart';
 import '../../data/models/product_model.dart';
+import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 
 // ─── Dependencies ────────────────────────────────────────────
 final httpClientProvider = Provider<http.Client>((ref) => http.Client());
@@ -43,53 +44,66 @@ class ProductListState {
     bool? isLoadingMore,
     bool? isRefreshing,
     bool? hasMore,
-    String? error,
+    Object? error = _errorSentinel,
   }) {
     return ProductListState(
       items: items ?? this.items,
       page: page ?? this.page,
-      isInitialLoading: isInitialLoading ?? this.isInitialLoading,
-      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
-      isRefreshing: isRefreshing ?? this.isRefreshing,
+      isInitialLoading:
+          isInitialLoading ?? this.isInitialLoading,
+      isLoadingMore:
+          isLoadingMore ?? this.isLoadingMore,
+      isRefreshing:
+          isRefreshing ?? this.isRefreshing,
       hasMore: hasMore ?? this.hasMore,
-      error: error ?? this.error,
+      error: identical(error, _errorSentinel)
+          ? this.error
+          : error as String?,
     );
   }
 }
 
+const _errorSentinel = Object();
+
 class ProductListNotifier extends StateNotifier<ProductListState> {
   final Ref ref;
-  static const int _limit = 30;
+  static const int _limit = 500;
 
   ProductListNotifier(this.ref) : super(const ProductListState());
 
   // Load first page (initial or refresh) – uses current search
-  Future<void> loadProducts() async {
-    if (state.isInitialLoading) return;
+Future<void> loadProducts() async {
+  state = state.copyWith(
+    isInitialLoading: true,
+    error: null,
+    page: 1,
+    hasMore: true,
+  );
 
-    state = state.copyWith(isInitialLoading: true, error: null);
-    try {
-      final search = ref.read(searchQueryProvider).trim();
-      final remoteSource = ref.read(productRemoteSourceProvider);
-      final result = await remoteSource.getProductsFromServer(
-        page: 1,
-        limit: _limit,
-        search: search,
-      );
+  try {
+    final search = ref.read(searchQueryProvider).trim();
 
-      state = state.copyWith(
-        items: result.items,
-        page: 1,
-        hasMore: result.total > _limit,
-        isInitialLoading: false,
-      );
-    } catch (e) {
-      state = state.copyWith(
-        isInitialLoading: false,
-        error: e.toString(),
-      );
-    }
+    final result = await ref.read(productRemoteSourceProvider)
+        .getProductsFromServer(
+          page: 1,
+          limit: _limit,
+          search: search,
+        );
+
+    state = state.copyWith(
+      items: result.items,
+      page: 1,
+      hasMore: result.total > _limit,
+      isInitialLoading: false,
+      error: null,
+    );
+  } catch (e) {
+    state = state.copyWith(
+      isInitialLoading: false,
+      error: e.toString(),
+    );
   }
+}
 
   // Load next page – passes the same search term
   Future<void> loadMore() async {
@@ -116,93 +130,112 @@ class ProductListNotifier extends StateNotifier<ProductListState> {
         isLoadingMore: false,
       );
     } catch (e) {
-      state = state.copyWith(
-        isLoadingMore: false,
-        error: e.toString(),
-      );
+      state = state.copyWith(isLoadingMore: false, error: e.toString());
     }
   }
 
-  // Pull‑to‑refresh – reloads page 1 with current search
-// ─── Pull‑to‑refresh – reloads page 1 without clearing the list ──
-Future<void> refresh() async {
-  state = state.copyWith(
-    isRefreshing: true,
-    error: null,
-    page: 1,
-    hasMore: true,
-    isLoadingMore: false,
-    // Do NOT clear items here – keep them visible
-  );
-  try {
-    final search = ref.read(searchQueryProvider).trim();
-    final remoteSource = ref.read(productRemoteSourceProvider);
-    final result = await remoteSource.getProductsFromServer(
-      page: 1,
-      limit: _limit,
-      search: search,
-    );
+  // Pull‑to‑refresh – reloads page 1 without clearing the list
+  Future<void> refresh() async {
     state = state.copyWith(
-      items: result.items,
+      isRefreshing: true,
+      error: null,
       page: 1,
-      hasMore: result.total > _limit,
-      isRefreshing: false,
-      // Keep isInitialLoading unchanged (so shimmer doesn't appear)
+      hasMore: true,
+      isLoadingMore: false,
     );
-  } catch (e) {
-    state = state.copyWith(isRefreshing: false, error: e.toString());
+    try {
+      final search = ref.read(searchQueryProvider).trim();
+      final remoteSource = ref.read(productRemoteSourceProvider);
+      final result = await remoteSource.getProductsFromServer(
+        page: 1,
+        limit: _limit,
+        search: search,
+      );
+      state = state.copyWith(
+        items: result.items,
+        page: 1,
+        hasMore: result.total > _limit,
+        isRefreshing: false,
+      );
+    } catch (e) {
+      state = state.copyWith(isRefreshing: false, error: e.toString());
+    }
   }
 }
-}
 
-final productListProvider = StateNotifierProvider<ProductListNotifier, ProductListState>((ref) {
-  return ProductListNotifier(ref);
-});
-final supplierListProvider =
-    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final productListProvider =
+    StateNotifierProvider<ProductListNotifier, ProductListState>((ref) {
+      return ProductListNotifier(ref);
+    });
+
+final supplierListProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final remote = ref.read(productRemoteSourceProvider);
   return remote.getSuppliersFromServer();
 });
+
 // ─── ProductOperations ──────────────────────────────────────
 class ProductOperations extends StateNotifier<AsyncValue<void>> {
   final Ref ref;
   ProductOperations(this.ref) : super(const AsyncValue.data(null));
 
-  Future<bool> addProduct(Product product) async {
-    state = const AsyncValue.loading();
-    try {
-      final newId = await ref.read(productRemoteSourceProvider).addProductToServer(product);
-      if (newId > 0) {
-        ref.read(productListProvider.notifier).refresh();
-        state = const AsyncValue.data(null);
-        return true;
-      }
-    } catch (e, st) {
-      state = AsyncValue.error(e, st);
-    }
-    return false;
-  }
+Future<bool> addProduct(Product product) async {
+  state = const AsyncValue.loading();
 
-  Future<bool> modifyProduct(Product product) async {
-    state = const AsyncValue.loading();
-    try {
-      final success = await ref.read(productRemoteSourceProvider).updateProductOnServer(product);
-      if (success) {
-        ref.read(productListProvider.notifier).refresh();
-        state = const AsyncValue.data(null);
-        return true;
-      }
-    } catch (e, st) {
-      state = AsyncValue.error(e, st);
+  try {
+    final newId = await ref
+        .read(productRemoteSourceProvider)
+        .addProductToServer(product);
+
+    if (newId <= 0) {
+      throw Exception('Unable to add product.');
     }
+
+    await ref.read(productListProvider.notifier).refresh();
+    await ref.read(dashboardProvider.notifier).refresh();
+
+    state = const AsyncValue.data(null);
+
+    return true;
+  } catch (e, st) {
+    state = AsyncValue.error(e, st);
     return false;
   }
+}
+
+Future<bool> modifyProduct(Product product) async {
+  state = const AsyncValue.loading();
+
+  try {
+    final success = await ref
+        .read(productRemoteSourceProvider)
+        .updateProductOnServer(product);
+
+    if (!success) {
+      throw Exception('Unable to update product.');
+    }
+
+    await ref.read(productListProvider.notifier).refresh();
+    await ref.read(dashboardProvider.notifier).refresh();
+
+    state = const AsyncValue.data(null);
+
+    return true;
+  } catch (e, st) {
+    state = AsyncValue.error(e, st);
+    return false;
+  }
+}
 
   Future<bool> deleteProduct(int id) async {
     try {
-      final success = await ref.read(productRemoteSourceProvider).deleteProductFromServer(id);
+      final success = await ref
+          .read(productRemoteSourceProvider)
+          .deleteProductFromServer(id);
       if (success) {
         ref.read(productListProvider.notifier).refresh();
+        ref.read(dashboardProvider.notifier).refresh(); // ⚡ Refresh dashboard
         return true;
       }
     } catch (_) {}
@@ -210,12 +243,12 @@ class ProductOperations extends StateNotifier<AsyncValue<void>> {
   }
 }
 
-final productOperationsProvider = StateNotifierProvider<ProductOperations, AsyncValue<void>>((ref) {
-  return ProductOperations(ref);
-});
+final productOperationsProvider =
+    StateNotifierProvider<ProductOperations, AsyncValue<void>>((ref) {
+      return ProductOperations(ref);
+    });
 
 // ─── Filtered & Sorted List (client‑side) ──────────────────
-// Search is now done server‑side, so we only apply filter and sort here.
 final filteredProductsProvider = Provider<Map<String, dynamic>>((ref) {
   final paginatedState = ref.watch(productListProvider);
   final filter = ref.watch(selectedFilterProvider);
@@ -253,8 +286,18 @@ final filteredProductsProvider = Provider<Map<String, dynamic>>((ref) {
     case "Stock (Low → High)":
       temp.sort((a, b) => a.quantity.compareTo(b.quantity));
       break;
+    case "Price (High → Low)":
     case "Value (High → Low)":
-      temp.sort((a, b) => (b.quantity * b.sellingPrice).compareTo(a.quantity * a.sellingPrice));
+      temp.sort((a, b) {
+        final priceA = a.sellingPrice;
+        final priceB = b.sellingPrice;
+
+        if (priceB > priceA) return 1;
+        if (priceB < priceA) return -1;
+
+        // Equal price tie-breaker: Alphabetical order A-Z
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
       break;
     default:
       temp.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));

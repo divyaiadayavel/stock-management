@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../../core/storage/db_helper.dart';
+
 
 class ProductSearchSheet extends StatefulWidget {
   final Function(Map<String, dynamic>, int qty) onSelect;
@@ -16,16 +16,8 @@ class _ProductSearchSheetState extends State<ProductSearchSheet> {
 
   Map<int, int> qtyMap = {}; // store qty per product
 
-  @override
-  void initState() {
-    super.initState();
-    load();
-  }
 
-  void load() async {
-    final data = await DBHelper.getAllProducts();
-    setState(() => products = data);
-  }
+
 
   @override
   Widget build(BuildContext context) {
