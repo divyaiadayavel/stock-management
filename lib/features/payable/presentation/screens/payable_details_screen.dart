@@ -5,9 +5,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/responsive_helper.dart';
+import '../../../reports/domain/entities/report_extras.dart';
 import '../../../reports/presentation/screens/po_details_screen.dart';
 import '../../../reports/presentation/widgets/report_shared_widgets.dart';
-import '../../domain/entities/supplier_detail.dart';
 import '../providers/payable_provider.dart';
 
 /// PAYABLE DETAILS SCREEN
@@ -18,9 +18,15 @@ import '../providers/payable_provider.dart';
 /// every purchase order raised with this supplier, tapping one goes
 /// straight to [PoDetailsScreen] (no preview step).
 ///
-/// The purchase-order list itself still comes from reports.php's
-/// `supplier_detail` action via [supplierDetailProvider] — that's the
-/// only place the itemized purchase history lives.
+/// DATA FLOW: [supplierPurchaseOrdersProvider] (keyed by supplier NAME,
+/// not id) → reportsRepositoryProvider.getPurchaseOrdersReport() → the
+/// exact same `reports.php?action=purchases&view=orders` action your
+/// Purchases/Reports screens already use successfully.
+///
+/// RESPONSIVE LAYOUT: horizontal insets come from [R.hPad], capping the
+/// content to a readable max width and centering it on desktop rather
+/// than stretching it edge-to-edge. The order list itself flows through
+/// [_ResponsiveGrid] — one column on phone, two on tablet and desktop.
 class PayableDetailsScreen extends ConsumerWidget {
   final String supplierId;
   final String? supplierName;
@@ -58,12 +64,13 @@ class PayableDetailsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final detailAsync = ref.watch(supplierDetailProvider(supplierId));
     final name = (supplierName ?? '').trim().isEmpty ? 'Supplier' : supplierName!.trim();
+    final ordersAsync = ref.watch(supplierPurchaseOrdersProvider(name));
     final parts = name.split(' ');
     final initials = parts.length >= 2
         ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
         : name[0].toUpperCase();
+    final hPad = R.hPad(context).left;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -89,10 +96,10 @@ class PayableDetailsScreen extends ConsumerWidget {
       ),
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () async => ref.invalidate(supplierDetailProvider(supplierId)),
+          onRefresh: () async => ref.invalidate(supplierPurchaseOrdersProvider(name)),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: EdgeInsets.symmetric(horizontal: R.sp(context, 16), vertical: R.sp(context, 12)),
+            padding: EdgeInsets.symmetric(horizontal: hPad, vertical: R.sp(context, 12)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -167,21 +174,22 @@ class PayableDetailsScreen extends ConsumerWidget {
                 ),
                 SizedBox(height: R.sp(context, 12)),
 
-                ReportAsyncView<SupplierDetail>(
-                  value: detailAsync,
-                  builder: (context, detail) {
-                    final paid = (detail.totalProcurementValue - currentBalance).clamp(0, double.infinity);
+                ReportAsyncView<List<PurchaseOrderSummary>>(
+                  value: ordersAsync,
+                  builder: (context, orders) {
+                    final totalPurchases = orders.fold<double>(0.0, (sum, o) => sum + o.grandTotal);
+                    final totalPaid = orders.fold<double>(0.0, (sum, o) => sum + o.paidAmount);
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
                             Expanded(
-                              child: _MiniStat(label: 'Total Purchases', value: formatRupee(detail.totalProcurementValue)),
+                              child: _MiniStat(label: 'Total Purchases', value: formatRupee(totalPurchases)),
                             ),
                             SizedBox(width: R.sp(context, 8)),
                             Expanded(
-                              child: _MiniStat(label: 'Paid', value: formatRupee(paid.toDouble()), color: AppColors.green),
+                              child: _MiniStat(label: 'Paid', value: formatRupee(totalPaid), color: AppColors.green),
                             ),
                             SizedBox(width: R.sp(context, 8)),
                             Expanded(
@@ -195,7 +203,7 @@ class PayableDetailsScreen extends ConsumerWidget {
                         ),
                         SizedBox(height: R.sp(context, 20)),
                         Text(
-                          'Purchase Orders (${detail.orders.length})',
+                          'Purchase Orders (${orders.length})',
                           style: TextStyle(
                             fontSize: R.fs(context, 14),
                             fontWeight: FontWeight.w700,
@@ -203,7 +211,7 @@ class PayableDetailsScreen extends ConsumerWidget {
                           ),
                         ),
                         SizedBox(height: R.sp(context, 8)),
-                        _PurchasesList(orders: detail.orders),
+                        _PurchasesList(orders: orders),
                       ],
                     );
                   },
@@ -271,11 +279,15 @@ class _PurchasesList extends StatelessWidget {
       );
     }
 
-    return Column(
+    return _ResponsiveGrid(
+      columns: R.gridCols(context, phone: 1, tablet: 2, desktop: 2),
+      spacing: R.sp(context, 10),
+      runSpacing: R.sp(context, 10),
       children: orders.map((order) {
         final hasBalance = order.balanceAmount > 0.01;
         final qtyText = _formatQuantity(order.totalQuantity);
         return GestureDetector(
+          key: ValueKey(order.poNumber),
           onTap: () {
             if (order.poNumber.isEmpty) return;
             Navigator.push(
@@ -284,7 +296,6 @@ class _PurchasesList extends StatelessWidget {
             );
           },
           child: Container(
-            margin: EdgeInsets.only(bottom: R.sp(context, 10)),
             padding: EdgeInsets.symmetric(horizontal: R.sp(context, 14), vertical: R.sp(context, 12)),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -337,6 +348,51 @@ class _PurchasesList extends StatelessWidget {
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+/// A tiny device-aware grid: 1 column just stacks children (identical to
+/// the old Column on phone), anything more measures the available width
+/// with [LayoutBuilder] and wraps equal-width children — no fixed row
+/// height is assumed, so each card (even one with a wrapped multi-line
+/// item summary) is free to size to its own content.
+class _ResponsiveGrid extends StatelessWidget {
+  final List<Widget> children;
+  final int columns;
+  final double spacing;
+  final double runSpacing;
+
+  const _ResponsiveGrid({
+    required this.children,
+    required this.columns,
+    required this.spacing,
+    required this.runSpacing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (columns <= 1) {
+      return Column(
+        children: [
+          for (int i = 0; i < children.length; i++) ...[
+            if (i > 0) SizedBox(height: runSpacing),
+            children[i],
+          ],
+        ],
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final itemWidth = (constraints.maxWidth - spacing * (columns - 1)) / columns;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: runSpacing,
+          children: [
+            for (final child in children) SizedBox(width: itemWidth, child: child),
+          ],
+        );
+      },
     );
   }
 }

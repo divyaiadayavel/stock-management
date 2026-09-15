@@ -312,12 +312,13 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
     required List<Widget> Function(
       void Function(void Function()) setSheetState,
       String? errorText,
-      void Function(String?) setError,
-    ) fieldsBuilder,
+      void Function(String?) setFormError,
+    )
+    fieldsBuilder,
     required String saveLabel,
-    required Future<bool> Function() onSave,
+    required Future<bool> Function(void Function(String?) setFormError) onSave,
     bool isEdit = false,
-    VoidCallback? onDelete,
+    Future<void> Function()? onDelete,
   }) {
     bool isSaving = false;
     String? errorText;
@@ -329,9 +330,13 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx2, setSheetState) {
+            void setFormError(String? val) {
+              setSheetState(() => errorText = val);
+            }
+
             Future<void> handleSave() async {
               setSheetState(() => isSaving = true);
-              final success = await onSave();
+              final success = await onSave(setFormError);
               if (!mounted) return;
               if (success) {
                 Navigator.pop(ctx2);
@@ -369,7 +374,9 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
                           child: Container(
                             width: 32,
                             height: 4,
-                            margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+                            margin: const EdgeInsets.only(
+                              bottom: AppSpacing.lg,
+                            ),
                             decoration: BoxDecoration(
                               color: AppColors.borderStrong.withOpacity(0.4),
                               borderRadius: BorderRadius.circular(2),
@@ -389,7 +396,9 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
                               ),
                             ),
                             InkWell(
-                              onTap: isSaving ? null : () => Navigator.pop(ctx2),
+                              onTap: isSaving
+                                  ? null
+                                  : () => Navigator.pop(ctx2),
                               borderRadius: BorderRadius.circular(20),
                               child: Container(
                                 padding: const EdgeInsets.all(4),
@@ -397,7 +406,11 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
                                   color: AppColors.surface2,
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(Icons.close, size: 18, color: AppColors.textSecondary),
+                                child: const Icon(
+                                  Icons.close,
+                                  size: 18,
+                                  color: AppColors.textSecondary,
+                                ),
                               ),
                             ),
                           ],
@@ -407,7 +420,7 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
                         ...fieldsBuilder(
                           setSheetState,
                           errorText,
-                          (val) => setSheetState(() => errorText = val),
+                          setFormError,
                         ),
                         const SizedBox(height: AppSpacing.xl),
                         // Action Buttons: Delete & Save
@@ -419,15 +432,19 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
                                     ? null
                                     : () async {
                                         final confirm = await _showDeleteDialog(
-                                          _selectedTab == 0 ? 'Category' : 'Unit',
+                                          _selectedTab == 0
+                                              ? 'Category'
+                                              : 'Unit',
                                         );
                                         if (confirm == true) {
                                           if (!mounted) return;
                                           Navigator.pop(ctx2);
-                                          onDelete();
+                                          await onDelete();
                                         }
                                       },
-                                borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+                                borderRadius: BorderRadius.circular(
+                                  AppSizes.radiusMd,
+                                ),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: AppSpacing.lg,
@@ -435,7 +452,9 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
                                   ),
                                   decoration: BoxDecoration(
                                     color: AppColors.red.withOpacity(0.08),
-                                    borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+                                    borderRadius: BorderRadius.circular(
+                                      AppSizes.radiusMd,
+                                    ),
                                     border: Border.all(
                                       color: AppColors.red.withOpacity(0.2),
                                     ),
@@ -466,7 +485,9 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
                                 label: saveLabel,
                                 isLoading: isSaving,
                                 onPressed: isSaving ? null : handleSave,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
                               ),
                             ),
                           ],
@@ -501,7 +522,10 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
       ),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+        labelStyle: const TextStyle(
+          color: AppColors.textSecondary,
+          fontSize: 13,
+        ),
         errorText: errorText,
         filled: true,
         fillColor: AppColors.surface2,
@@ -525,16 +549,17 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
     );
   }
 
-  // ─── FORM ENTRY POINTS ─────────────────────────────────────────────────────
+  // ─── FORM ENTRY POINTS ────────────────────────────────────────────────     void _showCategoryDialog({
   void _showCategoryDialog({
     String title = 'Add Category',
     Map<String, dynamic>? initialData,
     int? id,
   }) {
-    final nameCtrl = TextEditingController(text: initialData?['category_name'] ?? '');
-    final descCtrl = TextEditingController(text: initialData?['description'] ?? '');
-    final orderCtrl = TextEditingController(
-      text: (initialData?['display_order'] ?? 0).toString(),
+    final nameCtrl = TextEditingController(
+      text: initialData?['category_name'] ?? '',
+    );
+    final descCtrl = TextEditingController(
+      text: initialData?['description'] ?? '',
     );
     final isEdit = id != null;
 
@@ -543,38 +568,37 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
       isEdit: isEdit,
       onDelete: isEdit ? () => _handleDeleteCategory(id) : null,
       saveLabel: isEdit ? 'Save Changes' : 'Create Category',
-      fieldsBuilder: (setSheetState, errorText, setError) => [
+      fieldsBuilder: (setSheetState, errorText, setFormError) => [
         _buildCleanTextField(
           controller: nameCtrl,
           label: 'Category Name',
           errorText: errorText,
           onChanged: (_) {
-            if (errorText != null) setError(null);
+            if (errorText != null) setFormError(null);
           },
         ),
         const SizedBox(height: AppSpacing.md),
-        _buildCleanTextField(
-          controller: descCtrl,
-          label: 'Description',
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _buildCleanTextField(
-          controller: orderCtrl,
-          label: 'Display Order',
-          keyboardType: TextInputType.number,
-        ),
+        _buildCleanTextField(controller: descCtrl, label: 'Description'),
       ],
-      onSave: () async {
-        final name = nameCtrl.text.trim();
-        if (name.isEmpty) {
-          _showSnackBar('Category name is required');
+      onSave: (setFormError) async {
+        final rawName = nameCtrl.text.trim();
+        if (rawName.isEmpty) {
+          setFormError('Category name is required');
           return false;
         }
+        if (RegExp(r'\d').hasMatch(rawName)) {
+          setFormError('Numbers are invalid');
+          return false;
+        }
+
+        // Auto-capitalize starting letter
+        final formattedName = rawName[0].toUpperCase() + rawName.substring(1);
+
         try {
           final data = {
-            'category_name': name,
+            'category_name': formattedName,
             'description': descCtrl.text.trim(),
-            'display_order': int.tryParse(orderCtrl.text.trim()) ?? 0,
+            'display_order': 0,
           };
           if (isEdit) {
             await _updateCategory(id, data);
@@ -582,7 +606,10 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
             await _addCategory(data);
           }
           if (!mounted) return false;
-          _showSnackBar('Category ${isEdit ? 'updated' : 'added'}', isError: false);
+          _showSnackBar(
+            'Category ${isEdit ? 'updated' : 'added'}',
+            isError: false,
+          );
           return true;
         } catch (e) {
           if (!mounted) return false;
@@ -598,9 +625,12 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
     Map<String, dynamic>? initialData,
     int? id,
   }) {
-    final nameCtrl = TextEditingController(text: initialData?['unit_name'] ?? '');
-    final shortCtrl = TextEditingController(text: initialData?['short_name'] ?? '');
-    final descCtrl = TextEditingController(text: initialData?['description'] ?? '');
+    final nameCtrl = TextEditingController(
+      text: initialData?['unit_name'] ?? '',
+    );
+    final shortCtrl = TextEditingController(
+      text: initialData?['short_name'] ?? '',
+    );
     final isEdit = id != null;
 
     _showFormSheet(
@@ -608,13 +638,13 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
       isEdit: isEdit,
       onDelete: isEdit ? () => _handleDeleteUnit(id) : null,
       saveLabel: isEdit ? 'Save Changes' : 'Create Unit',
-      fieldsBuilder: (setSheetState, errorText, setError) => [
+      fieldsBuilder: (setSheetState, errorText, setFormError) => [
         _buildCleanTextField(
           controller: nameCtrl,
           label: 'Unit Name',
           errorText: errorText,
           onChanged: (_) {
-            if (errorText != null) setError(null);
+            if (errorText != null) setFormError(null);
           },
         ),
         const SizedBox(height: AppSpacing.md),
@@ -622,23 +652,26 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
           controller: shortCtrl,
           label: 'Short Name (e.g. kg, pcs)',
         ),
-        const SizedBox(height: AppSpacing.md),
-        _buildCleanTextField(
-          controller: descCtrl,
-          label: 'Description',
-        ),
       ],
-      onSave: () async {
-        final name = nameCtrl.text.trim();
-        if (name.isEmpty) {
-          _showSnackBar('Unit name is required');
+      onSave: (setFormError) async {
+        final rawName = nameCtrl.text.trim();
+        if (rawName.isEmpty) {
+          setFormError('Unit name is required');
           return false;
         }
+        if (RegExp(r'\d').hasMatch(rawName)) {
+          setFormError('Numbers are invalid');
+          return false;
+        }
+
+        // Auto-capitalize starting letter
+        final formattedName = rawName[0].toUpperCase() + rawName.substring(1);
+
         try {
           final data = {
-            'unit_name': name,
+            'unit_name': formattedName,
             'short_name': shortCtrl.text.trim(),
-            'description': descCtrl.text.trim(),
+            'description': '',
           };
           if (isEdit) {
             await _updateUnit(id, data);
@@ -685,7 +718,10 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(ctx, true),
@@ -696,7 +732,13 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
                   borderRadius: BorderRadius.circular(AppSizes.radiusMd),
                 ),
               ),
-              child: const Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: const Text(
+                'Delete',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ],
         );
@@ -777,7 +819,10 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
                           if (badge != null) ...[
                             const SizedBox(width: 6),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: AppColors.surface2,
                                 borderRadius: BorderRadius.circular(6),
@@ -887,10 +932,7 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           if (isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: emptyState,
-            )
+            SliverFillRemaining(hasScrollBody: false, child: emptyState)
           else
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(
@@ -933,7 +975,7 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
           icon: Icons.category_outlined,
           title: (cat['category_name'] ?? '').toString(),
           subtitle: (cat['description'] ?? '').toString(),
-          badge: cat['display_order'] != null ? '#${cat['display_order']}' : null,
+          badge: null,
           isEnabled: isEnabled,
           onEdit: () => _showCategoryDialog(
             title: 'Edit Category',
@@ -969,11 +1011,8 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
           title: (unit['unit_name'] ?? '').toString(),
           subtitle: (unit['short_name'] ?? '').toString(),
           isEnabled: isEnabled,
-          onEdit: () => _showUnitDialog(
-            title: 'Edit Unit',
-            initialData: unit,
-            id: id,
-          ),
+          onEdit: () =>
+              _showUnitDialog(title: 'Edit Unit', initialData: unit, id: id),
           onToggle: (value) => _handleToggleUnit(id, value),
         );
       },
@@ -1076,23 +1115,16 @@ class _CustomizeScreenState extends ConsumerState<CustomizeScreen> {
             )
           : IndexedStack(
               index: _selectedTab,
-              children: [
-                _buildCategoriesTab(),
-                _buildUnitsTab(),
-              ],
+              children: [_buildCategoriesTab(), _buildUnitsTab()],
             ),
       floatingActionButton: _isLoading
           ? null
           : _buildGradientButton(
               label: _selectedTab == 0 ? 'Add Category' : 'Add Unit',
               icon: Icons.add,
-              onPressed: () => _selectedTab == 0
-                  ? _showCategoryDialog()
-                  : _showUnitDialog(),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 14,
-              ),
+              onPressed: () =>
+                  _selectedTab == 0 ? _showCategoryDialog() : _showUnitDialog(),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
               borderRadius: 28,
             ),
     );

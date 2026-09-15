@@ -5,9 +5,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/responsive_helper.dart';
+import '../../../reports/domain/entities/report_bill.dart';
 import '../../../reports/presentation/screens/invoice_details_screen.dart';
 import '../../../reports/presentation/widgets/report_shared_widgets.dart';
-import '../../domain/entities/customer_detail.dart';
 import '../providers/receivable_provider.dart';
 
 /// RECEIVABLE DETAILS SCREEN
@@ -18,9 +18,15 @@ import '../providers/receivable_provider.dart';
 /// every bill raised to this customer, tapping one goes straight to
 /// [InvoiceDetailsScreen] (no preview step).
 ///
-/// The bill list itself still comes from reports.php's `customer_detail`
-/// action via [customerDetailProvider] — that's the only place the
-/// itemized invoice history lives.
+/// DATA FLOW: [customerBillsProvider] (keyed by customer NAME, not id)
+/// → reportsRepositoryProvider.getSalesReports() → the exact same
+/// `reports.php?action=sales` action your Sales Reports screen already
+/// uses successfully.
+///
+/// RESPONSIVE LAYOUT: horizontal insets come from [R.hPad], capping the
+/// content to a readable max width and centering it on desktop rather
+/// than stretching it edge-to-edge. The bill list itself flows through
+/// [_ResponsiveGrid] — one column on phone, two on tablet and desktop.
 class ReceivableDetailsScreen extends ConsumerWidget {
   final String customerId;
   final String? customerName;
@@ -58,12 +64,13 @@ class ReceivableDetailsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final detailAsync = ref.watch(customerDetailProvider(customerId));
     final name = (customerName ?? '').trim().isEmpty ? 'Customer' : customerName!.trim();
+    final billsAsync = ref.watch(customerBillsProvider(name));
     final parts = name.split(' ');
     final initials = parts.length >= 2
         ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
         : name[0].toUpperCase();
+    final hPad = R.hPad(context).left;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -89,10 +96,10 @@ class ReceivableDetailsScreen extends ConsumerWidget {
       ),
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () async => ref.invalidate(customerDetailProvider(customerId)),
+          onRefresh: () async => ref.invalidate(customerBillsProvider(name)),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: EdgeInsets.symmetric(horizontal: R.sp(context, 16), vertical: R.sp(context, 12)),
+            padding: EdgeInsets.symmetric(horizontal: hPad, vertical: R.sp(context, 12)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -145,18 +152,19 @@ class ReceivableDetailsScreen extends ConsumerWidget {
                 ),
                 SizedBox(height: R.sp(context, 12)),
 
-                ReportAsyncView<CustomerDetail>(
-                  value: detailAsync,
-                  builder: (context, detail) {
-                    final paid = (detail.totalSalesValue - currentBalance).clamp(0, double.infinity);
+                ReportAsyncView<List<ReportBill>>(
+                  value: billsAsync,
+                  builder: (context, bills) {
+                    final totalSales = bills.fold<double>(0.0, (sum, b) => sum + b.grandTotal);
+                    final totalPaid = bills.fold<double>(0.0, (sum, b) => sum + b.paidAmount);
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            Expanded(child: _MiniStat(label: 'Total Sales', value: formatRupee(detail.totalSalesValue))),
+                            Expanded(child: _MiniStat(label: 'Total Sales', value: formatRupee(totalSales))),
                             SizedBox(width: R.sp(context, 8)),
-                            Expanded(child: _MiniStat(label: 'Paid', value: formatRupee(paid.toDouble()), color: AppColors.green)),
+                            Expanded(child: _MiniStat(label: 'Paid', value: formatRupee(totalPaid), color: AppColors.green)),
                             SizedBox(width: R.sp(context, 8)),
                             Expanded(
                               child: _MiniStat(
@@ -169,11 +177,11 @@ class ReceivableDetailsScreen extends ConsumerWidget {
                         ),
                         SizedBox(height: R.sp(context, 20)),
                         Text(
-                          'Bills (${detail.bills.length})',
+                          'Bills (${bills.length})',
                           style: TextStyle(fontSize: R.fs(context, 14), fontWeight: FontWeight.w700, color: AppColors.textPrimaryDark),
                         ),
                         SizedBox(height: R.sp(context, 8)),
-                        _BillsList(bills: detail.bills),
+                        _BillsList(bills: bills),
                       ],
                     );
                   },
@@ -220,7 +228,7 @@ class _MiniStat extends StatelessWidget {
 }
 
 class _BillsList extends StatelessWidget {
-  final List<ReportBillSummary> bills;
+  final List<ReportBill> bills;
   const _BillsList({required this.bills});
 
   @override
@@ -238,21 +246,22 @@ class _BillsList extends StatelessWidget {
       );
     }
 
-    return Column(
+    return _ResponsiveGrid(
+      columns: R.gridCols(context, phone: 1, tablet: 2, desktop: 2),
+      spacing: R.sp(context, 10),
+      runSpacing: R.sp(context, 10),
       children: bills.map((bill) {
-        final label = bill.invoiceNumber.isNotEmpty ? bill.invoiceNumber : bill.invoiceId;
         final hasBalance = bill.balanceAmount > 0.01;
         return GestureDetector(
+          key: ValueKey(bill.billId.isNotEmpty ? bill.billId : bill.invoiceNumber),
           onTap: () {
-            final invoiceId = bill.invoiceNumber.isNotEmpty ? bill.invoiceNumber : bill.invoiceId;
-            if (invoiceId.isEmpty) return;
+            if (bill.billId.isEmpty) return;
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => InvoiceDetailsScreen(invoiceId: invoiceId)),
+              MaterialPageRoute(builder: (_) => InvoiceDetailsScreen(invoiceId: bill.billId)),
             );
           },
           child: Container(
-            margin: EdgeInsets.only(bottom: R.sp(context, 10)),
             padding: EdgeInsets.symmetric(horizontal: R.sp(context, 14), vertical: R.sp(context, 12)),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -275,10 +284,13 @@ class _BillsList extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(label, style: TextStyle(fontSize: R.fs(context, 13.5), fontWeight: FontWeight.w600, color: AppColors.textPrimaryDark)),
+                      Text(
+                        bill.invoiceNumber.isNotEmpty ? bill.invoiceNumber : bill.billId,
+                        style: TextStyle(fontSize: R.fs(context, 13.5), fontWeight: FontWeight.w600, color: AppColors.textPrimaryDark),
+                      ),
                       SizedBox(height: R.sp(context, 2)),
                       Text(
-                        formatReportDate(bill.date),
+                        '${bill.invoiceDate}${bill.itemCount > 0 ? ' • ${bill.itemCount} item${bill.itemCount == 1 ? '' : 's'}' : ''}',
                         style: TextStyle(fontSize: R.fs(context, 11.5), color: AppColors.textSecondary),
                       ),
                     ],
@@ -304,6 +316,50 @@ class _BillsList extends StatelessWidget {
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+/// A tiny device-aware grid: 1 column just stacks children (identical to
+/// the old Column on phone), anything more measures the available width
+/// with [LayoutBuilder] and wraps equal-width children — no fixed row
+/// height is assumed, so each card is free to size to its own content.
+class _ResponsiveGrid extends StatelessWidget {
+  final List<Widget> children;
+  final int columns;
+  final double spacing;
+  final double runSpacing;
+
+  const _ResponsiveGrid({
+    required this.children,
+    required this.columns,
+    required this.spacing,
+    required this.runSpacing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (columns <= 1) {
+      return Column(
+        children: [
+          for (int i = 0; i < children.length; i++) ...[
+            if (i > 0) SizedBox(height: runSpacing),
+            children[i],
+          ],
+        ],
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final itemWidth = (constraints.maxWidth - spacing * (columns - 1)) / columns;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: runSpacing,
+          children: [
+            for (final child in children) SizedBox(width: itemWidth, child: child),
+          ],
+        );
+      },
     );
   }
 }

@@ -13,7 +13,6 @@ import 'payment_screen.dart';
 import 'add_product_bill_screen.dart';
 import '../../../../core/utils/responsive_helper.dart';
 
-
 class CurrentBillScreen extends ConsumerStatefulWidget {
   const CurrentBillScreen({super.key});
 
@@ -345,17 +344,6 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                           // ── TABLE ROWS ──
                           Expanded(
                             child: ListView.separated(
-                              // ✅ FIX: A bill's cart is a bounded, modest-sized
-                              // list (a handful to a few dozen line items), not
-                              // an endless feed. The default cacheExtent (250px)
-                              // was disposing rows once they scrolled far enough
-                              // off-screen, so scrolling back down past them
-                              // remounted a brand-new CachedNetworkImage widget
-                              // and briefly flashed the placeholder again —
-                              // looking like the image was "reloading". Keeping
-                              // a generous cacheExtent means every row (and its
-                              // decoded image) stays alive for the life of the
-                              // billing session, so it never has to re-resolve.
                               cacheExtent: 3000,
                               itemCount: billingState.cart.length,
                               separatorBuilder: (_, __) => const Divider(
@@ -367,10 +355,6 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                                 final deleteBtnW = R.fluid(context, 32, 40);
 
                                 return Padding(
-                                  // Stable identity per product so Flutter never
-                                  // confuses one row's element/image state for
-                                  // another's when qty changes or an item is
-                                  // removed from the middle of the cart.
                                   key: ValueKey(item.productId),
                                   padding: EdgeInsets.symmetric(
                                     horizontal: R.sp(context, AppSpacing.sm),
@@ -768,17 +752,32 @@ class _CurrentBillScreenState extends ConsumerState<CurrentBillScreen> {
                                 );
                               },
                             );
-if (confirm == true) {
-  billingNotifier.clearCart();
 
-  if (mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Bill cleared successfully"),
-      ),
-    );
-  }
-}
+                            if (confirm == true) {
+                              if (billingState.cart.isEmpty) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        "There is no product to clear",
+                                      ),
+                                    ),
+                                  );
+                                }
+                              } else {
+                                billingNotifier.clearCart();
+
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        "Bill cleared successfully",
+                                      ),
+                                    ),
+                                  );
+                                }
+                              }
+                            }
                           },
                           style: OutlinedButton.styleFrom(
                             side: const BorderSide(color: AppColors.red),

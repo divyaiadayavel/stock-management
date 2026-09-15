@@ -13,16 +13,6 @@ import 'receivable_details_screen.dart';
 /// ─────────────────
 /// Lists every customer with a "Due" / "Settled" indication, plus a
 /// running total.
-///
-/// DATA FLOW: this reads from [allCustomersProvider] — the exact same
-/// source your Customers screen already uses — so the amount shown here
-/// for every customer is guaranteed to match the Customers screen
-/// exactly (currentBalance straight from customers.php). The Reports
-/// feature's own `receivables` action returns unaggregated data that
-/// doesn't reconcile with the real ledger, so this screen intentionally
-/// does not use it for the list — only the detail screen still uses
-/// reports.php, for the invoice breakdown that isn't available anywhere
-/// else.
 class ReceivableScreen extends ConsumerStatefulWidget {
   const ReceivableScreen({super.key});
 
@@ -41,9 +31,67 @@ class _ReceivableScreenState extends ConsumerState<ReceivableScreen> {
     super.dispose();
   }
 
+  Widget _buildHighlightedText(
+    String text,
+    String query,
+    TextStyle baseStyle,
+    TextStyle highlightStyle,
+  ) {
+    if (query.isEmpty) {
+      return Text(
+        text,
+        style: baseStyle,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
+    final lowerText = text.toLowerCase();
+    final lowerQuery = query.toLowerCase().trim();
+
+    if (lowerQuery.isEmpty || !lowerText.contains(lowerQuery)) {
+      return Text(
+        text,
+        style: baseStyle,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
+    final List<TextSpan> spans = [];
+    int start = 0;
+
+    while (true) {
+      final index = lowerText.indexOf(lowerQuery, start);
+      if (index == -1) {
+        spans.add(TextSpan(text: text.substring(start), style: baseStyle));
+        break;
+      }
+
+      if (index > start) {
+        spans.add(
+          TextSpan(text: text.substring(start, index), style: baseStyle),
+        );
+      }
+
+      final matchEnd = index + lowerQuery.length;
+      spans.add(
+        TextSpan(text: text.substring(index, matchEnd), style: highlightStyle),
+      );
+      start = matchEnd;
+    }
+
+    return RichText(
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      text: TextSpan(children: spans),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final customersAsync = ref.watch(allCustomersProvider);
+    final hPad = R.hPad(context).left;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -63,13 +111,20 @@ class _ReceivableScreenState extends ConsumerState<ReceivableScreen> {
         child: customersAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Center(
-            child: Text('Could not load customers.', style: const TextStyle(color: AppColors.textSecondary)),
+            child: Text(
+              'Could not load customers.',
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
           ),
           data: (allCustomers) {
-            final totalReceivable = allCustomers.fold<double>(0.0, (sum, c) => sum + c.currentBalance);
+            final totalReceivable = allCustomers.fold<double>(
+              0.0,
+              (sum, c) => sum + c.currentBalance,
+            );
 
             final filtered = allCustomers.where((c) {
-              final matchesQuery = _query.isEmpty ||
+              final matchesQuery =
+                  _query.isEmpty ||
                   c.customerName.toLowerCase().contains(_query.toLowerCase()) ||
                   c.phone.replaceAll(RegExp(r'\s+'), '').contains(_query);
               final matchesDue = !_dueOnly || c.currentBalance > 0;
@@ -80,9 +135,9 @@ class _ReceivableScreenState extends ConsumerState<ReceivableScreen> {
               children: [
                 Padding(
                   padding: EdgeInsets.fromLTRB(
-                    R.sp(context, 16),
+                    hPad,
                     R.sp(context, 4),
-                    R.sp(context, 16),
+                    hPad,
                     R.sp(context, 12),
                   ),
                   child: Column(
@@ -92,17 +147,39 @@ class _ReceivableScreenState extends ConsumerState<ReceivableScreen> {
                         onChanged: (v) => setState(() => _query = v),
                         decoration: InputDecoration(
                           hintText: 'Search customer name or phone...',
-                          prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
+                          prefixIcon: const Icon(
+                            Icons.search,
+                            color: AppColors.textSecondary,
+                          ),
                           filled: true,
                           fillColor: Colors.white,
-                          contentPadding: EdgeInsets.symmetric(vertical: R.sp(context, 12)),
+                          contentPadding: EdgeInsets.symmetric(
+                            vertical: R.sp(context, 12),
+                          ),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(R.radius(context, 12)),
-                            borderSide: const BorderSide(color: AppColors.border),
+                            borderRadius: BorderRadius.circular(
+                              R.radius(context, 12),
+                            ),
+                            borderSide: const BorderSide(
+                              color: AppColors.border,
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(R.radius(context, 12)),
-                            borderSide: const BorderSide(color: AppColors.border),
+                            borderRadius: BorderRadius.circular(
+                              R.radius(context, 12),
+                            ),
+                            borderSide: const BorderSide(
+                              color: AppColors.border,
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(
+                              R.radius(context, 12),
+                            ),
+                            borderSide: const BorderSide(
+                              color: AppColors.cyan,
+                              width: 1.5,
+                            ),
                           ),
                         ),
                       ),
@@ -116,7 +193,7 @@ class _ReceivableScreenState extends ConsumerState<ReceivableScreen> {
                           ),
                           SizedBox(width: R.sp(context, 12)),
                           _StatCard(
-                            label: 'Total Receivable',
+                            label: 'Receivable',
                             value: formatRupee(totalReceivable),
                             icon: Icons.account_balance_wallet_outlined,
                             valueColor: AppColors.primary,
@@ -126,9 +203,17 @@ class _ReceivableScreenState extends ConsumerState<ReceivableScreen> {
                       SizedBox(height: R.sp(context, 12)),
                       Row(
                         children: [
-                          _FilterChip(label: 'All', selected: !_dueOnly, onTap: () => setState(() => _dueOnly = false)),
+                          _FilterChip(
+                            label: 'All',
+                            selected: !_dueOnly,
+                            onTap: () => setState(() => _dueOnly = false),
+                          ),
                           SizedBox(width: R.sp(context, 8)),
-                          _FilterChip(label: 'Due', selected: _dueOnly, onTap: () => setState(() => _dueOnly = true)),
+                          _FilterChip(
+                            label: 'Due',
+                            selected: _dueOnly,
+                            onTap: () => setState(() => _dueOnly = true),
+                          ),
                         ],
                       ),
                     ],
@@ -138,22 +223,44 @@ class _ReceivableScreenState extends ConsumerState<ReceivableScreen> {
                   child: filtered.isEmpty
                       ? Center(
                           child: Text(
-                            allCustomers.isEmpty ? 'No customers found yet.' : 'No matches.',
-                            style: const TextStyle(color: AppColors.textSecondary),
+                            allCustomers.isEmpty
+                                ? 'No customers found yet.'
+                                : 'No matches.',
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                            ),
                           ),
                         )
                       : RefreshIndicator(
-                          onRefresh: () async => ref.invalidate(allCustomersProvider),
-                          child: ListView.separated(
+                          onRefresh: () async =>
+                              ref.invalidate(allCustomersProvider),
+                          child: SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
                             padding: EdgeInsets.fromLTRB(
-                              R.sp(context, 16),
+                              hPad,
                               0,
-                              R.sp(context, 16),
+                              hPad,
                               R.sp(context, 24),
                             ),
-                            itemCount: filtered.length,
-                            separatorBuilder: (_, _) => SizedBox(height: R.sp(context, 10)),
-                            itemBuilder: (context, index) => _ReceivableCustomerRow(customer: filtered[index]),
+                            child: _ResponsiveGrid(
+                              columns: R.gridCols(
+                                context,
+                                phone: 1,
+                                tablet: 2,
+                                desktop: 3,
+                              ),
+                              spacing: R.sp(context, 12),
+                              runSpacing: R.sp(context, 10),
+                              children: [
+                                for (final c in filtered)
+                                  _ReceivableCustomerRow(
+                                    key: ValueKey(c.id ?? c.customerName),
+                                    customer: c,
+                                    query: _query,
+                                    buildHighlightedText: _buildHighlightedText,
+                                  ),
+                              ],
+                            ),
                           ),
                         ),
                 ),
@@ -168,12 +275,23 @@ class _ReceivableScreenState extends ConsumerState<ReceivableScreen> {
 
 class _ReceivableCustomerRow extends StatelessWidget {
   final CustomerModel customer;
-  const _ReceivableCustomerRow({required this.customer});
+  final String query;
+  final Widget Function(String, String, TextStyle, TextStyle)
+  buildHighlightedText;
+
+  const _ReceivableCustomerRow({
+    super.key,
+    required this.customer,
+    required this.query,
+    required this.buildHighlightedText,
+  });
 
   @override
   Widget build(BuildContext context) {
     final hasDue = customer.currentBalance > 0;
-    final name = customer.customerName.trim().isEmpty ? 'Customer' : customer.customerName.trim();
+    final name = customer.customerName.trim().isEmpty
+        ? 'Customer'
+        : customer.customerName.trim();
     final parts = name.split(' ');
     final initials = parts.length >= 2
         ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
@@ -192,7 +310,10 @@ class _ReceivableCustomerRow extends StatelessWidget {
         ),
       ),
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: R.sp(context, 14), vertical: R.sp(context, 12)),
+        padding: EdgeInsets.symmetric(
+          horizontal: R.sp(context, 14),
+          vertical: R.sp(context, 12),
+        ),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(R.radius(context, 12)),
@@ -203,11 +324,18 @@ class _ReceivableCustomerRow extends StatelessWidget {
             Container(
               width: R.fluid(context, 44, 56),
               height: R.fluid(context, 44, 56),
-              decoration: const BoxDecoration(shape: BoxShape.circle, gradient: AppColors.brandGradient),
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: AppColors.brandGradient,
+              ),
               child: Center(
                 child: Text(
                   initials,
-                  style: TextStyle(fontSize: R.fs(context, 13), fontWeight: FontWeight.w600, color: Colors.white),
+                  style: TextStyle(
+                    fontSize: R.fs(context, 13),
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
@@ -216,33 +344,56 @@ class _ReceivableCustomerRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  buildHighlightedText(
                     name,
-                    style: TextStyle(fontSize: R.fs(context, 14), fontWeight: FontWeight.w600, color: AppColors.textPrimaryDark),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    query,
+                    TextStyle(
+                      fontSize: R.fs(context, 14),
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimaryDark,
+                    ),
+                    TextStyle(
+                      fontSize: R.fs(context, 14),
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
                   ),
                   if (customer.phone.isNotEmpty) ...[
                     SizedBox(height: R.sp(context, 2)),
-                    Text(customer.phone, style: TextStyle(fontSize: R.fs(context, 12), color: AppColors.textSecondary)),
+                    Text(
+                      customer.phone,
+                      style: TextStyle(
+                        fontSize: R.fs(context, 12),
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
                   ],
                 ],
               ),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  formatRupee(customer.currentBalance),
-                  style: TextStyle(
-                    fontSize: R.fs(context, 14),
-                    fontWeight: FontWeight.w700,
-                    color: hasDue ? AppColors.orange : AppColors.textPrimaryDark,
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 120),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      formatRupee(customer.currentBalance),
+                      style: TextStyle(
+                        fontSize: R.fs(context, 14),
+                        fontWeight: FontWeight.w700,
+                        color: hasDue
+                            ? AppColors.orange
+                            : AppColors.textPrimaryDark,
+                      ),
+                    ),
                   ),
-                ),
-                SizedBox(height: R.sp(context, 4)),
-                ReportBadge.auto(hasDue ? 'Due' : 'Settled'),
-              ],
+                  SizedBox(height: R.sp(context, 4)),
+                  ReportBadge.auto(hasDue ? 'Due' : 'Settled'),
+                ],
+              ),
             ),
           ],
         ),
@@ -257,17 +408,31 @@ class _StatCard extends StatelessWidget {
   final IconData icon;
   final Color? valueColor;
 
-  const _StatCard({required this.label, required this.value, required this.icon, this.valueColor});
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.valueColor,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: R.sp(context, 16), vertical: R.sp(context, 14)),
+        padding: EdgeInsets.symmetric(
+          horizontal: R.sp(context, 16),
+          vertical: R.sp(context, 14),
+        ),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(R.radius(context, 16)),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
           border: Border.all(color: AppColors.border.withValues(alpha: 0.6)),
         ),
         child: Row(
@@ -278,20 +443,42 @@ class _StatCard extends StatelessWidget {
                 children: [
                   Text(
                     label,
-                    style: TextStyle(fontSize: R.fs(context, 11), color: AppColors.textSecondary, fontWeight: FontWeight.w600, letterSpacing: 0.5),
+                    style: TextStyle(
+                      fontSize: R.fs(context, 11),
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
                   ),
                   SizedBox(height: R.sp(context, 6)),
-                  Text(
-                    value,
-                    style: TextStyle(fontSize: R.fs(context, 18), fontWeight: FontWeight.bold, color: valueColor ?? AppColors.textPrimaryDark),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      value,
+                      style: TextStyle(
+                        fontSize: R.fs(context, 18),
+                        fontWeight: FontWeight.bold,
+                        color: valueColor ?? AppColors.textPrimaryDark,
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
             Container(
               padding: EdgeInsets.all(R.sp(context, 8)),
-              decoration: BoxDecoration(color: (valueColor ?? AppColors.primary).withValues(alpha: 0.08), shape: BoxShape.circle),
-              child: Icon(icon, size: R.icon(context, 18), color: valueColor ?? AppColors.primary),
+              decoration: BoxDecoration(
+                color: (valueColor ?? AppColors.primary).withValues(
+                  alpha: 0.08,
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                size: R.icon(context, 18),
+                color: valueColor ?? AppColors.primary,
+              ),
             ),
           ],
         ),
@@ -305,19 +492,28 @@ class _FilterChip extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  const _FilterChip({required this.label, required this.selected, required this.onTap});
+  const _FilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: R.sp(context, 18), vertical: R.sp(context, 8)),
+        padding: EdgeInsets.symmetric(
+          horizontal: R.sp(context, 18),
+          vertical: R.sp(context, 8),
+        ),
         decoration: BoxDecoration(
           gradient: selected ? AppColors.brandGradient : null,
           color: selected ? null : Colors.white,
           borderRadius: BorderRadius.circular(R.radius(context, 50)),
-          border: Border.all(color: selected ? Colors.transparent : AppColors.border),
+          border: Border.all(
+            color: selected ? Colors.transparent : AppColors.border,
+          ),
         ),
         child: Text(
           label,
@@ -328,6 +524,48 @@ class _FilterChip extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ResponsiveGrid extends StatelessWidget {
+  final List<Widget> children;
+  final int columns;
+  final double spacing;
+  final double runSpacing;
+
+  const _ResponsiveGrid({
+    required this.children,
+    required this.columns,
+    required this.spacing,
+    required this.runSpacing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (columns <= 1) {
+      return Column(
+        children: [
+          for (int i = 0; i < children.length; i++) ...[
+            if (i > 0) SizedBox(height: runSpacing),
+            children[i],
+          ],
+        ],
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final itemWidth =
+            (constraints.maxWidth - spacing * (columns - 1)) / columns;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: runSpacing,
+          children: [
+            for (final child in children)
+              SizedBox(width: itemWidth, child: child),
+          ],
+        );
+      },
     );
   }
 }

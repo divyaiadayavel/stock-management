@@ -244,6 +244,23 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
       final cash = double.tryParse(_cashCtrl.text) ?? 0;
       final upi = double.tryParse(_upiCtrl.text) ?? 0;
       final tendered = cash + upi;
+
+      // Validation check: Tendered amount cannot exceed the total amount
+      if (tendered > widget.totalAmount + 0.01) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Tendered amount cannot be greater than the total amount (₹${widget.totalAmount.toStringAsFixed(2)}).',
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() => _saving = false);
+        }
+        return;
+      }
+
       final balanceDue = tendered < widget.totalAmount
           ? widget.totalAmount - tendered
           : 0;
@@ -425,9 +442,6 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     final cash = double.tryParse(_cashCtrl.text) ?? 0;
     final upi = double.tryParse(_upiCtrl.text) ?? 0;
     final tendered = cash + upi;
-    final change = tendered > widget.totalAmount
-        ? tendered - widget.totalAmount
-        : 0;
     final balanceDue = tendered < widget.totalAmount
         ? widget.totalAmount - tendered
         : 0;
@@ -536,39 +550,65 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                       ],
                     ),
                   )
-                : GestureDetector(
-              onTap: _pickCustomer,
-              child: Container(
-                width: double.infinity,
-                padding: EdgeInsets.symmetric(
-                  horizontal: R.sp(context, AppSpacing.md),
-                  vertical: R.sp(context, AppSpacing.md),
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(
-                    R.radius(context, AppSizes.radiusMd),
-                  ),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      paymentState.selectedCustomerName ?? 'Walk-in Customer',
-                      style: AppTextStyles.cardValue.copyWith(
-                        fontWeight: FontWeight.w600,
+                : Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: R.sp(context, AppSpacing.md),
+                      vertical: R.sp(context, AppSpacing.md),
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      borderRadius: BorderRadius.circular(
+                        R.radius(context, AppSizes.radiusMd),
                       ),
+                      border: Border.all(color: AppColors.border),
                     ),
-                    Icon(
-                      Icons.keyboard_arrow_down,
-                      color: AppColors.textSecondary,
-                      size: R.icon(context, AppSizes.iconMd),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: _pickCustomer,
+                            behavior: HitTestBehavior.opaque,
+                            child: Text(
+                              paymentState.selectedCustomerName ??
+                                  'Walk-in Customer',
+                              style: AppTextStyles.cardValue.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (paymentState.selectedCustomerId != null)
+                          GestureDetector(
+                            onTap: () => ref
+                                .read(paymentProvider.notifier)
+                                .clearCustomer(),
+                            behavior: HitTestBehavior.opaque,
+                            child: Padding(
+                              padding: EdgeInsets.only(
+                                left: R.sp(context, AppSpacing.sm),
+                              ),
+                              child: Icon(
+                                Icons.close_rounded,
+                                color: AppColors.textSecondary,
+                                size: R.icon(context, AppSizes.iconMd),
+                              ),
+                            ),
+                          )
+                        else
+                          GestureDetector(
+                            onTap: _pickCustomer,
+                            behavior: HitTestBehavior.opaque,
+                            child: Icon(
+                              Icons.keyboard_arrow_down,
+                              color: AppColors.textSecondary,
+                              size: R.icon(context, AppSizes.iconMd),
+                            ),
+                          ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-            ),
+                  ),
             SizedBox(height: R.sp(context, AppSpacing.lg)),
             Text('Split tender', style: AppTextStyles.sectionTitle),
             SizedBox(height: R.sp(context, AppSpacing.sm)),
@@ -594,7 +634,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                   ),
                 ),
                 Text(
-                  'Change ₹${change.toStringAsFixed(2)}',
+                  'Tendered total ₹${tendered.toStringAsFixed(2)}',
                   style: AppTextStyles.small.copyWith(
                     color: AppColors.textSecondary,
                   ),

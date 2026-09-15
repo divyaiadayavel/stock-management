@@ -1,30 +1,33 @@
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/datasources/receivable_remote_datasource.dart';
-import '../../data/repositories/receivable_repository_impl.dart';
-import '../../domain/entities/customer_detail.dart';
-import '../../domain/repositories/receivable_repository.dart';
+import '../../../reports/domain/entities/report_bill.dart';
+import '../../../reports/presentation/providers/reports_provider.dart';
 
-// ── Dependency Injection ─────────────────────────────────────────────────
-final receivableRemoteDataSourceProvider = Provider<ReceivableRemoteDataSource>((ref) {
-  return ReceivableRemoteDataSourceImpl(client: Dio());
-});
-
-final receivableRepositoryProvider = Provider<ReceivableRepository>((ref) {
-  final remoteDataSource = ref.watch(receivableRemoteDataSourceProvider);
-  return ReceivableRepositoryImpl(remoteDataSource: remoteDataSource);
-});
-
-// ── Single customer detail (Receivable Details screen) ──────────────────
-// The customer LIST itself is intentionally read from the Customers
-// feature (`allCustomersProvider`) — see receivable_screen.dart for why.
-// This provider only supplies the bill breakdown, which is unique to
-// reports.php's `customer_detail` action.
-final customerDetailProvider = FutureProvider.family<CustomerDetail, String>((
+/// Every bill raised to [customerName].
+///
+/// Why this instead of reports.php's `customer_detail` action: that
+/// action is keyed by the customer's numeric id, and reports.php's
+/// internal sales records don't reliably line up with the real
+/// `customers` table id (we saw the mirror-image bug on the payable
+/// side — phantom entries that don't exist in the real Suppliers list —
+/// a clear sign of an id mismatch between the two systems).
+/// `getSalesReports` is the exact same action your already-working
+/// Sales Reports screen uses (`reports.php?action=sales`), searched by
+/// customer NAME instead of id — names are consistent across both
+/// systems, so this reliably returns every bill for this customer.
+final customerBillsProvider = FutureProvider.family<List<ReportBill>, String>((
   ref,
-  customerId,
+  customerName,
 ) async {
-  final repo = ref.watch(receivableRepositoryProvider);
-  return await repo.getCustomerDetail(customerId);
+  final repo = ref.watch(reportsRepositoryProvider);
+  final results = await repo.getSalesReports(
+    period: 'all',
+    query: customerName,
+    limit: 100,
+  );
+  // Defensive: `search` may fuzzy-match on the backend (it also matches
+  // invoice numbers), so keep only rows that are actually this customer.
+  final needle = customerName.trim().toLowerCase();
+  if (needle.isEmpty) return results;
+  return results.where((b) => b.customerName.trim().toLowerCase() == needle).toList();
 });

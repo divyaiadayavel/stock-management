@@ -95,7 +95,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       await NotificationService.registerFcmToken(userId);
 
       final response = await http.post(
-        Uri.parse('https://catalystack.com/catalystock/public_html/api/notifications/dev/send_test_notification.php'),
+        Uri.parse(
+          'https://catalystack.com/catalystock/public_html/api/notifications/dev/send_test_notification.php',
+        ),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'user_id': userId}),
       );
@@ -106,7 +108,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(data['message'] ?? 'Request processed'),
-            backgroundColor: data['success'] == true ? AppColors.green : AppColors.red,
+            backgroundColor: data['success'] == true
+                ? AppColors.green
+                : AppColors.red,
             duration: const Duration(seconds: 4),
           ),
         );
@@ -220,7 +224,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
   Widget _sectionHeader(String title) {
     return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: AppSpacing.sm, top: AppSpacing.sm),
+      padding: const EdgeInsets.only(
+        left: 4,
+        bottom: AppSpacing.sm,
+        top: AppSpacing.sm,
+      ),
       child: Text(
         title,
         style: AppTextStyles.cardValue.copyWith(

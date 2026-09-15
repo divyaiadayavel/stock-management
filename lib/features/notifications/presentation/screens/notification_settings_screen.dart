@@ -1,14 +1,10 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_text_styles.dart';
-import '../../../../core/network/api_config.dart';
 import '../../../../core/services/notification_service.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../settings/presentation/providers/settings_provider.dart';
@@ -23,17 +19,17 @@ class NotificationSettingsScreen extends ConsumerStatefulWidget {
 
 class _NotificationSettingsScreenState
     extends ConsumerState<NotificationSettingsScreen> {
-Map<String, bool> settings = {
-  "notifLowStock": true,
-  "notifOutOfStock": true,
-  "notifInStock": true,
-  "notifProduct": true,
-  "notifSupplier": true,
-  "notifCustomer": true,
-  "notifPrinter": true,
-  "notifInventory": true,
-  "notifPurchaseOrder": true,
-};
+  Map<String, bool> settings = {
+    "notifLowStock": true,
+    "notifOutOfStock": true,
+    "notifInStock": true,
+    "notifProduct": true,
+    "notifSupplier": true,
+    "notifCustomer": true,
+    "notifPrinter": true,
+    "notifInventory": true,
+    "notifPurchaseOrder": true,
+  };
 
   String lowStockAlertTime = "09:00";
   String outOfStockAlertTime = "09:00";
@@ -47,7 +43,6 @@ Map<String, bool> settings = {
   bool outOfStockExpanded = false;
 
   bool isLoading = true;
-  bool isTestingNotification = false;
 
   @override
   void initState() {
@@ -74,8 +69,9 @@ Map<String, bool> settings = {
 
   Future<void> _loadSettings() async {
     try {
-      final savedSettings =
-          await ref.read(settingsRepositoryProvider).getSettings();
+      final savedSettings = await ref
+          .read(settingsRepositoryProvider)
+          .getSettings();
 
       for (String key in settings.keys) {
         final valStr = savedSettings[key];
@@ -169,9 +165,7 @@ Map<String, bool> settings = {
       initialTime: initialTime,
       builder: (context, child) {
         return MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            alwaysUse24HourFormat: false,
-          ),
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
           child: child!,
         );
       },
@@ -195,9 +189,7 @@ Map<String, bool> settings = {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Unable to save low stock alert time"),
-        ),
+        const SnackBar(content: Text("Unable to save low stock alert time")),
       );
     }
   }
@@ -213,9 +205,7 @@ Map<String, bool> settings = {
       initialTime: initialTime,
       builder: (context, child) {
         return MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            alwaysUse24HourFormat: false,
-          ),
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
           child: child!,
         );
       },
@@ -239,9 +229,7 @@ Map<String, bool> settings = {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Unable to save out of stock alert time"),
-        ),
+        const SnackBar(content: Text("Unable to save out of stock alert time")),
       );
     }
   }
@@ -299,16 +287,7 @@ Map<String, bool> settings = {
   }
 
   Future<String?> _showIntervalPicker(String currentValue) async {
-    const intervals = [
-      "0",
-      "1",
-      "3",
-      "5",
-      "10",
-      "15",
-      "30",
-      "60",
-    ];
+    const intervals = ["0", "1", "3", "5", "10", "15", "30", "60"];
 
     return showModalBottomSheet<String>(
       context: context,
@@ -345,64 +324,62 @@ Map<String, bool> settings = {
                     style: AppTextStyles.small.copyWith(fontSize: 13),
                   ),
                   const SizedBox(height: 14),
-                  ...intervals.map(
-                    (interval) {
-                      final selected = interval == currentValue;
+                  ...intervals.map((interval) {
+                    final selected = interval == currentValue;
 
-                      final label = interval == "0"
-                          ? "Off (don't repeat)"
-                          : interval == "1"
-                              ? "Every 1 minute"
-                              : "Every $interval minutes";
+                    final label = interval == "0"
+                        ? "Off (don't repeat)"
+                        : interval == "1"
+                        ? "Every 1 minute"
+                        : "Every $interval minutes";
 
-                      return InkWell(
-                        borderRadius: BorderRadius.circular(10),
-                        onTap: () {
-                          Navigator.of(context).pop(interval);
-                        },
-                        child: Container(
-                          width: double.infinity,
-                          margin: const EdgeInsets.only(bottom: 4),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 11,
-                          ),
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? AppColors.surface2
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                selected
-                                    ? Icons.radio_button_checked
-                                    : Icons.radio_button_off,
-                                size: 20,
-                                color: selected
-                                    ? AppColors.primary
-                                    : AppColors.textSecondary,
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  label,
-                                  style: AppTextStyles.cardValue.copyWith(
-                                    fontSize: 14,
-                                    fontWeight: selected
-                                        ? FontWeight.w600
-                                        : FontWeight.w500,
-                                    color: AppColors.textPrimaryDark,
-                                  ),
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () {
+                        Navigator.of(context).pop(interval);
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 11,
+                        ),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? AppColors.surface2
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              selected
+                                  ? Icons.radio_button_checked
+                                  : Icons.radio_button_off,
+                              size: 20,
+                              color: selected
+                                  ? AppColors.primary
+                                  : AppColors.textSecondary,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                label,
+                                style: AppTextStyles.cardValue.copyWith(
+                                  fontSize: 14,
+                                  fontWeight: selected
+                                      ? FontWeight.w600
+                                      : FontWeight.w500,
+                                  color: AppColors.textPrimaryDark,
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    );
+                  }),
                 ],
               ),
             ),
@@ -470,62 +447,6 @@ Map<String, bool> settings = {
     }
 
     return "Every $minutes minutes";
-  }
-
-  Future<void> _sendTestNotification() async {
-    final authState = ref.read(authControllerProvider);
-
-    int userId = 1;
-
-    if (authState.user != null) {
-      final rawId = authState.user!['id'] ?? authState.user!['user_id'];
-
-      if (rawId != null) {
-        userId = int.tryParse(rawId.toString()) ?? 1;
-      }
-    }
-
-    setState(() {
-      isTestingNotification = true;
-    });
-
-    try {
-      await NotificationService.registerFcmToken(userId);
-
-      final response = await http.post(
-        Uri.parse(ApiConfig.sendTestNotification),
-        headers: ApiConfig.jsonHeaders,
-        body: jsonEncode({'user_id': userId}),
-      );
-
-      final data = jsonDecode(response.body);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(data['message'] ?? 'Request processed'),
-            backgroundColor:
-                data['success'] == true ? AppColors.green : AppColors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error triggering notification: $e'),
-            backgroundColor: AppColors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          isTestingNotification = false;
-        });
-      }
-    }
   }
 
   // ---------------------------------------------------------------------
@@ -651,11 +572,6 @@ Map<String, bool> settings = {
                         subtitle: "PO creation and receiving alerts",
                         dbKey: "notifPurchaseOrder",
                       ),
-                    ]),
-
-                    _sectionHeader("Testing & Debugging"),
-                    _group([
-                      _actionTile(),
                     ]),
 
                     const SizedBox(height: AppSpacing.xxl),
@@ -920,11 +836,7 @@ Map<String, bool> settings = {
                 ],
               ),
             ),
-            Icon(
-              Icons.chevron_right,
-              size: 16,
-              color: AppColors.textSecondary,
-            ),
+            Icon(Icons.chevron_right, size: 16, color: AppColors.textSecondary),
           ],
         ),
       ),
@@ -984,64 +896,6 @@ Map<String, bool> settings = {
             onChanged: (v) => _updateToggle(dbKey, v),
           ),
         ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------
-  // TEST NOTIFICATION ACTION TILE
-  // ---------------------------------------------------------------------
-
-  Widget _actionTile() {
-    return InkWell(
-      onTap: isTestingNotification ? null : _sendTestNotification,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.cardPadding,
-          vertical: AppSpacing.md,
-        ),
-        child: Row(
-          children: [
-            _iconCircle(
-              icon: Icons.notifications_active_outlined,
-              bg: AppColors.primary,
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Send Test Notification",
-                    style: AppTextStyles.cardValue.copyWith(
-                      fontSize: 15,
-                      fontFamily: AppTextStyles.fontBody,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.textPrimaryDark,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    "Test FCM push notification immediately",
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.small,
-                  ),
-                ],
-              ),
-            ),
-            isTestingNotification
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(
-                    Icons.chevron_right,
-                    color: AppColors.textSecondary,
-                  ),
-          ],
-        ),
       ),
     );
   }

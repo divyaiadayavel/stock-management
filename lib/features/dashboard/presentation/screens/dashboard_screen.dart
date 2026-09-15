@@ -23,6 +23,7 @@ import '../../../../core/network/api_config.dart';
 import '../../../expenses/presentation/screens/expense_screen.dart';
 import '../../../payable/presentation/screens/payable_screen.dart';
 import '../../../receivable/presentation/screens/receivable_screen.dart';
+import '../../../reports/presentation/screens/services_reports_screen.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -500,7 +501,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             onTap: () => _navigateTo(const ReceivableScreen()),
                           ),
                         ),
-                        const Expanded(child: SizedBox.shrink()),
+                        Expanded(
+                          child: _quickActionCircle(
+                            context: context,
+                            icon: Icons.history_rounded,
+                            label: "Service History",
+                            onTap: () =>
+                                _navigateTo(const ServicesReportsScreen()),
+                          ),
+                        ),
                         const Expanded(child: SizedBox.shrink()),
                       ],
                     ),

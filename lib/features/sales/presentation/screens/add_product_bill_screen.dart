@@ -26,36 +26,38 @@ class AddProductBillScreen extends ConsumerStatefulWidget {
       _AddProductBillScreenState();
 }
 
-class _AddProductBillScreenState
-    extends ConsumerState<AddProductBillScreen>
+class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen>
     with WidgetsBindingObserver {
   bool isAscending = true;
   String selectedCategory = "All";
 
-@override
-void initState() {
-  super.initState();
+  @override
+  void initState() {
+    super.initState();
 
-  WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addObserver(this);
 
-  Future.microtask(() {
-    ref.read(productListProvider.notifier).loadProducts();
-    ref.invalidate(salesCategoriesProvider);
-  });
-}
-@override
-void didChangeAppLifecycleState(AppLifecycleState state) {
-  super.didChangeAppLifecycleState(state);
-
-  if (state == AppLifecycleState.resumed) {
-    ref.invalidate(salesCategoriesProvider);
+    Future.microtask(() {
+      ref.read(productListProvider.notifier).loadProducts();
+      ref.invalidate(salesCategoriesProvider);
+    });
   }
-}
-@override
-void dispose() {
-  WidgetsBinding.instance.removeObserver(this);
-  super.dispose();
-}
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    if (state == AppLifecycleState.resumed) {
+      ref.invalidate(salesCategoriesProvider);
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
   void _showSnackBar(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -90,14 +92,81 @@ void dispose() {
   }
 
   static const _monthNames = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   String _formatExpiryDate(String raw) {
     final date = DateTime.tryParse(raw.trim());
     if (date == null) return raw;
     return '${date.day} ${_monthNames[date.month - 1]} ${date.year}';
+  }
+
+  Widget _buildHighlightedText(
+    String text,
+    String query,
+    TextStyle baseStyle,
+    TextStyle highlightStyle,
+  ) {
+    if (query.isEmpty) {
+      return Text(
+        text,
+        style: baseStyle,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
+    final lowerText = text.toLowerCase();
+    final lowerQuery = query.toLowerCase().trim();
+
+    if (lowerQuery.isEmpty || !lowerText.contains(lowerQuery)) {
+      return Text(
+        text,
+        style: baseStyle,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
+    final List<TextSpan> spans = [];
+    int start = 0;
+
+    while (true) {
+      final index = lowerText.indexOf(lowerQuery, start);
+      if (index == -1) {
+        spans.add(TextSpan(text: text.substring(start), style: baseStyle));
+        break;
+      }
+
+      if (index > start) {
+        spans.add(
+          TextSpan(text: text.substring(start, index), style: baseStyle),
+        );
+      }
+
+      final matchEnd = index + lowerQuery.length;
+      spans.add(
+        TextSpan(text: text.substring(index, matchEnd), style: highlightStyle),
+      );
+      start = matchEnd;
+    }
+
+    return RichText(
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      text: TextSpan(children: spans),
+    );
   }
 
   @override
@@ -131,9 +200,7 @@ void dispose() {
       final nameA = a.name;
       final nameB = b.name;
 
-      return isAscending
-          ? nameA.compareTo(nameB)
-          : nameB.compareTo(nameA);
+      return isAscending ? nameA.compareTo(nameB) : nameB.compareTo(nameA);
     });
 
     final showLoading = isLoading && products.isEmpty;
@@ -160,19 +227,14 @@ void dispose() {
                     onPressed: () => Navigator.pop(context),
                   ),
                   SizedBox(width: R.sp(context, AppSpacing.xs)),
-                  Text(
-                    "Add Product Bill",
-                    style: AppTextStyles.heading,
-                  ),
+                  Text("Add Product Bill", style: AppTextStyles.heading),
                 ],
               ),
             ),
 
             Expanded(
               child: showLoading
-                  ? const Center(
-                      child: CircularProgressIndicator(),
-                    )
+                  ? const Center(child: CircularProgressIndicator())
                   : SingleChildScrollView(
                       padding: EdgeInsets.all(
                         R.sp(context, AppSpacing.screenPadding),
@@ -206,8 +268,8 @@ void dispose() {
                                       fillColor: AppColors.card,
                                       contentPadding:
                                           const EdgeInsets.symmetric(
-                                        vertical: 0,
-                                      ),
+                                            vertical: 0,
+                                          ),
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(
                                           AppSizes.radiusLg,
@@ -239,19 +301,13 @@ void dispose() {
                                   ),
                                 ),
                               ),
-                              SizedBox(
-                                width: R.sp(
-                                  context,
-                                  AppSpacing.md,
-                                ),
-                              ),
+                              SizedBox(width: R.sp(context, AppSpacing.md)),
                               GestureDetector(
                                 onTap: () {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) =>
-                                          const ScannerBillScreen(),
+                                      builder: (_) => const ScannerBillScreen(),
                                     ),
                                   );
                                 },
@@ -278,10 +334,7 @@ void dispose() {
                           ),
 
                           SizedBox(
-                            height: R.sp(
-                              context,
-                              AppSpacing.sectionGap,
-                            ),
+                            height: R.sp(context, AppSpacing.sectionGap),
                           ),
 
                           // ── Category Chips ──
@@ -322,9 +375,7 @@ void dispose() {
                                             .trim() ??
                                         "",
                                   )
-                                  .where(
-                                    (name) => name.isNotEmpty,
-                                  )
+                                  .where((name) => name.isNotEmpty)
                                   .toList();
 
                               return SizedBox(
@@ -347,20 +398,15 @@ void dispose() {
                           ),
 
                           SizedBox(
-                            height: R.sp(
-                              context,
-                              AppSpacing.sectionGap,
-                            ),
+                            height: R.sp(context, AppSpacing.sectionGap),
                           ),
 
                           Row(
-                            mainAxisAlignment:
-                                MainAxisAlignment.spaceBetween,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
                                 "All Products",
-                                style:
-                                    AppTextStyles.sectionTitle.copyWith(
+                                style: AppTextStyles.sectionTitle.copyWith(
                                   color: AppColors.textPrimaryDark,
                                 ),
                               ),
@@ -372,8 +418,7 @@ void dispose() {
                                 },
                                 child: Text(
                                   isAscending ? "A-Z" : "Z-A",
-                                  style:
-                                      AppTextStyles.button.copyWith(
+                                  style: AppTextStyles.button.copyWith(
                                     color: AppColors.cyanDim,
                                   ),
                                 ),
@@ -381,54 +426,35 @@ void dispose() {
                             ],
                           ),
 
-                          SizedBox(
-                            height: R.sp(
-                              context,
-                              AppSpacing.md,
-                            ),
-                          ),
+                          SizedBox(height: R.sp(context, AppSpacing.md)),
 
                           // ── Product List ──
                           ListView.builder(
                             shrinkWrap: true,
-                            physics:
-                                const NeverScrollableScrollPhysics(),
+                            physics: const NeverScrollableScrollPhysics(),
                             itemCount: filteredProducts.length,
                             itemBuilder: (context, index) {
-                              final product =
-                                  filteredProducts[index];
+                              final product = filteredProducts[index];
 
                               if (product.id == null) {
                                 return const SizedBox.shrink();
                               }
 
-                              final isOutOfStock =
-                                  product.quantity <= 0;
+                              final isOutOfStock = product.quantity <= 0;
                               final isExpired = _isExpired(product);
-                              final isDisabled =
-                                  isOutOfStock || isExpired;
+                              final isDisabled = isOutOfStock || isExpired;
 
                               return Container(
                                 margin: EdgeInsets.only(
-                                  bottom: R.sp(
-                                    context,
-                                    AppSpacing.sm,
-                                  ),
+                                  bottom: R.sp(context, AppSpacing.sm),
                                 ),
                                 padding: EdgeInsets.symmetric(
-                                  horizontal: R.sp(
-                                    context,
-                                    AppSpacing.md,
-                                  ),
-                                  vertical: R.sp(
-                                    context,
-                                    AppSpacing.md,
-                                  ),
+                                  horizontal: R.sp(context, AppSpacing.md),
+                                  vertical: R.sp(context, AppSpacing.md),
                                 ),
                                 decoration: BoxDecoration(
                                   color: AppColors.card,
-                                  borderRadius:
-                                      BorderRadius.circular(
+                                  borderRadius: BorderRadius.circular(
                                     AppSizes.radiusLg,
                                   ),
                                   border: Border.all(
@@ -438,32 +464,28 @@ void dispose() {
                                   ),
                                 ),
                                 child: Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
                                     // ── Left: Product Info ──
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
-                                        mainAxisSize:
-                                            MainAxisSize.min,
+                                        mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Text(
+                                          _buildHighlightedText(
                                             product.name,
-                                            maxLines: 1,
-                                            overflow:
-                                                TextOverflow.ellipsis,
-                                            style: AppTextStyles
-                                                .cardValue
-                                                .copyWith(
-                                              fontSize:
-                                                  R.fs(context, 13.5),
+                                            search,
+                                            AppTextStyles.cardValue.copyWith(
+                                              fontSize: R.fs(context, 13.5),
                                               color: isDisabled
-                                                  ? AppColors
-                                                      .textSecondary
-                                                  : AppColors
-                                                      .textPrimaryDark,
+                                                  ? AppColors.textSecondary
+                                                  : AppColors.textPrimaryDark,
+                                            ),
+                                            AppTextStyles.cardValue.copyWith(
+                                              fontSize: R.fs(context, 13.5),
+                                              color: AppColors.primary,
+                                              fontWeight: FontWeight.bold,
                                             ),
                                           ),
                                           SizedBox(
@@ -480,8 +502,7 @@ void dispose() {
                                                 value:
                                                     "₹${product.sellingPrice}",
                                                 valueColor:
-                                                    AppColors
-                                                        .textPrimaryDark,
+                                                    AppColors.textPrimaryDark,
                                               ),
                                               SizedBox(
                                                 width: R.sp(
@@ -492,10 +513,8 @@ void dispose() {
                                               _metaChip(
                                                 context: context,
                                                 label: "Disc",
-                                                value:
-                                                    "${product.discount}%",
-                                                valueColor:
-                                                    AppColors.green,
+                                                value: "${product.discount}%",
+                                                valueColor: AppColors.green,
                                               ),
                                               SizedBox(
                                                 width: R.sp(
@@ -506,13 +525,10 @@ void dispose() {
                                               _metaChip(
                                                 context: context,
                                                 label: "Stock",
-                                                value:
-                                                    "${product.quantity}",
-                                                valueColor:
-                                                    isOutOfStock
-                                                        ? AppColors.red
-                                                        : AppColors
-                                                            .cyanDim,
+                                                value: "${product.quantity}",
+                                                valueColor: isOutOfStock
+                                                    ? AppColors.red
+                                                    : AppColors.cyanDim,
                                               ),
                                             ],
                                           ),
@@ -525,14 +541,11 @@ void dispose() {
                                             ),
                                             Text(
                                               "⏰ Expired on ${_formatExpiryDate(product.expiryDate)}",
-                                              style: AppTextStyles
-                                                  .small
+                                              style: AppTextStyles.small
                                                   .copyWith(
-                                                color:
-                                                    AppColors.red,
-                                                fontWeight:
-                                                    FontWeight.w600,
-                                              ),
+                                                    color: AppColors.red,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
                                             ),
                                           ] else if (isOutOfStock) ...[
                                             SizedBox(
@@ -543,14 +556,11 @@ void dispose() {
                                             ),
                                             Text(
                                               "⚠️ Out of Stock",
-                                              style: AppTextStyles
-                                                  .small
+                                              style: AppTextStyles.small
                                                   .copyWith(
-                                                color:
-                                                    AppColors.red,
-                                                fontWeight:
-                                                    FontWeight.w600,
-                                              ),
+                                                    color: AppColors.red,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
                                             ),
                                           ],
                                         ],
@@ -562,44 +572,38 @@ void dispose() {
                                       width: R.isDesktop(context)
                                           ? 180
                                           : R.isTablet(context)
-                                              ? 160
-                                              : 130,
+                                          ? 160
+                                          : 130,
                                       child: Consumer(
-                                        builder:
-                                            (context, ref, child) {
-                                          final billingState =
-                                              ref.watch(
+                                        builder: (context, ref, child) {
+                                          final billingState = ref.watch(
                                             billingProvider,
                                           );
 
-                                          final existingIndex =
-                                              billingState.cart
-                                                  .indexWhere(
-                                            (e) =>
-                                                e.productId ==
-                                                product.id,
-                                          );
+                                          final existingIndex = billingState
+                                              .cart
+                                              .indexWhere(
+                                                (e) =>
+                                                    e.productId == product.id,
+                                              );
 
                                           // ── Not in cart ──
                                           if (existingIndex == -1) {
                                             return Align(
-                                              alignment: Alignment
-                                                  .centerRight,
+                                              alignment: Alignment.centerRight,
                                               child: InkWell(
                                                 borderRadius:
-                                                    BorderRadius
-                                                        .circular(
-                                                  AppSizes.radiusMd,
-                                                ),
-                                                onTap: (isOutOfStock &&
-                                                        !isExpired)
+                                                    BorderRadius.circular(
+                                                      AppSizes.radiusMd,
+                                                    ),
+                                                onTap:
+                                                    (isOutOfStock && !isExpired)
                                                     ? null
                                                     : () {
                                                         if (isExpired) {
                                                           _showSnackBar(
                                                             'This product has expired. Cannot add expired products to bill.',
-                                                            isError:
-                                                                true,
+                                                            isError: true,
                                                           );
                                                           return;
                                                         }
@@ -616,27 +620,22 @@ void dispose() {
                                                 child: Container(
                                                   height: 34,
                                                   width: 34,
-                                                  decoration:
-                                                      BoxDecoration(
-                                                    gradient:
-                                                        isDisabled
-                                                            ? null
-                                                            : AppColors
-                                                                .brandGradient,
+                                                  decoration: BoxDecoration(
+                                                    gradient: isDisabled
+                                                        ? null
+                                                        : AppColors
+                                                              .brandGradient,
                                                     color: isDisabled
-                                                        ? AppColors
-                                                            .surface2
+                                                        ? AppColors.surface2
                                                         : null,
                                                     borderRadius:
-                                                        BorderRadius
-                                                            .circular(
-                                                      AppSizes.radiusMd,
-                                                    ),
+                                                        BorderRadius.circular(
+                                                          AppSizes.radiusMd,
+                                                        ),
                                                     border: isDisabled
                                                         ? Border.all(
-                                                            color:
-                                                                AppColors
-                                                                    .border,
+                                                            color: AppColors
+                                                                .border,
                                                           )
                                                         : null,
                                                   ),
@@ -644,7 +643,7 @@ void dispose() {
                                                     Icons.add,
                                                     color: isDisabled
                                                         ? AppColors
-                                                            .textSecondary
+                                                              .textSecondary
                                                         : Colors.white,
                                                     size: 19,
                                                   ),
@@ -655,8 +654,7 @@ void dispose() {
 
                                           // ── Already in cart ──
                                           final item =
-                                              billingState.cart[
-                                                  existingIndex];
+                                              billingState.cart[existingIndex];
 
                                           final availableStock =
                                               product.quantity;
@@ -664,49 +662,37 @@ void dispose() {
                                           return Row(
                                             mainAxisAlignment:
                                                 MainAxisAlignment.end,
-                                            mainAxisSize:
-                                                MainAxisSize.max,
+                                            mainAxisSize: MainAxisSize.max,
                                             children: [
                                               Expanded(
                                                 child: Container(
-                                                  height:
-                                                      R.btnH(context) -
-                                                          16,
-                                                  decoration:
-                                                      BoxDecoration(
-                                                    border:
-                                                        Border.all(
-                                                      color: AppColors
-                                                          .cyanDim
-                                                          .withOpacity(
-                                                        0.4,
-                                                      ),
+                                                  height: R.btnH(context) - 16,
+                                                  decoration: BoxDecoration(
+                                                    border: Border.all(
+                                                      color: AppColors.cyanDim
+                                                          .withOpacity(0.4),
                                                     ),
                                                     borderRadius:
-                                                        BorderRadius
-                                                            .circular(
-                                                      AppSizes.radiusMd,
-                                                    ),
+                                                        BorderRadius.circular(
+                                                          AppSizes.radiusMd,
+                                                        ),
                                                   ),
                                                   child: Row(
                                                     children: [
                                                       // MINUS
                                                       Expanded(
-                                                        child:
-                                                            InkWell(
-                                                          borderRadius:
-                                                              const BorderRadius
-                                                                  .only(
+                                                        child: InkWell(
+                                                          borderRadius: const BorderRadius.only(
                                                             topLeft:
                                                                 Radius.circular(
-                                                              AppSizes
-                                                                  .radiusMd,
-                                                            ),
+                                                                  AppSizes
+                                                                      .radiusMd,
+                                                                ),
                                                             bottomLeft:
                                                                 Radius.circular(
-                                                              AppSizes
-                                                                  .radiusMd,
-                                                            ),
+                                                                  AppSizes
+                                                                      .radiusMd,
+                                                                ),
                                                           ),
                                                           onTap: () {
                                                             ref
@@ -715,40 +701,31 @@ void dispose() {
                                                                       .notifier,
                                                                 )
                                                                 .decreaseQty(
-                                                                  product
-                                                                      .id!,
+                                                                  product.id!,
                                                                 );
                                                           },
-                                                          child:
-                                                              Container(
+                                                          child: Container(
                                                             height: 34,
-                                                            decoration:
-                                                                const BoxDecoration(
-                                                              color:
-                                                                  AppColors
-                                                                      .surface2,
-                                                              borderRadius:
-                                                                  BorderRadius
-                                                                      .only(
+                                                            decoration: const BoxDecoration(
+                                                              color: AppColors
+                                                                  .surface2,
+                                                              borderRadius: BorderRadius.only(
                                                                 topLeft:
                                                                     Radius.circular(
-                                                                  AppSizes
-                                                                      .radiusMd,
-                                                                ),
+                                                                      AppSizes
+                                                                          .radiusMd,
+                                                                    ),
                                                                 bottomLeft:
                                                                     Radius.circular(
-                                                                  AppSizes
-                                                                      .radiusMd,
-                                                                ),
+                                                                      AppSizes
+                                                                          .radiusMd,
+                                                                    ),
                                                               ),
                                                             ),
-                                                            child:
-                                                                const Icon(
-                                                              Icons
-                                                                  .remove,
-                                                              color:
-                                                                  AppColors
-                                                                      .cyanDim,
+                                                            child: const Icon(
+                                                              Icons.remove,
+                                                              color: AppColors
+                                                                  .cyanDim,
                                                               size: 15,
                                                             ),
                                                           ),
@@ -759,72 +736,57 @@ void dispose() {
                                                       Container(
                                                         width: 1,
                                                         height: 34,
-                                                        color: AppColors
-                                                            .cyanDim
-                                                            .withOpacity(
-                                                          0.25,
-                                                        ),
+                                                        color: AppColors.cyanDim
+                                                            .withOpacity(0.25),
                                                       ),
 
                                                       // QTY INPUT
                                                       Expanded(
-                                                        child:
-                                                            SizedBox(
+                                                        child: SizedBox(
                                                           height: 34,
-                                                          child:
-                                                              TextFormField(
-                                                            key:
-                                                                ValueKey(
+                                                          child: TextFormField(
+                                                            key: ValueKey(
                                                               item.qty,
                                                             ),
-                                                            initialValue:
-                                                                item.qty
-                                                                    .toString(),
+                                                            initialValue: item
+                                                                .qty
+                                                                .toString(),
                                                             keyboardType:
                                                                 TextInputType
                                                                     .number,
-                                                            textAlign:
-                                                                TextAlign
-                                                                    .center,
+                                                            textAlign: TextAlign
+                                                                .center,
                                                             style: AppTextStyles
                                                                 .cardValue
                                                                 .copyWith(
-                                                              fontSize:
-                                                                  13,
-                                                              height: 1.2,
-                                                            ),
-                                                            decoration:
-                                                                const InputDecoration(
-                                                              filled:
-                                                                  true,
+                                                                  fontSize: 13,
+                                                                  height: 1.2,
+                                                                ),
+                                                            decoration: const InputDecoration(
+                                                              filled: true,
                                                               fillColor:
-                                                                  Colors
-                                                                      .white,
+                                                                  Colors.white,
                                                               border:
                                                                   InputBorder
                                                                       .none,
-                                                              isDense:
-                                                                  true,
+                                                              isDense: true,
                                                               contentPadding:
                                                                   EdgeInsets.symmetric(
-                                                                vertical:
-                                                                    8,
-                                                              ),
+                                                                    vertical: 8,
+                                                                  ),
                                                             ),
-                                                            onFieldSubmitted:
-                                                                (value) {
+                                                            onFieldSubmitted: (value) {
                                                               int? newQty =
                                                                   int.tryParse(
-                                                                value,
-                                                              );
+                                                                    value,
+                                                                  );
 
                                                               if (newQty ==
                                                                   null) {
                                                                 return;
                                                               }
 
-                                                              if (newQty ==
-                                                                  0) {
+                                                              if (newQty == 0) {
                                                                 ref
                                                                     .read(
                                                                       billingProvider
@@ -837,16 +799,14 @@ void dispose() {
                                                                 return;
                                                               }
 
-                                                              if (newQty <
-                                                                  0) {
+                                                              if (newQty < 0) {
                                                                 return;
                                                               }
 
                                                               if (isExpired) {
                                                                 _showSnackBar(
                                                                   'This product has expired. Cannot add expired products to bill.',
-                                                                  isError:
-                                                                      true,
+                                                                  isError: true,
                                                                 );
                                                                 return;
                                                               }
@@ -858,8 +818,7 @@ void dispose() {
 
                                                                 _showSnackBar(
                                                                   'Only $availableStock items available',
-                                                                  isError:
-                                                                      true,
+                                                                  isError: true,
                                                                 );
                                                               }
 
@@ -869,8 +828,7 @@ void dispose() {
                                                                         .notifier,
                                                                   )
                                                                   .updateQty(
-                                                                    product
-                                                                        .id!,
+                                                                    product.id!,
                                                                     newQty,
                                                                   );
                                                             },
@@ -882,37 +840,30 @@ void dispose() {
                                                       Container(
                                                         width: 1,
                                                         height: 34,
-                                                        color: AppColors
-                                                            .cyanDim
-                                                            .withOpacity(
-                                                          0.25,
-                                                        ),
+                                                        color: AppColors.cyanDim
+                                                            .withOpacity(0.25),
                                                       ),
 
                                                       // PLUS
                                                       Expanded(
-                                                        child:
-                                                            InkWell(
-                                                          borderRadius:
-                                                              const BorderRadius
-                                                                  .only(
+                                                        child: InkWell(
+                                                          borderRadius: const BorderRadius.only(
                                                             topRight:
                                                                 Radius.circular(
-                                                              AppSizes
-                                                                  .radiusMd,
-                                                            ),
+                                                                  AppSizes
+                                                                      .radiusMd,
+                                                                ),
                                                             bottomRight:
                                                                 Radius.circular(
-                                                              AppSizes
-                                                                  .radiusMd,
-                                                            ),
+                                                                  AppSizes
+                                                                      .radiusMd,
+                                                                ),
                                                           ),
                                                           onTap: () {
                                                             if (isExpired) {
                                                               _showSnackBar(
                                                                 'This product has expired. Cannot add expired products to bill.',
-                                                                isError:
-                                                                    true,
+                                                                isError: true,
                                                               );
                                                               return;
                                                             }
@@ -921,8 +872,7 @@ void dispose() {
                                                                 availableStock) {
                                                               _showSnackBar(
                                                                 'Only $availableStock items available',
-                                                                isError:
-                                                                    true,
+                                                                isError: true,
                                                               );
                                                               return;
                                                             }
@@ -933,39 +883,31 @@ void dispose() {
                                                                       .notifier,
                                                                 )
                                                                 .increaseQty(
-                                                                  product
-                                                                      .id!,
+                                                                  product.id!,
                                                                 );
                                                           },
-                                                          child:
-                                                              Container(
+                                                          child: Container(
                                                             height: 34,
-                                                            decoration:
-                                                                const BoxDecoration(
-                                                              color:
-                                                                  AppColors
-                                                                      .surface2,
-                                                              borderRadius:
-                                                                  BorderRadius
-                                                                      .only(
+                                                            decoration: const BoxDecoration(
+                                                              color: AppColors
+                                                                  .surface2,
+                                                              borderRadius: BorderRadius.only(
                                                                 topRight:
                                                                     Radius.circular(
-                                                                  AppSizes
-                                                                      .radiusMd,
-                                                                ),
+                                                                      AppSizes
+                                                                          .radiusMd,
+                                                                    ),
                                                                 bottomRight:
                                                                     Radius.circular(
-                                                                  AppSizes
-                                                                      .radiusMd,
-                                                                ),
+                                                                      AppSizes
+                                                                          .radiusMd,
+                                                                    ),
                                                               ),
                                                             ),
-                                                            child:
-                                                                const Icon(
+                                                            child: const Icon(
                                                               Icons.add,
-                                                              color:
-                                                                  AppColors
-                                                                      .cyanDim,
+                                                              color: AppColors
+                                                                  .cyanDim,
                                                               size: 15,
                                                             ),
                                                           ),
@@ -986,77 +928,64 @@ void dispose() {
                                               // DELETE
                                               InkWell(
                                                 borderRadius:
-                                                    BorderRadius
-                                                        .circular(
-                                                  AppSizes.radiusSm,
-                                                ),
+                                                    BorderRadius.circular(
+                                                      AppSizes.radiusSm,
+                                                    ),
                                                 onTap: () async {
-                                                  final confirm =
-                                                      await showDialog<
-                                                          bool>(
+                                                  final confirm = await showDialog<bool>(
                                                     context: context,
-                                                    builder:
-                                                        (context) =>
-                                                            AlertDialog(
-                                                      shape:
-                                                          RoundedRectangleBorder(
+                                                    builder: (context) => AlertDialog(
+                                                      shape: RoundedRectangleBorder(
                                                         borderRadius:
-                                                            BorderRadius
-                                                                .circular(
-                                                          AppSizes
-                                                              .radiusLg,
-                                                        ),
+                                                            BorderRadius.circular(
+                                                              AppSizes.radiusLg,
+                                                            ),
                                                       ),
                                                       title: Text(
                                                         "Delete Product",
                                                         style: AppTextStyles
                                                             .sectionTitle
                                                             .copyWith(
-                                                          color: AppColors
-                                                              .textPrimaryDark,
-                                                        ),
+                                                              color: AppColors
+                                                                  .textPrimaryDark,
+                                                            ),
                                                       ),
                                                       content: Text(
                                                         "Are you sure you want to delete this product?",
                                                         style:
-                                                            AppTextStyles
-                                                                .small,
+                                                            AppTextStyles.small,
                                                       ),
                                                       actions: [
                                                         TextButton(
                                                           onPressed: () =>
-                                                              Navigator
-                                                                  .pop(
-                                                            context,
-                                                            false,
-                                                          ),
-                                                          child:
-                                                              const Text(
+                                                              Navigator.pop(
+                                                                context,
+                                                                false,
+                                                              ),
+                                                          child: const Text(
                                                             "Cancel",
                                                           ),
                                                         ),
                                                         ElevatedButton(
                                                           style:
-                                                              ElevatedButton
-                                                                  .styleFrom(
-                                                            backgroundColor:
-                                                                AppColors
-                                                                    .red,
-                                                          ),
+                                                              ElevatedButton.styleFrom(
+                                                                backgroundColor:
+                                                                    AppColors
+                                                                        .red,
+                                                              ),
                                                           onPressed: () =>
-                                                              Navigator
-                                                                  .pop(
-                                                            context,
-                                                            true,
-                                                          ),
+                                                              Navigator.pop(
+                                                                context,
+                                                                true,
+                                                              ),
                                                           child: Text(
                                                             "Delete",
                                                             style: AppTextStyles
                                                                 .button
                                                                 .copyWith(
-                                                              color: Colors
-                                                                  .white,
-                                                            ),
+                                                                  color: Colors
+                                                                      .white,
+                                                                ),
                                                           ),
                                                         ),
                                                       ],
@@ -1101,15 +1030,11 @@ void dispose() {
       // ── Bottom Bill Bar ──
       bottomNavigationBar: SafeArea(
         child: Container(
-          margin: EdgeInsets.all(
-            R.sp(context, AppSpacing.md),
-          ),
+          margin: EdgeInsets.all(R.sp(context, AppSpacing.md)),
           height: R.btnH(context) + 10,
           decoration: BoxDecoration(
             gradient: AppColors.brandGradient,
-            borderRadius: BorderRadius.circular(
-              AppSizes.radiusLg,
-            ),
+            borderRadius: BorderRadius.circular(AppSizes.radiusLg),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(.1),
@@ -1120,12 +1045,7 @@ void dispose() {
           ),
           child: Row(
             children: [
-              SizedBox(
-                width: R.sp(
-                  context,
-                  AppSpacing.lg,
-                ),
-              ),
+              SizedBox(width: R.sp(context, AppSpacing.lg)),
               Stack(
                 children: [
                   const Icon(
@@ -1153,18 +1073,11 @@ void dispose() {
                   ),
                 ],
               ),
-              SizedBox(
-                width: R.sp(
-                  context,
-                  AppSpacing.md,
-                ),
-              ),
+              SizedBox(width: R.sp(context, AppSpacing.md)),
               Expanded(
                 child: Column(
-                  mainAxisAlignment:
-                      MainAxisAlignment.center,
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       "${billingState.cart.length} Items",
@@ -1183,26 +1096,15 @@ void dispose() {
                 ),
               ),
               Padding(
-                padding: EdgeInsets.only(
-                  right: R.sp(
-                    context,
-                    AppSpacing.md,
-                  ),
-                ),
+                padding: EdgeInsets.only(right: R.sp(context, AppSpacing.md)),
                 child: SizedBox(
                   height: R.btnH(context) - 12,
                   child: ElevatedButton(
-                    style:
-                        ElevatedButton.styleFrom(
+                    style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
-                      foregroundColor:
-                          AppColors.cyanDim,
-                      shape:
-                          RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(
-                          AppSizes.radiusMd,
-                        ),
+                      foregroundColor: AppColors.cyanDim,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
                       ),
                     ),
                     onPressed: () {
@@ -1213,15 +1115,13 @@ void dispose() {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) =>
-                              const CurrentBillScreen(),
+                          builder: (_) => const CurrentBillScreen(),
                         ),
                       );
                     },
                     child: Text(
                       "View Bill",
-                      style:
-                          AppTextStyles.button.copyWith(
+                      style: AppTextStyles.button.copyWith(
                         color: AppColors.cyanDim,
                       ),
                     ),
@@ -1245,38 +1145,23 @@ void dispose() {
         });
       },
       child: Container(
-        margin: EdgeInsets.only(
-          right: R.sp(
-            context,
-            AppSpacing.sm,
-          ),
-        ),
+        margin: EdgeInsets.only(right: R.sp(context, AppSpacing.sm)),
         padding: EdgeInsets.symmetric(
           horizontal: R.sp(context, 14),
           vertical: R.sp(context, 10),
         ),
         decoration: BoxDecoration(
-          gradient: isSelected
-              ? AppColors.brandGradient
-              : null,
-          color: isSelected
-              ? null
-              : AppColors.card,
-          borderRadius: BorderRadius.circular(
-            AppSizes.radiusMd,
-          ),
+          gradient: isSelected ? AppColors.brandGradient : null,
+          color: isSelected ? null : AppColors.card,
+          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
           border: Border.all(
-            color: isSelected
-                ? Colors.transparent
-                : AppColors.border,
+            color: isSelected ? Colors.transparent : AppColors.border,
           ),
         ),
         child: Text(
           title,
           style: AppTextStyles.button.copyWith(
-            color: isSelected
-                ? Colors.white
-                : AppColors.textPrimaryDark,
+            color: isSelected ? Colors.white : AppColors.textPrimaryDark,
             fontSize: R.fs(context, 12),
           ),
         ),
@@ -1291,15 +1176,12 @@ void dispose() {
     required Color valueColor,
   }) {
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           label,
-          style: AppTextStyles.small.copyWith(
-            fontSize: R.fs(context, 10),
-          ),
+          style: AppTextStyles.small.copyWith(fontSize: R.fs(context, 10)),
         ),
         Text(
           value,

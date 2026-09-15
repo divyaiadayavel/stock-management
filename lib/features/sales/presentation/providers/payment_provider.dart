@@ -27,13 +27,19 @@ class PaymentState {
 class PaymentNotifier extends StateNotifier<PaymentState> {
   PaymentNotifier() : super(const PaymentState());
 
-  void selectCustomer({
-    required int id,
-    required String name,
-  }) {
-    state = state.copyWith(
-      selectedCustomerId: id,
-      selectedCustomerName: name,
+  void selectCustomer({required int id, required String name}) {
+    state = state.copyWith(selectedCustomerId: id, selectedCustomerName: name);
+  }
+
+  /// Clears the selected/added customer, falling back to "Walk-in
+  /// Customer". Deliberately does NOT use [copyWith] — its `??`
+  /// pattern can't set a field back to null, so this rebuilds the
+  /// state directly, keeping [paymentMethod] as-is.
+  void clearCustomer() {
+    state = PaymentState(
+      paymentMethod: state.paymentMethod,
+      selectedCustomerId: null,
+      selectedCustomerName: null,
     );
   }
 
@@ -42,7 +48,6 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
   }
 }
 
-final paymentProvider =
-    StateNotifierProvider<PaymentNotifier, PaymentState>(
+final paymentProvider = StateNotifierProvider<PaymentNotifier, PaymentState>(
   (ref) => PaymentNotifier(),
 );

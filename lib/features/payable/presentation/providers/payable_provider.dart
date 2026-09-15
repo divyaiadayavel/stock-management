@@ -1,30 +1,34 @@
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/datasources/payable_remote_datasource.dart';
-import '../../data/repositories/payable_repository_impl.dart';
-import '../../domain/entities/supplier_detail.dart';
-import '../../domain/repositories/payable_repository.dart';
+import '../../../reports/domain/entities/report_extras.dart';
+import '../../../reports/presentation/providers/reports_provider.dart';
 
-// ── Dependency Injection ─────────────────────────────────────────────────
-final payableRemoteDataSourceProvider = Provider<PayableRemoteDataSource>((ref) {
-  return PayableRemoteDataSourceImpl(client: Dio());
-});
-
-final payableRepositoryProvider = Provider<PayableRepository>((ref) {
-  final remoteDataSource = ref.watch(payableRemoteDataSourceProvider);
-  return PayableRepositoryImpl(remoteDataSource: remoteDataSource);
-});
-
-// ── Single supplier detail (Payable Details screen) ──────────────────────
-// The supplier LIST itself is intentionally read from the Suppliers
-// feature (`suppliersNotifierProvider`) — see payable_screen.dart for why.
-// This provider only supplies the purchase-order breakdown, which is
-// unique to reports.php's `supplier_detail` action.
-final supplierDetailProvider = FutureProvider.family<SupplierDetail, String>((
+/// Every purchase order raised with [supplierName].
+///
+/// Why this instead of reports.php's `supplier_detail` action: that
+/// action is keyed by the supplier's numeric id, and reports.php's
+/// internal purchase records don't reliably line up with the real
+/// `suppliers` table id (we saw phantom entries like "Test Supplier
+/// Corp" appear in the id-based aggregation that don't exist in the
+/// real Suppliers list — a clear sign of an id mismatch between the two
+/// systems). `getPurchaseOrdersReport` is the exact same action your
+/// already-working Purchases/Reports screens use
+/// (`reports.php?action=purchases&view=orders`), searched by supplier
+/// NAME instead of id — names are consistent across both systems, so
+/// this reliably returns every PO for this supplier.
+final supplierPurchaseOrdersProvider = FutureProvider.family<List<PurchaseOrderSummary>, String>((
   ref,
-  supplierId,
+  supplierName,
 ) async {
-  final repo = ref.watch(payableRepositoryProvider);
-  return await repo.getSupplierDetail(supplierId);
+  final repo = ref.watch(reportsRepositoryProvider);
+  final results = await repo.getPurchaseOrdersReport(
+    period: 'all',
+    search: supplierName,
+    limit: 100,
+  );
+  // Defensive: `search` may fuzzy-match on the backend, so keep only
+  // rows that are actually this supplier.
+  final needle = supplierName.trim().toLowerCase();
+  if (needle.isEmpty) return results;
+  return results.where((o) => o.supplierName.trim().toLowerCase() == needle).toList();
 });
