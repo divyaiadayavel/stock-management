@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import '../../../../../core/constants/app_colors.dart';
 import '../../../../../core/utils/responsive_helper.dart';
+import '../../../../../core/utils/validators.dart';
 import '../../data/models/service_question_model.dart';
 import '../../domain/enums/question_type.dart';
 import 'question_type_picker_sheet.dart';
@@ -188,9 +189,10 @@ class _QuestionEditorCardState extends State<QuestionEditorCard> {
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: TextField(
+                child: TextFormField(
                   controller: _labelController,
                   focusNode: _labelFocusNode,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
                   style: TextStyle(
                     fontSize: R.fs(context, 14),
                     fontWeight: FontWeight.w500,
@@ -219,7 +221,18 @@ class _QuestionEditorCardState extends State<QuestionEditorCard> {
                         width: 1.2,
                       ),
                     ),
+                    errorBorder: inputBorder.copyWith(
+                      borderSide: const BorderSide(color: Colors.redAccent),
+                    ),
+                    focusedErrorBorder: inputBorder.copyWith(
+                      borderSide: const BorderSide(
+                        color: Colors.redAccent,
+                        width: 1.2,
+                      ),
+                    ),
+                    errorStyle: TextStyle(fontSize: R.fs(context, 10.5)),
                   ),
+                  validator: (v) => Validators.validateQuestionLabel(v ?? ''),
                   onChanged: (_) => _emit(),
                 ),
               ),
@@ -320,8 +333,9 @@ class _QuestionEditorCardState extends State<QuestionEditorCard> {
                     ),
                     const SizedBox(width: 4),
                     Expanded(
-                      child: TextField(
+                      child: TextFormField(
                         controller: controller,
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
                         style: TextStyle(
                           fontSize: R.fs(context, 13),
                           color: Colors.black87,
@@ -348,6 +362,20 @@ class _QuestionEditorCardState extends State<QuestionEditorCard> {
                               width: 1.2,
                             ),
                           ),
+                          errorBorder: inputBorder.copyWith(
+                            borderSide: const BorderSide(color: Colors.redAccent),
+                          ),
+                          focusedErrorBorder: inputBorder.copyWith(
+                            borderSide: const BorderSide(
+                              color: Colors.redAccent,
+                              width: 1.2,
+                            ),
+                          ),
+                          errorStyle: TextStyle(fontSize: R.fs(context, 10.5)),
+                        ),
+                        validator: (v) => Validators.validateChoiceOption(
+                          v ?? '',
+                          fieldName: 'Option ${i + 1}',
                         ),
                         onChanged: (_) => _emit(),
                       ),

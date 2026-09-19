@@ -1,5 +1,6 @@
 // lib/features/settings/service_management/data/models/service_category_model.dart
 import '../../domain/entities/service_category.dart';
+import '../../domain/enums/service_category_type.dart';
 
 class ServiceCategoryModel extends ServiceCategoryEntity {
   final String? description;
@@ -8,12 +9,15 @@ class ServiceCategoryModel extends ServiceCategoryEntity {
     super.id = 0,
     required super.name,
     this.description,
+    super.type,
     super.servicesCount,
+    super.providersCount,
   });
 
   Map<String, dynamic> toMap() {
     return {
       'name': name.trim(),
+      'type': type.apiValue,
       if (description != null && description!.isNotEmpty)
         'description': description!.trim(),
     };
@@ -29,8 +33,11 @@ class ServiceCategoryModel extends ServiceCategoryEntity {
       description:
           map['description']?.toString().trim() ??
           map['note']?.toString().trim(),
+      type: ServiceCategoryTypeX.fromApiValue(map['type']?.toString()),
       servicesCount:
           int.tryParse(map['services_count']?.toString() ?? '0') ?? 0,
+      providersCount:
+          int.tryParse(map['providers_count']?.toString() ?? '0') ?? 0,
     );
   }
 }

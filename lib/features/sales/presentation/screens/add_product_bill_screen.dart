@@ -16,7 +16,7 @@ import '../providers/sales_provider.dart';
 import '../../../products/presentation/providers/product_provider.dart';
 import '../../../products/data/models/product_model.dart';
 
-final searchProductProvider = StateProvider<String>((ref) => "");
+final searchProductProvider = StateProvider.autoDispose<String>((ref) => "");
 
 class AddProductBillScreen extends ConsumerStatefulWidget {
   const AddProductBillScreen({super.key});
@@ -31,22 +31,39 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen>
   bool isAscending = true;
   String selectedCategory = "All";
 
+  late final TextEditingController _searchController;
+
   @override
   void initState() {
     super.initState();
 
     WidgetsBinding.instance.addObserver(this);
 
-    Future.microtask(() {
-      ref.read(productListProvider.notifier).loadProducts();
+    _searchController = TextEditingController();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
+      await ref
+          .read(productListProvider.notifier)
+          .loadProducts(searchOverride: '');
+
+      if (!mounted) return;
+
       ref.invalidate(salesCategoriesProvider);
     });
   }
 
+  // @override
+  // void didChangeAppLifecycleState(AppLifecycleState state) {
+  //   super.didChangeAppLifecycleState(state);
+
+  //   if (state == AppLifecycleState.resumed) {
+  //     ref.invalidate(salesCategoriesProvider);
+  //   }
+  // }
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-
     if (state == AppLifecycleState.resumed) {
       ref.invalidate(salesCategoriesProvider);
     }
@@ -54,7 +71,10 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen>
 
   @override
   void dispose() {
+    _searchController.dispose();
+
     WidgetsBinding.instance.removeObserver(this);
+
     super.dispose();
   }
 
@@ -249,6 +269,7 @@ class _AddProductBillScreenState extends ConsumerState<AddProductBillScreen>
                                 child: SizedBox(
                                   height: AppSizes.inputHeight + 8,
                                   child: TextField(
+                                    controller: _searchController,
                                     onChanged: (value) {
                                       ref
                                               .read(

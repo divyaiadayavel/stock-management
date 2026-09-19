@@ -12,6 +12,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../../../core/utils/responsive_helper.dart';
+import '../../../../core/utils/validators.dart';
 import '../../../settings/domain/entities/printers_hardware/receipt/receipt.dart';
 import '../../../settings/domain/entities/printers_hardware/receipt/receipt_item.dart';
 import '../../../settings/presentation/providers/printers_hardware/printer_management/printers_hardware_provider.dart';
@@ -88,6 +89,13 @@ class _ServiceReceiptScreenState
     if (_isPhoneField(answer.label) &&
         !value.startsWith('+91')) {
       value = '+91 $value';
+    } else {
+      final lower = answer.label.toLowerCase();
+      if (lower.contains('name') ||
+          lower.contains('customer') ||
+          lower.contains('user')) {
+        value = Validators.normalizeName(value);
+      }
     }
 
     return value;

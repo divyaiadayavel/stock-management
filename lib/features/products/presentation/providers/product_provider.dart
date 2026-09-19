@@ -49,16 +49,11 @@ class ProductListState {
     return ProductListState(
       items: items ?? this.items,
       page: page ?? this.page,
-      isInitialLoading:
-          isInitialLoading ?? this.isInitialLoading,
-      isLoadingMore:
-          isLoadingMore ?? this.isLoadingMore,
-      isRefreshing:
-          isRefreshing ?? this.isRefreshing,
+      isInitialLoading: isInitialLoading ?? this.isInitialLoading,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      isRefreshing: isRefreshing ?? this.isRefreshing,
       hasMore: hasMore ?? this.hasMore,
-      error: identical(error, _errorSentinel)
-          ? this.error
-          : error as String?,
+      error: identical(error, _errorSentinel) ? this.error : error as String?,
     );
   }
 }
@@ -72,38 +67,66 @@ class ProductListNotifier extends StateNotifier<ProductListState> {
   ProductListNotifier(this.ref) : super(const ProductListState());
 
   // Load first page (initial or refresh) – uses current search
-Future<void> loadProducts() async {
-  state = state.copyWith(
-    isInitialLoading: true,
-    error: null,
-    page: 1,
-    hasMore: true,
-  );
+  // Future<void> loadProducts() async {
+  //   state = state.copyWith(
+  //     isInitialLoading: true,
+  //     error: null,
+  //     page: 1,
+  //     hasMore: true,
+  //   );
 
-  try {
-    final search = ref.read(searchQueryProvider).trim();
+  //   try {
+  //     final search = ref.read(searchQueryProvider).trim();
 
-    final result = await ref.read(productRemoteSourceProvider)
-        .getProductsFromServer(
-          page: 1,
-          limit: _limit,
-          search: search,
-        );
+  //     final result = await ref.read(productRemoteSourceProvider)
+  //         .getProductsFromServer(
+  //           page: 1,
+  //           limit: _limit,
+  //           search: search,
+  //         );
 
+  //     state = state.copyWith(
+  //       items: result.items,
+  //       page: 1,
+  //       hasMore: result.total > _limit,
+  //       isInitialLoading: false,
+  //       error: null,
+  //     );
+  //   } catch (e) {
+  //     state = state.copyWith(
+  //       isInitialLoading: false,
+  //       error: e.toString(),
+  //     );
+  //   }
+  // }
+  Future<void> loadProducts({String? searchOverride}) async {
     state = state.copyWith(
-      items: result.items,
-      page: 1,
-      hasMore: result.total > _limit,
-      isInitialLoading: false,
+      isInitialLoading: true,
       error: null,
+      page: 1,
+      hasMore: true,
     );
-  } catch (e) {
-    state = state.copyWith(
-      isInitialLoading: false,
-      error: e.toString(),
-    );
+
+    try {
+      final search = searchOverride != null
+          ? searchOverride.trim()
+          : ref.read(searchQueryProvider).trim();
+
+      final result = await ref
+          .read(productRemoteSourceProvider)
+          .getProductsFromServer(page: 1, limit: _limit, search: search);
+
+      state = state.copyWith(
+        items: result.items,
+        page: 1,
+        hasMore: result.total > _limit,
+        isInitialLoading: false,
+        error: null,
+      );
+    } catch (e) {
+      state = state.copyWith(isInitialLoading: false, error: e.toString());
+    }
   }
-}
 
   // Load next page – passes the same search term
   Future<void> loadMore() async {
@@ -180,53 +203,53 @@ class ProductOperations extends StateNotifier<AsyncValue<void>> {
   final Ref ref;
   ProductOperations(this.ref) : super(const AsyncValue.data(null));
 
-Future<bool> addProduct(Product product) async {
-  state = const AsyncValue.loading();
+  Future<bool> addProduct(Product product) async {
+    state = const AsyncValue.loading();
 
-  try {
-    final newId = await ref
-        .read(productRemoteSourceProvider)
-        .addProductToServer(product);
+    try {
+      final newId = await ref
+          .read(productRemoteSourceProvider)
+          .addProductToServer(product);
 
-    if (newId <= 0) {
-      throw Exception('Unable to add product.');
+      if (newId <= 0) {
+        throw Exception('Unable to add product.');
+      }
+
+      await ref.read(productListProvider.notifier).refresh();
+      await ref.read(dashboardProvider.notifier).refresh();
+
+      state = const AsyncValue.data(null);
+
+      return true;
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+      return false;
     }
-
-    await ref.read(productListProvider.notifier).refresh();
-    await ref.read(dashboardProvider.notifier).refresh();
-
-    state = const AsyncValue.data(null);
-
-    return true;
-  } catch (e, st) {
-    state = AsyncValue.error(e, st);
-    return false;
   }
-}
 
-Future<bool> modifyProduct(Product product) async {
-  state = const AsyncValue.loading();
+  Future<bool> modifyProduct(Product product) async {
+    state = const AsyncValue.loading();
 
-  try {
-    final success = await ref
-        .read(productRemoteSourceProvider)
-        .updateProductOnServer(product);
+    try {
+      final success = await ref
+          .read(productRemoteSourceProvider)
+          .updateProductOnServer(product);
 
-    if (!success) {
-      throw Exception('Unable to update product.');
+      if (!success) {
+        throw Exception('Unable to update product.');
+      }
+
+      await ref.read(productListProvider.notifier).refresh();
+      await ref.read(dashboardProvider.notifier).refresh();
+
+      state = const AsyncValue.data(null);
+
+      return true;
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+      return false;
     }
-
-    await ref.read(productListProvider.notifier).refresh();
-    await ref.read(dashboardProvider.notifier).refresh();
-
-    state = const AsyncValue.data(null);
-
-    return true;
-  } catch (e, st) {
-    state = AsyncValue.error(e, st);
-    return false;
   }
-}
 
   Future<bool> deleteProduct(int id) async {
     try {

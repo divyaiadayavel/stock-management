@@ -4,28 +4,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/responsive_helper.dart';
+import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/dynamic_question_field.dart';
 import '../../../settings/service_management/domain/entities/service_question.dart';
+import '../../../settings/service_management/domain/enums/question_type.dart';
 import '../providers/services_provider.dart';
 import 'service_review_screen.dart';
 
 class ServiceFormScreen extends ConsumerStatefulWidget {
   final int serviceId;
 
-  const ServiceFormScreen({
-    super.key,
-    required this.serviceId,
-  });
+  const ServiceFormScreen({super.key, required this.serviceId});
 
   @override
-  ConsumerState<ServiceFormScreen> createState() =>
-      _ServiceFormScreenState();
+  ConsumerState<ServiceFormScreen> createState() => _ServiceFormScreenState();
 }
 
-class _ServiceFormScreenState
-    extends ConsumerState<ServiceFormScreen> {
-  final TextEditingController _chargeController =
-      TextEditingController();
+class _ServiceFormScreenState extends ConsumerState<ServiceFormScreen> {
+  final TextEditingController _chargeController = TextEditingController();
 
   String _capitalizeWords(String text) {
     if (text.isEmpty) return text;
@@ -35,8 +31,7 @@ class _ServiceFormScreenState
         .map((word) {
           if (word.isEmpty) return word;
 
-          return word[0].toUpperCase() +
-              word.substring(1);
+          return word[0].toUpperCase() + word.substring(1);
         })
         .join(' ');
   }
@@ -56,48 +51,27 @@ class _ServiceFormScreenState
 
     final amount = double.tryParse(text);
 
-    if (amount == null || amount < 0) {
+    if (amount == null || amount <= 0) {
       return null;
     }
 
     return amount;
   }
 
-  bool _validateAll(
-    List<ServiceQuestionEntity> questions,
-    bool chargeEnabled,
-  ) {
+  bool _validateAll(List<ServiceQuestionEntity> questions, bool chargeEnabled) {
     // ─── Validate service charge ───────────────────────────
     if (chargeEnabled) {
-      final chargeText = _chargeController.text.trim();
+      final chargeError = Validators.validateServiceCharge(
+        _chargeController.text,
+      );
 
-      if (chargeText.isEmpty) {
+      if (chargeError != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: Colors.red.shade700,
-            content: const Text(
-              'Enter the service charge.',
-              style: TextStyle(
-                color: Colors.white,
-              ),
-            ),
-          ),
-        );
-
-        return false;
-      }
-
-      final charge = double.tryParse(chargeText);
-
-      if (charge == null || charge < 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: Colors.red.shade700,
-            content: const Text(
-              'Enter a valid service charge.',
-              style: TextStyle(
-                color: Colors.white,
-              ),
+            content: Text(
+              chargeError,
+              style: const TextStyle(color: Colors.white),
             ),
           ),
         );
@@ -107,12 +81,9 @@ class _ServiceFormScreenState
     }
 
     // ─── Validate required questions ───────────────────────
-    final answers =
-        ref.read(serviceFormAnswersProvider);
+    final answers = ref.read(serviceFormAnswersProvider);
 
     for (final q in questions) {
-      if (!q.required) continue;
-
       final value = answers[q.id];
 
       final isEmpty =
@@ -120,38 +91,62 @@ class _ServiceFormScreenState
           (value is String && value.trim().isEmpty) ||
           (value is List && value.isEmpty);
 
-      if (isEmpty) {
+      if (q.required && isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: Colors.red.shade700,
             content: Text(
               '"${q.label}" is required.',
-              style: const TextStyle(
-                color: Colors.white,
-              ),
+              style: const TextStyle(color: Colors.white),
             ),
           ),
         );
 
         return false;
       }
+
+      if (isEmpty) continue;
+
+      // Text-typed answers (short_answer / paragraph) get the same
+      // rule the field itself applies live — picked by what the
+      // label is actually asking for (name / phone / plan / amount
+      // / generic text). Choice-based types (multiple_choice,
+      // checkboxes, dropdown, date, time, file_upload) are picked
+      // from a fixed set, so the required check above is all they
+      // need.
+      if (value is String) {
+        final isParagraph = q.type == QuestionType.paragraph;
+
+        final textError = isParagraph
+            ? validateServiceParagraphAnswer(q, value)
+            : validateServiceShortAnswer(q, value);
+
+        if (textError != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: Colors.red.shade700,
+              content: Text(
+                textError,
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          );
+
+          return false;
+        }
+      }
     }
 
     return true;
   }
 
-  Widget _buildServiceChargeField(
-    BuildContext context,
-  ) {
+  Widget _buildServiceChargeField(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFFF0FDF4),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFFBBF7D0),
-          width: 1.2,
-        ),
+        border: Border.all(color: const Color(0xFFBBF7D0), width: 1.2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -174,8 +169,7 @@ class _ServiceFormScreenState
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Service Charge',
@@ -202,17 +196,13 @@ class _ServiceFormScreenState
 
           const SizedBox(height: 14),
 
-          TextField(
+          TextFormField(
             controller: _chargeController,
-            keyboardType:
-                const TextInputType.numberWithOptions(
-              decimal: true,
-            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [
-              FilteringTextInputFormatter.allow(
-                RegExp(r'^\d*\.?\d{0,2}'),
-              ),
+              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
             ],
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             style: TextStyle(
               fontSize: R.fs(context, 16),
               fontWeight: FontWeight.w700,
@@ -232,50 +222,48 @@ class _ServiceFormScreenState
               ),
               filled: true,
               fillColor: Colors.white,
-              contentPadding:
-                  EdgeInsets.symmetric(
+              contentPadding: EdgeInsets.symmetric(
                 horizontal: R.sp(context, 14),
                 vertical: R.sp(context, 13),
               ),
-              enabledBorder:
-                  OutlineInputBorder(
-                borderRadius:
-                    BorderRadius.circular(10),
-                borderSide: const BorderSide(
-                  color: Color(0xFFD1FAE5),
-                ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Color(0xFFD1FAE5)),
               ),
-              focusedBorder:
-                  OutlineInputBorder(
-                borderRadius:
-                    BorderRadius.circular(10),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
                 borderSide: const BorderSide(
                   color: Color(0xFF16A34A),
                   width: 1.5,
                 ),
               ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Colors.redAccent),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(
+                  color: Colors.redAccent,
+                  width: 1.5,
+                ),
+              ),
+              errorStyle: TextStyle(fontSize: R.fs(context, 11.5)),
             ),
+            validator: (v) => Validators.validateServiceCharge(v ?? ''),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildNoChargeCard(
-    BuildContext context,
-  ) {
+  Widget _buildNoChargeCard(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 14,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
-          width: 1.2,
-        ),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
       ),
       child: Row(
         children: [
@@ -295,8 +283,7 @@ class _ServiceFormScreenState
           const SizedBox(width: 12),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'No service charge',
@@ -325,17 +312,9 @@ class _ServiceFormScreenState
 
   @override
   Widget build(BuildContext context) {
-    final serviceAsync =
-        ref.watch(
-      userServiceDetailProvider(
-        widget.serviceId,
-      ),
-    );
+    final serviceAsync = ref.watch(userServiceDetailProvider(widget.serviceId));
 
-    final hPad = R.hPad(
-      context,
-      base: 20,
-    );
+    final hPad = R.hPad(context, base: 20);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -350,9 +329,7 @@ class _ServiceFormScreenState
 
           error: (e, _) => Center(
             child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: hPad.left,
-              ),
+              padding: EdgeInsets.symmetric(horizontal: hPad.left),
               child: Text(
                 'Failed to load service: $e',
                 style: TextStyle(
@@ -368,9 +345,7 @@ class _ServiceFormScreenState
             final questions = service.questions;
 
             final title = _capitalizeWords(
-              service.name.isEmpty
-                  ? 'Service Form'
-                  : service.name,
+              service.name.isEmpty ? 'Service Form' : service.name,
             );
 
             return Column(
@@ -385,31 +360,25 @@ class _ServiceFormScreenState
                     children: [
                       IconButton(
                         padding: EdgeInsets.zero,
-                        constraints:
-                            const BoxConstraints(),
+                        constraints: const BoxConstraints(),
                         icon: const Icon(
                           Icons.arrow_back,
                           color: Colors.black87,
                           size: 24,
                         ),
-                        onPressed: () =>
-                            Navigator.pop(context),
+                        onPressed: () => Navigator.pop(context),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Text(
                           title,
                           style: TextStyle(
-                            fontWeight:
-                                FontWeight.w700,
-                            color:
-                                const Color(0xFF0F172A),
-                            fontSize:
-                                R.fs(context, 20),
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF0F172A),
+                            fontSize: R.fs(context, 20),
                           ),
                           maxLines: 1,
-                          overflow:
-                              TextOverflow.ellipsis,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -421,25 +390,16 @@ class _ServiceFormScreenState
                 // ─── Form ─────────────────────────────────
                 Expanded(
                   child: ListView(
-                    padding: EdgeInsets.fromLTRB(
-                      hPad.left,
-                      8,
-                      hPad.left,
-                      20,
-                    ),
+                    padding: EdgeInsets.fromLTRB(hPad.left, 8, hPad.left, 20),
                     children: [
                       // ─── Service Charge ────────────────
                       if (service.chargeEnabled) ...[
-                        _buildServiceChargeField(
-                          context,
-                        ),
+                        _buildServiceChargeField(context),
                         const SizedBox(height: 22),
                       ],
 
                       if (!service.chargeEnabled) ...[
-                        _buildNoChargeCard(
-                          context,
-                        ),
+                        _buildNoChargeCard(context),
                         const SizedBox(height: 22),
                       ],
 
@@ -447,89 +407,54 @@ class _ServiceFormScreenState
                       if (questions.isEmpty)
                         Center(
                           child: Padding(
-                            padding:
-                                const EdgeInsets.only(
-                              top: 40,
-                            ),
+                            padding: const EdgeInsets.only(top: 40),
                             child: Column(
-                              mainAxisAlignment:
-                                  MainAxisAlignment.center,
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(
-                                  Icons
-                                      .assignment_turned_in_outlined,
+                                  Icons.assignment_turned_in_outlined,
                                   size: 64,
-                                  color:
-                                      Colors.grey.shade400,
+                                  color: Colors.grey.shade400,
                                 ),
-                                const SizedBox(
-                                  height: 12,
-                                ),
+                                const SizedBox(height: 12),
                                 Text(
                                   'No questions configured for this service',
                                   style: TextStyle(
-                                    fontSize: R.fs(
-                                      context,
-                                      15,
-                                    ),
-                                    fontWeight:
-                                        FontWeight.w500,
-                                    color:
-                                        Colors.grey.shade700,
+                                    fontSize: R.fs(context, 15),
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.grey.shade700,
                                   ),
-                                  textAlign:
-                                      TextAlign.center,
+                                  textAlign: TextAlign.center,
                                 ),
                               ],
                             ),
                           ),
                         )
                       else
-                        ...questions
-                            .asMap()
-                            .entries
-                            .map(
-                          (entry) {
-                            final i = entry.key;
-                            final question =
-                                entry.value;
+                        ...questions.asMap().entries.map((entry) {
+                          final i = entry.key;
+                          final question = entry.value;
 
-                            return Padding(
-                              padding:
-                                  EdgeInsets.only(
-                                bottom: i ==
-                                        questions
-                                                .length -
-                                            1
-                                    ? 0
-                                    : 22,
-                              ),
-                              child:
-                                  DynamicQuestionField(
-                                index: i + 1,
-                                question: question,
-                                initialValue:
-                                    ref.watch(
-                                  serviceFormAnswersProvider,
-                                )[question.id],
-                                onChanged: (value) {
-                                  if (question.id !=
-                                      null) {
-                                    ref
-                                        .read(
-                                          serviceFormAnswersProvider
-                                              .notifier,
-                                        )
-                                        .setAnswer(
-                                          question.id!,
-                                          value,
-                                        );
-                                  }
-                                },
-                              ),
-                            );
-                          },
-                        ),
+                          return Padding(
+                            padding: EdgeInsets.only(
+                              bottom: i == questions.length - 1 ? 0 : 22,
+                            ),
+                            child: DynamicQuestionField(
+                              index: i + 1,
+                              question: question,
+                              initialValue: ref.watch(
+                                serviceFormAnswersProvider,
+                              )[question.id],
+                              onChanged: (value) {
+                                if (question.id != null) {
+                                  ref
+                                      .read(serviceFormAnswersProvider.notifier)
+                                      .setAnswer(question.id!, value);
+                                }
+                              },
+                            ),
+                          );
+                        }),
                     ],
                   ),
                 ),
@@ -544,26 +469,20 @@ class _ServiceFormScreenState
                   ),
                   child: GestureDetector(
                     onTap: () {
-                      if (!_validateAll(
-                        questions,
-                        service.chargeEnabled,
-                      )) {
+                      if (!_validateAll(questions, service.chargeEnabled)) {
                         return;
                       }
 
-                      final enteredAmount =
-                          service.chargeEnabled
-                              ? (_parseCharge() ?? 0.0)
-                              : 0.0;
+                      final enteredAmount = service.chargeEnabled
+                          ? (_parseCharge() ?? 0.0)
+                          : 0.0;
 
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) =>
-                              ServiceReviewScreen(
+                          builder: (_) => ServiceReviewScreen(
                             service: service,
-                            enteredAmount:
-                                enteredAmount,
+                            enteredAmount: enteredAmount,
                           ),
                         ),
                       );
@@ -573,29 +492,21 @@ class _ServiceFormScreenState
                       height: 52,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        gradient:
-                            AppColors.brandGradient,
-                        borderRadius:
-                            BorderRadius.circular(10),
+                        gradient: AppColors.brandGradient,
+                        borderRadius: BorderRadius.circular(10),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black
-                                .withValues(
-                              alpha: 0.08,
-                            ),
+                            color: Colors.black.withValues(alpha: 0.08),
                             blurRadius: 8,
-                            offset:
-                                const Offset(0, 3),
+                            offset: const Offset(0, 3),
                           ),
                         ],
                       ),
                       child: Text(
                         'Review',
                         style: TextStyle(
-                          fontSize:
-                              R.fs(context, 16),
-                          fontWeight:
-                              FontWeight.w700,
+                          fontSize: R.fs(context, 16),
+                          fontWeight: FontWeight.w700,
                           color: Colors.white,
                         ),
                       ),

@@ -1,0 +1,31 @@
+// ============================================================
+// PASTE THESE INTO YOUR EXISTING lib/core/network/api_config.dart
+//
+// Nothing existing changes — these are six new constants that sit
+// beside your current service endpoints. Replace `baseUrl` below with
+// whatever your file already calls it (the same one used by
+// getServices / submitServiceRequest).
+// ============================================================
+
+  // ─── SERVICE PROVIDERS (admin side) ───────────────────────
+  static const String getServiceProviders =
+      '$baseUrl/services/admin/providers.php';
+
+  static const String getServiceProviderDetail =
+      '$baseUrl/services/admin/providers.php';
+
+  static const String saveServiceProvider =
+      '$baseUrl/services/admin/providers.php';
+
+  static const String deleteServiceProvider =
+      '$baseUrl/services/admin/providers.php';
+
+  static const String reloadServiceProviderBalance =
+      '$baseUrl/services/admin/providers.php?action=reload';
+
+  // ─── PROVIDER RECHARGES (user side) ───────────────────────
+  static const String submitProviderRecharge =
+      '$baseUrl/services/user/provider_recharges.php';
+
+  static const String getProviderRecharges =
+      '$baseUrl/services/user/provider_recharges.php';

@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/constants/app_colors.dart';
 import '../../../../../core/utils/responsive_helper.dart';
+import '../../../../../core/utils/validators.dart';
 import '../providers/service_management_provider.dart';
 
 /// Mirrors "Add Category (Popup)" — screen 2 in the reference design.
 Future<void> showAddCategoryDialog(BuildContext context, WidgetRef ref) {
   final controller = TextEditingController();
   bool isSaving = false;
+  String? nameError;
 
   final inputBorder = OutlineInputBorder(
     borderRadius: BorderRadius.circular(R.radius(context, 10)),
@@ -87,6 +89,7 @@ Future<void> showAddCategoryDialog(BuildContext context, WidgetRef ref) {
                 TextField(
                   controller: controller,
                   autofocus: true,
+                  textCapitalization: TextCapitalization.words,
                   style: TextStyle(
                     fontSize: R.fs(context, 14),
                     color: Colors.black87,
@@ -97,6 +100,8 @@ Future<void> showAddCategoryDialog(BuildContext context, WidgetRef ref) {
                       fontSize: R.fs(context, 14),
                       color: Colors.grey.shade400,
                     ),
+                    errorText: nameError,
+                    errorStyle: TextStyle(fontSize: R.fs(context, 11.5)),
                     filled: true,
                     fillColor: Colors.white,
                     contentPadding: EdgeInsets.symmetric(
@@ -110,7 +115,23 @@ Future<void> showAddCategoryDialog(BuildContext context, WidgetRef ref) {
                         width: 1.5,
                       ),
                     ),
+                    errorBorder: inputBorder.copyWith(
+                      borderSide: const BorderSide(color: Colors.redAccent),
+                    ),
+                    focusedErrorBorder: inputBorder.copyWith(
+                      borderSide: const BorderSide(
+                        color: Colors.redAccent,
+                        width: 1.5,
+                      ),
+                    ),
                   ),
+                  onChanged: (value) {
+                    if (nameError == null) return;
+
+                    setState(() {
+                      nameError = Validators.validateCategoryName(value);
+                    });
+                  },
                 ),
               ],
             ),
@@ -129,8 +150,18 @@ Future<void> showAddCategoryDialog(BuildContext context, WidgetRef ref) {
                 onTap: isSaving
                     ? null
                     : () async {
-                        final name = controller.text.trim();
-                        if (name.isEmpty) return;
+                        final error = Validators.validateCategoryName(
+                          controller.text,
+                        );
+
+                        if (error != null) {
+                          setState(() => nameError = error);
+                          return;
+                        }
+
+                        final name = Validators.normalizeText(
+                          controller.text,
+                        );
                         setState(() => isSaving = true);
                         final ok = await ref
                             .read(serviceCategoriesProvider.notifier)

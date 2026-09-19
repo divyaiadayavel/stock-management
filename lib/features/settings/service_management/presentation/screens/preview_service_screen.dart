@@ -11,6 +11,11 @@ class PreviewServiceScreen extends StatelessWidget {
 
   const PreviewServiceScreen({super.key, required this.service});
 
+  String _capitalizeFirstLetter(String text) {
+    if (text.isEmpty) return text;
+    return text[0].toUpperCase() + text.substring(1);
+  }
+
   @override
   Widget build(BuildContext context) {
     final hPad = R.hPad(context, base: 16);
@@ -125,7 +130,7 @@ class PreviewServiceScreen extends StatelessWidget {
                                   Text(
                                     service.name.isEmpty
                                         ? 'Untitled Service'
-                                        : service.name,
+                                        : _capitalizeFirstLetter(service.name),
                                     style: TextStyle(
                                       fontSize: R.fs(context, 15),
                                       fontWeight: FontWeight.w600,
@@ -148,7 +153,7 @@ class PreviewServiceScreen extends StatelessWidget {
                                     child: Text(
                                       service.categoryName.isEmpty
                                           ? 'No Category'
-                                          : service.categoryName,
+                                          : _capitalizeFirstLetter(service.categoryName),
                                       style: TextStyle(
                                         fontSize: R.fs(context, 11),
                                         fontWeight: FontWeight.w500,

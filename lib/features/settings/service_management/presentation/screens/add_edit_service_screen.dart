@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../../core/constants/app_colors.dart';
 import '../../../../../core/utils/responsive_helper.dart';
+import '../../../../../core/utils/validators.dart';
 import '../../data/models/service_model.dart';
 import '../../data/models/service_question_model.dart';
 import '../../domain/enums/question_type.dart';
@@ -31,6 +32,11 @@ class AddEditServiceScreen extends ConsumerStatefulWidget {
 }
 
 class _AddEditServiceScreenState extends ConsumerState<AddEditServiceScreen> {
+
+  String _capitalizeFirstLetter(String text) {
+    if (text.isEmpty) return text;
+    return text[0].toUpperCase() + text.substring(1);
+  }
   final _nameController = TextEditingController();
 
   int? _categoryId;
@@ -194,7 +200,8 @@ class _AddEditServiceScreenState extends ConsumerState<AddEditServiceScreen> {
   }
 
   bool get _isValid =>
-      _nameController.text.trim().isNotEmpty && _categoryId != null;
+      Validators.validateServiceName(_nameController.text) == null &&
+      _categoryId != null;
 
   ServiceModel _buildDraft() {
     return ServiceModel(
@@ -207,14 +214,39 @@ class _AddEditServiceScreenState extends ConsumerState<AddEditServiceScreen> {
     );
   }
 
+  void _snack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.red.shade700,
+        content: Text(message, style: const TextStyle(color: Colors.white)),
+      ),
+    );
+  }
+
   Future<void> _save() async {
-    if (!_isValid) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Enter a service name and choose a category.'),
-        ),
-      );
+    final nameError = Validators.validateServiceName(_nameController.text);
+
+    if (nameError != null) {
+      _snack(nameError);
       return;
+    }
+
+    if (_categoryId == null) {
+      _snack('Select a category.');
+      return;
+    }
+
+    // Every question label runs through the same rule the provider
+    // flow uses, so a blank or too-short label can never be saved.
+    for (final question in _questions) {
+      final labelError = Validators.validateQuestionLabel(question.label);
+
+      if (labelError != null) {
+        _snack(
+          '${labelError.replaceFirst('Question label', 'A question label')}.',
+        );
+        return;
+      }
     }
 
     final draft = _buildDraft();
@@ -482,8 +514,9 @@ class _AddEditServiceScreenState extends ConsumerState<AddEditServiceScreen> {
 
         const SizedBox(height: 6),
 
-        TextField(
+        TextFormField(
           controller: _nameController,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           style: TextStyle(
             fontSize: R.fs(context, 14),
             color: const Color(0xFF0F172A),
@@ -507,7 +540,15 @@ class _AddEditServiceScreenState extends ConsumerState<AddEditServiceScreen> {
                 width: 1.5,
               ),
             ),
+            errorBorder: inputBorder.copyWith(
+              borderSide: const BorderSide(color: Colors.redAccent),
+            ),
+            focusedErrorBorder: inputBorder.copyWith(
+              borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
+            ),
+            errorStyle: TextStyle(fontSize: R.fs(context, 11)),
           ),
+          validator: (v) => Validators.validateServiceName(v ?? ''),
           onChanged: (_) => setState(() {}),
         ),
 
@@ -564,7 +605,7 @@ class _AddEditServiceScreenState extends ConsumerState<AddEditServiceScreen> {
             ),
             items: categories
                 .map<DropdownMenuItem<int>>(
-                  (c) => DropdownMenuItem(value: c.id, child: Text(c.name)),
+                  (c) => DropdownMenuItem(value: c.id, child: Text(_capitalizeFirstLetter(c.name))),
                 )
                 .toList(),
             onChanged: (id) {

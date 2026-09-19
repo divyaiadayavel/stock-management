@@ -16,6 +16,7 @@ import 'product_performance_screen.dart';
 import 'purchases_suppliers_screen.dart';
 import 'inventory_stock_report_screen.dart';
 import 'services_reports_screen.dart';
+import 'provider_reports_screen.dart';
 import 'profitability_margins_screen.dart';
 
 class ReportsScreen extends ConsumerStatefulWidget {
@@ -304,6 +305,19 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     context,
                     MaterialPageRoute(
                       builder: (_) => const ServicesReportsScreen(),
+                    ),
+                  ),
+                ),
+                _DirectoryCard(
+                  title: 'Provider Reports',
+                  subtitle:
+                      'Recharge invoices & provider reload/initial-load amount history',
+                  icon: Icons.account_balance_wallet_rounded,
+                  color: const Color(0xFF0EA5E9),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ProviderReportsScreen(),
                     ),
                   ),
                 ),

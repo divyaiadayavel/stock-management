@@ -2,6 +2,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../../../settings/service_management/data/models/service_category_model.dart';
+import '../../../settings/service_management/domain/enums/service_category_type.dart';
 import '../../../settings/service_management/data/models/service_model.dart';
 import '../../data/datasources/services_remote_datasource.dart';
 import '../../data/models/service_request_model.dart';
@@ -45,6 +46,27 @@ final userServiceCategoriesProvider =
     FutureProvider<List<ServiceCategoryModel>>((ref) {
       return ref.read(_getServiceCategoriesProvider).call();
     });
+
+/// Categories on the Service tab only — same split as the admin
+/// Services & Categories screen.
+final userServiceTypeCategoriesProvider =
+    Provider<AsyncValue<List<ServiceCategoryModel>>>((ref) {
+  return ref.watch(userServiceCategoriesProvider).whenData(
+        (categories) => categories
+            .where((c) => c.type == ServiceCategoryType.service)
+            .toList(),
+      );
+});
+
+/// Categories on the Provider tab only.
+final userProviderTypeCategoriesProvider =
+    Provider<AsyncValue<List<ServiceCategoryModel>>>((ref) {
+  return ref.watch(userServiceCategoriesProvider).whenData(
+        (categories) => categories
+            .where((c) => c.type == ServiceCategoryType.provider)
+            .toList(),
+      );
+});
 
 final servicesForCategoryProvider =
     FutureProvider.family<List<ServiceModel>, int>((ref, categoryId) {

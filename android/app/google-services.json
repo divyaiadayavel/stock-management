@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "1066596178753",
-    "project_id": "catalystock-dev",
-    "storage_bucket": "catalystock-dev.firebasestorage.app"
+    "project_number": "1012917152970",
+    "project_id": "catalystock-36dac",
+    "storage_bucket": "catalystock-36dac.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1066596178753:android:b33800103b9c6fd11b9fc0",
+        "mobilesdk_app_id": "1:1012917152970:android:97235705798366dd42d833",
         "android_client_info": {
-          "package_name": "com.example.stock_management.dev"
+          "package_name": "com.example.stock_management"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDjg1riJyv0rwvQBRMs5zBaBXt_f2u9Shk"
+          "current_key": "AIzaSyD3kpmQLC8fNg2NJV7IpdZjZsO056Kiuo0"
         }
       ],
       "services": {

@@ -2,10 +2,12 @@
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../features/settings/service_management/domain/entities/service_question.dart';
 import '../../features/settings/service_management/domain/enums/question_type.dart';
 import '../constants/app_colors.dart';
 import '../utils/responsive_helper.dart';
+import '../utils/validators.dart';
 
 class DynamicQuestionField extends StatefulWidget {
   final int index;
@@ -25,6 +27,86 @@ class DynamicQuestionField extends StatefulWidget {
 
   @override
   State<DynamicQuestionField> createState() => _DynamicQuestionFieldState();
+}
+
+/// Shared with [ServiceFormScreen] so the same rule that blocks the
+/// field as you type also blocks the "Review" button if a bad value
+/// slipped through (paste, autofill, etc).
+///
+/// Every rule lives in Validators, picked by what the question is
+/// actually asking for: a "name"-ish label needs a capitalised,
+/// letters-only name of at least 3 letters; a "phone"-ish label
+/// needs exactly 10 digits with no spaces; a "plan"-ish label allows
+/// alphanumeric; an "amount"-ish label must be a number greater than
+/// 0 (0 is never accepted).
+String? validateServiceShortAnswer(ServiceQuestionEntity q, Object? rawValue) {
+  final value = rawValue?.toString() ?? '';
+  final label = q.label.toLowerCase();
+
+  if (label.contains('phone') ||
+      label.contains('mobile') ||
+      label.contains('contact')) {
+    return q.required
+        ? Validators.validatePhone(value, fieldName: q.label)
+        : Validators.validateOptionalPhone(value, fieldName: q.label);
+  }
+
+  if (label.contains('email') || label.contains('mail')) {
+    return q.required
+        ? Validators.validateEmail(value)
+        : Validators.validateOptionalEmail(value);
+  }
+
+  if (label.contains('amount') ||
+      label.contains('price') ||
+      label.contains('fee') ||
+      label.contains('cost')) {
+    return Validators.validateCustomerAmount(
+      value,
+      fieldName: q.label,
+      required: q.required,
+    );
+  }
+
+  if (label.contains('plan')) {
+    // Plan names/descriptions are alphanumeric ("199 Unlimited"),
+    // unlike a person's name, so this gets its own rule.
+    return Validators.validatePlanName(
+      value,
+      fieldName: q.label,
+      required: q.required,
+    );
+  }
+
+  if (label.contains('name') ||
+      label.contains('customer') ||
+      label.contains('user')) {
+    // Optional name field left blank is fine; once they start
+    // typing, the usual capital-letter / 3-letter name rule applies.
+    if (!q.required && Validators.normalizeText(value).isEmpty) {
+      return null;
+    }
+
+    return Validators.validateName(value, fieldName: q.label);
+  }
+
+  return Validators.validateShortAnswer(
+    value,
+    fieldName: q.label,
+    required: q.required,
+  );
+}
+
+/// Same idea as [validateServiceShortAnswer], for paragraph answers.
+String? validateServiceParagraphAnswer(
+  ServiceQuestionEntity q,
+  Object? rawValue,
+) {
+  return Validators.validateParagraphAnswer(
+    rawValue?.toString() ?? '',
+    fieldName: q.label,
+    required: q.required,
+  );
 }
 
 class _DynamicQuestionFieldState extends State<DynamicQuestionField> {
@@ -55,6 +137,25 @@ class _DynamicQuestionFieldState extends State<DynamicQuestionField> {
   String _capitalize(String text) {
     if (text.isEmpty) return text;
     return text[0].toUpperCase() + text.substring(1);
+  }
+
+  bool _isNameField(String label) {
+    final lower = label.toLowerCase();
+    return lower.contains('name') ||
+        lower.contains('customer') ||
+        lower.contains('user');
+  }
+
+  List<TextInputFormatter>? _inputFormattersFor(String label) {
+    if (!_isNameField(label)) return null;
+
+    // Lowercase is allowed while typing. Only valid name characters are
+    // accepted; capitalisation is handled only when displayed on invoices.
+    return [
+      FilteringTextInputFormatter.allow(
+      RegExp(r"[A-Za-z0-9\s'\-]"),
+    ),
+    ];
   }
 
   Widget? _getPrefixIcon(String label, QuestionType type) {
@@ -215,15 +316,31 @@ class _DynamicQuestionFieldState extends State<DynamicQuestionField> {
   ) {
     final prefix = _getPrefixIcon(q.label, q.type);
 
+    final errorBorder = border.copyWith(
+      borderSide: const BorderSide(color: Colors.redAccent),
+    );
+    final focusedErrorBorder = border.copyWith(
+      borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
+    );
+
     switch (q.type) {
       case QuestionType.shortAnswer:
-        return TextField(
+        return TextFormField(
           controller: _textController,
           enabled: widget.enabled,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          keyboardType: q.label.toLowerCase().contains('phone') ||
+                  q.label.toLowerCase().contains('mobile') ||
+                  q.label.toLowerCase().contains('contact')
+              ? TextInputType.phone
+              : q.label.toLowerCase().contains('email')
+                  ? TextInputType.emailAddress
+                  : TextInputType.text,
           style: TextStyle(
             fontSize: R.fs(context, 15),
             color: const Color(0xFF0F172A),
           ),
+          inputFormatters: _inputFormattersFor(q.label),
           decoration: InputDecoration(
             hintText: 'Enter ${q.label.toLowerCase()}',
             hintStyle: TextStyle(
@@ -253,15 +370,20 @@ class _DynamicQuestionFieldState extends State<DynamicQuestionField> {
                 width: 1.5,
               ),
             ),
+            errorBorder: errorBorder,
+            focusedErrorBorder: focusedErrorBorder,
+            errorStyle: TextStyle(fontSize: R.fs(context, 11.5)),
           ),
+          validator: (v) => validateServiceShortAnswer(q, v),
           onChanged: widget.onChanged,
         );
 
       case QuestionType.paragraph:
-        return TextField(
+        return TextFormField(
           controller: _textController,
           enabled: widget.enabled,
           maxLines: 4,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           style: TextStyle(
             fontSize: R.fs(context, 15),
             color: const Color(0xFF0F172A),
@@ -282,7 +404,11 @@ class _DynamicQuestionFieldState extends State<DynamicQuestionField> {
                 width: 1.5,
               ),
             ),
+            errorBorder: errorBorder,
+            focusedErrorBorder: focusedErrorBorder,
+            errorStyle: TextStyle(fontSize: R.fs(context, 11.5)),
           ),
+          validator: (v) => validateServiceParagraphAnswer(q, v),
           onChanged: widget.onChanged,
         );
 

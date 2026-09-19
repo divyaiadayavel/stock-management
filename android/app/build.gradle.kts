@@ -24,7 +24,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.stock_management.dev"
+        applicationId = "com.example.stock_management"
 
         minSdk = flutter.minSdkVersion
         targetSdk = 36
